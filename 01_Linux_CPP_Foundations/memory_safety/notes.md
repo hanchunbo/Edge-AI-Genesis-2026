@@ -215,3 +215,9 @@ void safe_function() {
 | 可能悬空的观察者 | `weak_ptr` |
 | 传递使用但不持有 | `const T&` 或 `const shared_ptr<T>&` |
 | 转移所有权 | `std::move` + 移动构造 |
+
+## 7. 其他技巧
+```git
+#撤销最近的一次提交并保存之前的修改记录
+git revert --no-edit HEAD
+```
