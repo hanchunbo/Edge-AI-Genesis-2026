@@ -63,10 +63,10 @@ CustomImage dest = std::move(source);  // 调用移动构造函数
 flowchart TB
     subgraph DeepCopy["深拷贝 ❌ 性能差"]
         direction TB
-        DC1["source\n├─ data_ ──▶ [24MB 数据]\n└─ size_ = 24MB"]
-        DC1 -->|"dest = source"| DC2["1. new char[24MB]"]
+        DC1["source<br>├─ data_ ──▶ 24MB 数据<br>└─ size_ = 24MB"]
+        DC1 -->|"dest = source"| DC2["1. new char 24MB"]
         DC2 --> DC3["2. memcpy 24MB"]
-        DC3 --> DC4["dest\n├─ data_ ──▶ [24MB 副本]\n└─ size_ = 24MB"]
+        DC3 --> DC4["dest<br>├─ data_ ──▶ 24MB 副本<br>└─ size_ = 24MB"]
         DC4 --> DC5["source 仍持有原数据"]
         
         style DC2 fill:#FFB6C1
@@ -75,10 +75,10 @@ flowchart TB
 
     subgraph MoveSemantics["移动语义 ✅ 高性能"]
         direction TB
-        MS1["source\n├─ data_ ──▶ [24MB 数据]\n└─ size_ = 24MB"]
-        MS1 -->|"dest = std::move(source)"| MS2["1. dest.data_ = source.data_\n2. dest.size_ = source.size_"]
-        MS2 --> MS3["3. source.data_ = nullptr\n4. source.size_ = 0"]
-        MS3 --> MS4["dest\n├─ data_ ──▶ [24MB 数据]\n└─ size_ = 24MB"]
+        MS1["source<br>├─ data_ ──▶ 24MB 数据<br>└─ size_ = 24MB"]
+        MS1 -->|"dest = std::move"| MS2["1. dest.data_ = source.data_<br>2. dest.size_ = source.size_"]
+        MS2 --> MS3["3. source.data_ = nullptr<br>4. source.size_ = 0"]
+        MS3 --> MS4["dest<br>├─ data_ ──▶ 24MB 数据<br>└─ size_ = 24MB"]
         MS4 --> MS5["source 已被清空"]
         
         style MS2 fill:#90EE90

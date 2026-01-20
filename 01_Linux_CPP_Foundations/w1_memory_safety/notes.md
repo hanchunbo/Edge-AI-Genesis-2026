@@ -75,10 +75,10 @@ flowchart LR
     end
 
     subgraph shared["shared_ptr 共享所有权"]
-        S1["ptr1 ──▶ Object\n(count=1)"]
-        S1 -->|"ptr2 = ptr1"| S2["ptr1 ──▶ Object ◀── ptr2\n(count=2)"]
-        S2 -->|"ptr1 销毁"| S3["Object ◀── ptr2\n(count=1)"]
-        S3 -->|"ptr2 销毁"| S4["Object 被删除\n(count=0)"]
+        S1["ptr1 ──▶ Object<br>(count=1)"]
+        S1 -->|"ptr2 = ptr1"| S2["ptr1 ──▶ Object ◀── ptr2<br>(count=2)"]
+        S2 -->|"ptr1 销毁"| S3["Object ◀── ptr2<br>(count=1)"]
+        S3 -->|"ptr2 销毁"| S4["Object 被删除<br>(count=0)"]
     end
 
     subgraph weak["weak_ptr 打破循环引用"]
