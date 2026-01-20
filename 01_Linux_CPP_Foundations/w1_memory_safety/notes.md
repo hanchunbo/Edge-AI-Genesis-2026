@@ -38,6 +38,56 @@ void good_example() {
 }   // 离开作用域，自动释放
 ```
 
+### 1.4 RAII 生命周期流程图
+
+```mermaid
+flowchart TB
+    subgraph RAII["RAII 自动管理"]
+        A1[进入作用域] --> A2[构造函数: 分配资源]
+        A2 --> A3{执行业务逻辑}
+        A3 -->|正常执行| A4[离开作用域]
+        A3 -->|抛出异常| A5[栈展开]
+        A4 --> A6[析构函数: 释放资源]
+        A5 --> A6
+        A6 --> A7[✅ 资源安全释放]
+    end
+
+    subgraph Manual["手动管理 ❌"]
+        B1[new 分配] --> B2{执行业务逻辑}
+        B2 -->|正常执行| B3[delete 释放]
+        B2 -->|抛出异常| B4[❌ 内存泄漏!]
+        B2 -->|忘记 delete| B5[❌ 内存泄漏!]
+    end
+
+    style A7 fill:#90EE90
+    style B4 fill:#FFB6C1
+    style B5 fill:#FFB6C1
+```
+
+### 1.5 智能指针所有权转移图
+
+```mermaid
+flowchart LR
+    subgraph unique["unique_ptr 独占所有权"]
+        U1["ptr1 ──owns──▶ Object"]
+        U1 -->|"std::move(ptr1)"| U2["ptr2 ──owns──▶ Object"]
+        U2 --> U3["ptr1 = nullptr"]
+    end
+
+    subgraph shared["shared_ptr 共享所有权"]
+        S1["ptr1 ──▶ Object\n(count=1)"]
+        S1 -->|"ptr2 = ptr1"| S2["ptr1 ──▶ Object ◀── ptr2\n(count=2)"]
+        S2 -->|"ptr1 销毁"| S3["Object ◀── ptr2\n(count=1)"]
+        S3 -->|"ptr2 销毁"| S4["Object 被删除\n(count=0)"]
+    end
+
+    subgraph weak["weak_ptr 打破循环引用"]
+        W1["A ──shared──▶ B"]
+        W1 --> W2["B ──weak──▶ A"]
+        W2 --> W3["✅ 无循环引用"]
+    end
+```
+
 ---
 
 ## 2. 智能指针
