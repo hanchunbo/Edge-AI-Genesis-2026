@@ -127,6 +127,89 @@ make
          ◄─────── count ───────►
 ```
 
+### 项目时序图
+
+下图展示了我们项目中生产者-消费者模型的完整执行流程：
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant Main as Main Thread
+    participant P as Producer
+    participant RB as RingBuffer
+    participant C1 as Consumer 1
+    participant C2 as Consumer 2
+
+    %% 初始化阶段
+    rect rgb(200, 220, 240)
+        Note over Main,C2: 初始化阶段
+        Main->>RB: 创建 ThreadSafeRingBuffer
+        Main->>C1: Start() 启动消费者线程
+        Main->>C2: Start() 启动消费者线程
+        Main->>P: Start(30) 启动生产者线程
+    end
+
+    %% 生产消费阶段
+    rect rgb(200, 240, 200)
+        Note over Main,C2: 生产-消费阶段
+        
+        loop 每帧图像
+            P->>P: 创建 SimulatedImage
+            P->>RB: Push(image)
+            
+            alt 缓冲区未满
+                RB-->>P: 入队成功
+                RB->>RB: notify_one() 唤醒消费者
+            else 缓冲区已满
+                P->>P: wait() 等待空位
+            end
+        end
+
+        par Consumer 1 处理
+            C1->>RB: Pop()
+            alt 缓冲区有数据
+                RB-->>C1: 返回 Image
+                C1->>C1: 模拟处理 (5-20ms)
+            else 缓冲区为空
+                C1->>C1: wait() 等待数据
+            end
+        and Consumer 2 处理
+            C2->>RB: Pop()
+            alt 缓冲区有数据
+                RB-->>C2: 返回 Image
+                C2->>C2: 模拟处理 (5-20ms)
+            else 缓冲区为空
+                C2->>C2: wait() 等待数据
+            end
+        end
+    end
+
+    %% 停止阶段
+    rect rgb(240, 220, 200)
+        Note over Main,C2: 优雅停止阶段
+        P-->>Main: Producer 完成所有帧
+        Main->>P: Join() 等待生产者结束
+        Main->>RB: Stop() 设置停止标志
+        RB->>RB: notify_all() 唤醒所有等待线程
+        Main->>C1: Stop()
+        Main->>C2: Stop()
+        C1-->>Main: Consumer 1 退出
+        C2-->>Main: Consumer 2 退出
+        Main->>C1: Join()
+        Main->>C2: Join()
+    end
+
+    Note over Main: 统计并输出结果
+```
+
+**时序图说明**：
+
+| 阶段 | 关键操作 | 涉及的同步机制 |
+|------|----------|----------------|
+| 初始化 | 创建缓冲区、启动线程 | `std::thread` 构造 |
+| 生产-消费 | Push/Pop 操作 | `mutex` + `condition_variable` |
+| 优雅停止 | Stop() + Join() | `atomic<bool>` + `notify_all()` |
+
 ---
 
 ## AI 部署场景应用
