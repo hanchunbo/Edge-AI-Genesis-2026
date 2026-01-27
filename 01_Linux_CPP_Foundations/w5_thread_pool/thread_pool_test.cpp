@@ -8,6 +8,7 @@
 #include <numeric>
 #include <random>
 #include <sstream>
+#include <stop_token>
 #include <string>
 #include <vector>
 
@@ -164,7 +165,7 @@ void TestIdleCpuUsage() {
   std::cout << "(Monitor with 'top' or 'htop' in another terminal)\n";
 
   // 等待一段时间，让用户观察 CPU 占用
-  std::this_thread::sleep_for(std::chrono::seconds(2));
+  std::this_thread::sleep_for(std::chrono::seconds(10));
 
   std::cout << "Pending tasks: " << pool.GetPendingTaskCount() << "\n";
   std::cout << "Active tasks: " << pool.GetActiveTaskCount() << "\n";
@@ -282,11 +283,78 @@ void TestExceptionHandling() {
 }
 
 // =============================================================================
+// 测试7：std::stop_token 优雅中断测试 (C++20)
+// =============================================================================
+// 演示如何使用 stop_token 中断长时间运行的任务
+// =============================================================================
+void TestStopTokenInterruption() {
+  std::cout << "\n" << std::string(60, '=') << "\n";
+  std::cout << "Test 7: Stop Token Graceful Interruption (C++20)\n";
+  std::cout << std::string(60, '=') << "\n";
+
+  w5::ThreadPool pool(2);
+  std::atomic<bool> task_started(false);
+  std::atomic<bool> task_interrupted(false);
+  std::atomic<int> iterations_completed(0);
+
+  // 提交一个长时间运行但可中断的任务
+  auto future = pool.SubmitWithToken([&](std::stop_token stop_token) -> int {
+    task_started = true;
+    std::cout << "[Task] Long-running task started\n";
+
+    // 模拟长时间运行的任务（如持续推理）
+    for (int i = 0; i < 1000; ++i) {
+      // 关键：检查 stop_token 实现优雅退出
+      if (stop_token.stop_requested()) {
+        std::cout << "[Task] Stop requested, exiting gracefully at iteration "
+                  << i << "\n";
+        task_interrupted = true;
+        return -1;  // 返回表示被中断
+      }
+
+      // 模拟工作
+      std::this_thread::sleep_for(std::chrono::milliseconds(10));
+      ++iterations_completed;
+    }
+
+    std::cout << "[Task] Completed all iterations\n";
+    return 0;
+  });
+
+  // 等待任务开始
+  while (!task_started) {
+    std::this_thread::sleep_for(std::chrono::milliseconds(1));
+  }
+
+  // 让任务运行一小段时间
+  std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
+  std::cout << "[Main] Requesting shutdown (stop)...\n";
+  std::cout << "[Main] Iterations before stop: " << iterations_completed << "\n";
+
+  // 请求停止
+  pool.Shutdown();
+
+  // 获取结果
+  int result = future.get();
+  std::cout << "[Main] Task returned: " << result << "\n";
+  std::cout << "[Main] Task was interrupted: "
+            << (task_interrupted ? "Yes" : "No") << "\n";
+  std::cout << "[Main] Total iterations: " << iterations_completed << "\n";
+
+  if (task_interrupted && iterations_completed < 1000) {
+    std::cout << "[PASSED] Stop token interruption test\n";
+  } else {
+    std::cout << "[FAILED] Task was not interrupted properly\n";
+  }
+}
+
+// =============================================================================
 // 主函数
 // =============================================================================
 int main() {
   std::cout << "========================================\n";
-  std::cout << "W5: 高性能并发进阶 - 通用线程池架构\n";
+  std::cout << "W5: 高性能并发进阶 - 通用线程池架构 (C++20)\n";
   std::cout << "========================================\n";
 
   // 运行所有测试
@@ -296,6 +364,7 @@ int main() {
   TestGracefulShutdown();
   TestWaitForAll();
   TestExceptionHandling();
+  TestStopTokenInterruption();
 
   std::cout << "\n========================================\n";
   std::cout << "All tests completed!\n";
