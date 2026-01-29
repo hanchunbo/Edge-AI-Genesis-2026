@@ -1,10 +1,20 @@
 cmake_minimum_required(VERSION 3.16)
 project(MoveSemanticsDemo LANGUAGES CXX)
 
-# 设置 C++ 标准
-set(CMAKE_CXX_STANDARD 17)
+# ============================================================================
+# C++20 配置
+# ============================================================================
+# 本项目使用 C++20 特性：
+# - std::span (零拷贝视图)
+# - std::format (类型安全格式化)
+# - Concepts (编译期类型约束)
+# ============================================================================
+set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
+
+# 强制使用 GCC 13
+set(CMAKE_CXX_COMPILER "g++-13")
 
 # 编译选项
 add_compile_options(

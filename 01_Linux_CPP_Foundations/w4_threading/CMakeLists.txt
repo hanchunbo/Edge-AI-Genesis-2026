@@ -1,9 +1,21 @@
 cmake_minimum_required(VERSION 3.16)
 project(w4_threading LANGUAGES CXX)
 
-set(CMAKE_CXX_STANDARD 17)
+# ============================================================================
+# C++20 配置
+# ============================================================================
+# 本项目使用 C++20 特性：
+# - std::counting_semaphore (轻量级同步原语)
+# - std::atomic::wait/notify (无锁等待)
+# - std::jthread & std::stop_token (RAII 线程)
+# - std::format (类型安全格式化)
+# ============================================================================
+set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
+# 强制使用 GCC 13
+set(CMAKE_CXX_COMPILER "g++-13")
 
 # 添加线程库支持
 find_package(Threads REQUIRED)

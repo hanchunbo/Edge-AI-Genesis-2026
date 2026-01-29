@@ -237,3 +237,42 @@ static_assert(std::is_nothrow_move_constructible_v<CustomImage>,
 - [cppreference: std::move](https://en.cppreference.com/w/cpp/utility/move)
 - [cppreference: std::forward](https://en.cppreference.com/w/cpp/utility/forward)
 - Effective Modern C++ - Item 23-30
+
+---
+
+## 8. 技术演进复盘 (C++11/17 → C++20/23)
+
+> 本节根据 `format_project.md` 演进式重构工作流自动生成，总结项目中从旧标准向新标准转换的核心逻辑差异。
+
+### 8.1 数据传递：指针 → std::span
+
+| 维度 | Legacy C++11/17 | Modern C++20/23 |
+|------|-----------------|-----------------|
+| **实现** | `void Process(T* data, size_t len)` | `void Process(std::span<T> data)` |
+| **边界检查** | 无，依赖调用者 | 支持 `at()` 抛异常检查 |
+| **范围遍历** | 手动索引循环 | 原生支持范围 for |
+| **类型安全** | 弱（指针可隐式转换） | 强（模板类型绑定） |
+
+**Pain Point 解决**：消除了指针 + 长度参数分离导致的不一致，统一为单一视图对象。
+
+### 8.2 格式化输出：iostream/printf → std::format
+
+| 维度 | Legacy C++11/17 | Modern C++20/23 |
+|------|-----------------|-----------------|
+| **实现** | `std::cout << "value: " << val;` | `std::format("value: {}", val)` |
+| **类型检查** | 运行时（printf）/ 无检查（cout） | 编译期类型检查 |
+| **可读性** | 差（多次 `<<` 操作符） | 好（类似 Python f-string） |
+| **性能** | iostream 有 locale 开销 | 更高效 |
+
+**Pain Point 解决**：printf 的格式串错误不再是运行时 UB，std::format 在编译期捕获类型不匹配。
+
+### 8.3 模板约束：SFINAE → Concepts
+
+| 维度 | Legacy C++11/17 | Modern C++20/23 |
+|------|-----------------|-----------------|
+| **实现** | `enable_if_t<is_movable_v<T>>` | `requires std::movable<T>` |
+| **错误信息** | 数百行模板展开 | 一行清晰的约束失败 |
+| **可读性** | 极差 | 接近自然语言 |
+| **组合性** | 困难 | 支持 `&&` / `\|\|` 组合 |
+
+**Pain Point 解决**：使用 `std::movable` 等标准 Concept，模板错误信息从"天书"变为人类可读。

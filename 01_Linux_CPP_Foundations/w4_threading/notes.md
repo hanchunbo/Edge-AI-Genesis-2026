@@ -310,3 +310,76 @@ make -j$(nproc)
 - C++ Concurrency in Action (2nd Edition) - Anthony Williams
 - [cppreference: std::condition_variable](https://en.cppreference.com/w/cpp/thread/condition_variable)
 - [Google Thread Sanitizer](https://clang.llvm.org/docs/ThreadSanitizer.html)
+
+---
+
+## 技术演进复盘 (C++11/17 → C++20/23)
+
+本节总结从传统 C++ 到现代 C++ 的核心技术演进，帮助理解 W4 项目中使用的 C++20 特性。
+
+### 1. 线程管理：std::thread → std::jthread
+
+| 方面 | Legacy (C++11/17) | Modern (C++20) |
+|------|-------------------|----------------|
+| 生命周期 | 手动 `join()`/`detach()` | RAII 自动汇合 |
+| 停止机制 | `volatile bool` 标志位 | `std::stop_token` 协作停止 |
+| 异常安全 | 需额外 RAII 封装 | 内置异常安全 |
+
+**代码对比**：
+```cpp
+// Legacy: std::thread
+std::thread t(worker);
+try { /* work */ } catch (...) { }
+t.join();  // 必须手动调用
+
+// Modern: std::jthread (C++20)
+std::jthread t(worker);  // 析构时自动 join
+```
+
+### 2. 同步原语：condition_variable → counting_semaphore
+
+| 方面 | Legacy (C++11/17) | Modern (C++20) |
+|------|-------------------|----------------|
+| 实现 | `mutex` + `cv` + `predicate` | 原子计数器 |
+| 虚假唤醒 | 需 `while`/`predicate` 处理 | 无虚假唤醒 |
+| 性能 | 锁竞争开销 | 轻量原子操作 |
+| 语义 | 通用等待/通知 | 资源计数模型 |
+
+**代码对比**：
+```cpp
+// Legacy: condition_variable
+std::mutex mtx;
+std::condition_variable cv;
+bool ready = false;
+cv.wait(lock, [&]{ return ready; });  // 需要 predicate 防止虚假唤醒
+
+// Modern: counting_semaphore (C++20)
+std::counting_semaphore<16> sem(0);
+sem.acquire();  // 无虚假唤醒，语义清晰
+```
+
+### 3. 格式化输出：iostream/printf → std::format
+
+| 方面 | Legacy (C++11/17) | Modern (C++20) |
+|------|-------------------|----------------|
+| 类型检查 | 运行时（printf）/ 无（iostream） | 编译期 |
+| 语法 | 繁琐拼接 / 格式串 | 简洁占位符 `{}` |
+| 性能 | iostream 较慢 | 优化的格式化引擎 |
+
+**代码对比**：
+```cpp
+// Legacy: iostream
+std::cout << "Frame " << frame_id << " latency: " << latency << "ms" << std::endl;
+
+// Modern: std::format (C++20)
+std::cout << std::format("Frame {} latency: {:.2f}ms\n", frame_id, latency);
+```
+
+### 4. 演进总结
+
+本项目（W4）采用 C++20 现代特性实现生产者-消费者模型：
+
+1. **SemaphoreRingBuffer** 使用 `std::counting_semaphore` 替代传统 `condition_variable`
+2. **ThreadSafeLog** 使用 `std::format` 提供类型安全的线程日志
+3. 代码注释中保留了 `[Legacy/Pain Point/Modern]` 演进标记，便于对比学习
+

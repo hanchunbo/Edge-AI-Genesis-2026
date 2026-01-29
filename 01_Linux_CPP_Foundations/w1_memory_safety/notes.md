@@ -271,3 +271,71 @@ void safe_function() {
 #撤销最近的一次提交并保存之前的修改记录
 git revert --no-edit HEAD
 ```
+
+---
+
+## 8. 技术演进复盘 (C++17 → C++20/23)
+
+本节记录 W1 模块从 C++17 迁移到 C++20/23 的核心技术决策。
+
+### 8.1 错误处理：异常 → std::expected
+
+| 维度 | C++17 (Legacy) | C++20/23 (Modern) |
+|------|----------------|-------------------|
+| **实现** | `throw std::invalid_argument` | `std::expected<T, E>` |
+| **开销** | 栈展开有运行时开销 | 零开销抽象 |
+| **强制处理** | 可忽略（编译器不强制捕获） | 编译期强制处理 |
+| **信息携带** | `what()` 字符串 | 类型安全的 `E` 错误类型 |
+
+```cpp
+// [Legacy C++17]
+SafeTensorBuffer(size_t size) {
+  if (size == 0) throw std::invalid_argument("...");
+}
+
+// [Modern C++23]
+static auto Create(size_t size) -> std::expected<SafeTensorBuffer, TensorError> {
+  if (size == 0) return std::unexpected(TensorError::kZeroSize);
+  // ...
+}
+```
+
+### 8.2 数据传递：指针+长度 → std::span
+
+| 维度 | C++17 (Legacy) | C++20 (Modern) |
+|------|----------------|----------------|
+| **接口** | `void Process(uint8_t* data, size_t len)` | `void Process(std::span<uint8_t> data)` |
+| **边界安全** | 调用方自行保证 | span 携带长度信息 |
+| **范围 for** | 不支持 | 支持 |
+| **子视图** | 手动指针运算 | `span.subspan()` |
+
+### 8.3 日志输出：iostream → std::format
+
+| 维度 | C++17 (Legacy) | C++20 (Modern) |
+|------|----------------|----------------|
+| **语法** | `cout << "size: " << size << endl` | `format("size: {}", size)` |
+| **类型安全** | 弱（`<<` 重载隐式转换） | 强（编译期检查） |
+| **格式化** | `setw/setprecision` 有状态 | `{:>10.2f}` 无状态 |
+| **性能** | 多次函数调用 | 单次格式化 |
+
+### 8.4 类型约束：SFINAE → Concepts
+
+```cpp
+// [Legacy C++17] - 难以理解的错误信息
+template<typename T, typename = std::enable_if_t<std::is_move_constructible_v<T>>>
+void Process(T&& obj);
+
+// [Modern C++20] - 清晰的约束表达
+template<std::movable T>
+void Process(T&& obj);
+```
+
+### 8.5 迁移检查清单
+
+- [x] 所有 `std::cout <<` 替换为 `std::format`
+- [x] 工厂函数提供 `std::expected` 版本
+- [x] 数据视图接口使用 `std::span`
+- [x] 类型约束使用 Concepts (`std::movable`, `std::copyable`)
+- [x] 函数命名改为 PascalCase (Google Style)
+- [x] 添加 `[Legacy/Pain Point/Modern]` 注释模板
+
