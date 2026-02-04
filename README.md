@@ -71,7 +71,7 @@
 | **Q3** | 硬件加速双栈突击 | TensorRT、NCNN、ARM NEON、YOLO 部署 |
 | **Q4** | 系统集成与职场升维 | AI 微服务、Docker、云边协同、MEM 论文 |
 
-详细执行手册见 [docs/Q1.md](./docs/Q1.md)
+详细执行手册见 [docs/Q1.md](./docs/Q1.md) | [docs/Q2.md](./docs/Q2.md)
 
 ---
 
