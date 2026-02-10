@@ -1,0 +1,49 @@
+---
+# Edge-AI-Genesis-2026 Code Formatting
+# Based on Google C++ Style Guide + project conventions
+Language: Cpp
+BasedOnStyle: Google
+
+# Indentation
+IndentWidth: 2
+TabWidth: 2
+UseTab: Never
+AccessModifierOffset: -1
+IndentCaseLabels: true
+NamespaceIndentation: None
+
+# Line width
+ColumnLimit: 80
+
+# C++ standard
+Standard: c++20
+
+# Braces (K&R style)
+BreakBeforeBraces: Attach
+
+# Includes
+SortIncludes: CaseSensitive
+IncludeBlocks: Regroup
+IncludeCategories:
+  # C++ standard library headers
+  - Regex: '<[a-z_]+>'
+    Priority: 2
+  # Project headers
+  - Regex: '".*"'
+    Priority: 1
+
+# Alignment
+AlignAfterOpenBracket: Align
+AlignConsecutiveAssignments: false
+AlignConsecutiveDeclarations: false
+AlignTrailingComments: true
+
+# Other
+AllowShortFunctionsOnASingleLine: Inline
+AllowShortIfStatementsOnASingleLine: WithoutElse
+AllowShortLoopsOnASingleLine: false
+DerivePointerAlignment: false
+PointerAlignment: Left
+SpaceAfterCStyleCast: false
+SpacesBeforeTrailingComments: 2
+...

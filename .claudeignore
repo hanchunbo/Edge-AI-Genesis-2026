@@ -1,0 +1,53 @@
+# =================================================================
+# Edge-AI-Genesis-2026 - Claude 忽略配置文件
+# 目的：节省 Token，防止 Claude 扫描非代码逻辑文件
+# =================================================================
+
+# 1. 编译产物（Token 消耗大户）
+build/
+bin/
+lib/
+*.o
+*.a
+*.so
+*.out
+
+# 2. AI 模型文件（绝对禁止扫描，动辄几百 MB）
+*.onnx
+*.engine
+*.weights
+*.bin
+*.pt
+*.pth
+*.tflite
+
+# 3. 版本控制与环境
+.git/
+.svn/
+.idea/
+.vscode/
+.agent/           # 除非需要 Claude 修改规则，否则建议屏蔽
+node_modules/
+
+# 4. 第三方依赖（通常不需要 Claude 审计源码）
+vcpkg_installed/
+third_party/
+external/
+
+# 5. 日志与临时文件
+*.log
+*.tmp
+*.cache
+temp/
+
+# 6. 文档图片（Claude 无法通过文本接口读取二进制图片内容）
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.pdf
+
+# 7. 静态资源与大数据集
+data/
+datasets/
+assets/
