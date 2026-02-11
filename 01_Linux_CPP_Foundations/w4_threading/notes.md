@@ -210,6 +210,116 @@ sequenceDiagram
 | 生产-消费 | Push/Pop 操作 | `mutex` + `condition_variable` |
 | 优雅停止 | Stop() + Join() | `atomic<bool>` + `notify_all()` |
 
+### 项目时序图（C++20 信号量版本）
+
+下图展示了重构后基于 `std::counting_semaphore` 的执行流程，对应 `producer_consumer.cpp` 的实际实现：
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant Main as Main Thread
+    participant P as Producer
+    participant SRB as SemaphoreRingBuffer
+    participant ES as empty_slots_ (sem=16)
+    participant FS as full_slots_ (sem=0)
+    participant C1 as Consumer 1
+    participant C2 as Consumer 2
+
+    %% 初始化阶段
+    rect rgb(200, 220, 240)
+        Note over Main,C2: 初始化阶段
+        Main->>SRB: 创建 SemaphoreRingBuffer<SimulatedImage, 16>
+        Note right of SRB: empty_slots_(16), full_slots_(0)
+        Main->>C1: Start() 启动消费者线程
+        Main->>C2: Start() 启动消费者线程
+        Main->>P: Start(30) 启动生产者线程 (60 FPS)
+    end
+
+    %% 生产消费阶段
+    rect rgb(200, 240, 200)
+        Note over Main,C2: 生产-消费阶段（信号量同步）
+
+        loop 每帧图像
+            P->>P: 创建 SimulatedImage(id, 1920, 1080)
+            P->>ES: acquire() 等待空槽
+            alt empty_slots_ > 0
+                ES-->>P: 计数 -1，立即返回
+            else empty_slots_ == 0（缓冲区满）
+                P->>P: 阻塞等待空槽释放
+            end
+            P->>SRB: lock_guard + buffer_[tail_] = move(image)
+            P->>FS: release() 通知有新数据
+            Note right of FS: full_slots_ 计数 +1
+        end
+
+        par Consumer 1 处理
+            C1->>FS: try_acquire_for(100ms)
+            alt full_slots_ > 0
+                FS-->>C1: 计数 -1，立即返回
+                C1->>SRB: lock_guard + move(buffer_[head_])
+                C1->>ES: release() 归还空槽
+                Note right of ES: empty_slots_ 计数 +1
+                C1->>C1: 模拟处理 (5-20ms)
+            else 超时（无数据）
+                FS-->>C1: 返回 false
+                C1->>C1: 检查 stopped_ 后重试
+            end
+        and Consumer 2 处理
+            C2->>FS: try_acquire_for(100ms)
+            alt full_slots_ > 0
+                FS-->>C2: 计数 -1，立即返回
+                C2->>SRB: lock_guard + move(buffer_[head_])
+                C2->>ES: release() 归还空槽
+                C2->>C2: 模拟处理 (5-20ms)
+            else 超时（无数据）
+                FS-->>C2: 返回 false
+                C2->>C2: 检查 stopped_ 后重试
+            end
+        end
+    end
+
+    %% 停止阶段
+    rect rgb(240, 220, 200)
+        Note over Main,C2: 优雅停止阶段
+        P-->>Main: Producer 完成所有帧
+        Main->>P: Join() 等待生产者结束
+        Main->>Main: sleep(500ms) 等待消费者处理残留数据
+        Main->>SRB: Stop()
+        SRB->>SRB: stopped_ = true
+        SRB->>ES: release() 解除生产者阻塞
+        SRB->>FS: release() 解除消费者阻塞
+        Main->>C1: Stop()
+        Main->>C2: Stop()
+        C1->>C1: acquire 后检查 stopped_，退出循环
+        C2->>C2: acquire 后检查 stopped_，退出循环
+        C1-->>Main: Consumer 1 退出
+        C2-->>Main: Consumer 2 退出
+        Main->>C1: Join()
+        Main->>C2: Join()
+    end
+
+    Note over Main: 统计并输出结果
+```
+
+**信号量版本时序图说明**：
+
+| 阶段 | 关键操作 | 涉及的同步机制 |
+|------|----------|----------------|
+| 初始化 | 创建缓冲区、启动线程 | `std::thread` 构造 |
+| 生产-消费 | acquire/release 操作 | `counting_semaphore` + `mutex`（仅保护数据拷贝） |
+| 优雅停止 | Stop() + release() | `atomic<bool>` + 信号量 release 解除阻塞 |
+
+**与传统版本的核心差异**：
+
+| 对比项 | condition_variable 版本 | counting_semaphore 版本 |
+|--------|------------------------|------------------------|
+| 等待空槽 | `cv.wait(lock, predicate)` | `empty_slots_.acquire()` |
+| 等待数据 | `cv.wait(lock, predicate)` | `full_slots_.try_acquire_for(100ms)` |
+| 通知机制 | `notify_one()` / `notify_all()` | `release()` 增加计数 |
+| 虚假唤醒 | 需 predicate 循环检查 | 无虚假唤醒 |
+| mutex 用途 | 保护条件判断 + 数据操作 | 仅保护数据读写（更短临界区） |
+| 停止机制 | `notify_all()` 广播唤醒 | `release()` 释放信号量解除阻塞 |
+
 ---
 
 ## AI 部署场景应用
