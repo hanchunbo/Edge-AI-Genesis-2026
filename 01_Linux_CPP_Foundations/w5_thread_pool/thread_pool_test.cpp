@@ -6,11 +6,10 @@
 #include <atomic>
 #include <chrono>
 #include <cmath>
+#include <gtest/gtest.h>
 #include <stop_token>
 #include <string>
 #include <vector>
-
-#include <gtest/gtest.h>
 
 namespace {
 
@@ -47,9 +46,8 @@ TEST(ThreadPoolTest, BasicFunctionality) {
   EXPECT_EQ(future2.get(), 30);
 
   // 字符串参数
-  auto future3 = pool.Submit(
-      [](const std::string& s) { return s + " World!"; },
-      std::string("Hello"));
+  auto future3 = pool.Submit([](const std::string& s) { return s + " World!"; },
+                             std::string("Hello"));
   EXPECT_EQ(future3.get(), "Hello World!");
 }
 
@@ -64,8 +62,7 @@ TEST(ThreadPoolTest, ImageRotationParallel) {
   // 串行基准
   double serial_sum = 0.0;
   for (int i = 0; i < kNumTasks; ++i) {
-    serial_sum +=
-        SimulateImageRotation(i, kImageWidth, kImageHeight, i * 3.6);
+    serial_sum += SimulateImageRotation(i, kImageWidth, kImageHeight, i * 3.6);
   }
 
   // 并行执行
@@ -154,20 +151,19 @@ TEST(ThreadPoolTest, StopTokenInterruption) {
   std::atomic<bool> task_interrupted(false);
   std::atomic<int> iterations_completed(0);
 
-  auto future =
-      pool.SubmitWithToken([&](std::stop_token stop_token) -> int {
-        task_started = true;
+  auto future = pool.SubmitWithToken([&](std::stop_token stop_token) -> int {
+    task_started = true;
 
-        for (int i = 0; i < 1000; ++i) {
-          if (stop_token.stop_requested()) {
-            task_interrupted = true;
-            return -1;
-          }
-          std::this_thread::sleep_for(std::chrono::milliseconds(10));
-          ++iterations_completed;
-        }
-        return 0;
-      });
+    for (int i = 0; i < 1000; ++i) {
+      if (stop_token.stop_requested()) {
+        task_interrupted = true;
+        return -1;
+      }
+      std::this_thread::sleep_for(std::chrono::milliseconds(10));
+      ++iterations_completed;
+    }
+    return 0;
+  });
 
   // 等待任务启动
   while (!task_started) {

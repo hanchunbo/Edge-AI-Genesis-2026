@@ -36,17 +36,17 @@
 #include <atomic>              // std::atomic —— 无锁原子操作
 #include <concepts>            // C++20 Concepts —— 模板约束
 #include <condition_variable>  // condition_variable_any —— 支持 stop_token
-#include <format>              // C++20 std::format —— 类型安全格式化（保留备用）
-#include <functional>          // std::function, std::bind —— 可调用对象包装
-#include <future>              // std::future, std::packaged_task —— 异步结果
-#include <memory>              // std::shared_ptr, std::make_shared
-#include <mutex>               // std::mutex, std::lock_guard, std::unique_lock
-#include <queue>               // std::queue —— 任务队列
-#include <stdexcept>           // std::runtime_error —— 异常类型
-#include <stop_token>          // C++20 std::stop_token —— 协同中断机制
-#include <thread>              // std::jthread, std::thread::hardware_concurrency
-#include <type_traits>         // std::invoke_result_t —— 返回类型推导
-#include <vector>              // std::vector —— 存储工作线程
+#include <format>       // C++20 std::format —— 类型安全格式化（保留备用）
+#include <functional>   // std::function, std::bind —— 可调用对象包装
+#include <future>       // std::future, std::packaged_task —— 异步结果
+#include <memory>       // std::shared_ptr, std::make_shared
+#include <mutex>        // std::mutex, std::lock_guard, std::unique_lock
+#include <queue>        // std::queue —— 任务队列
+#include <stdexcept>    // std::runtime_error —— 异常类型
+#include <stop_token>   // C++20 std::stop_token —— 协同中断机制
+#include <thread>       // std::jthread, std::thread::hardware_concurrency
+#include <type_traits>  // std::invoke_result_t —— 返回类型推导
+#include <vector>       // std::vector —— 存储工作线程
 
 namespace w5 {
 
@@ -100,8 +100,8 @@ class ThreadPool {
    *                    如果传入 0，会自动调整为 1。
    */
   explicit ThreadPool(size_t num_threads = std::thread::hardware_concurrency())
-      : stop_source_(),        // 初始化停止信号源（默认未请求停止）
-        active_tasks_(0) {     // 初始化活跃任务计数为 0
+      : stop_source_(),     // 初始化停止信号源（默认未请求停止）
+        active_tasks_(0) {  // 初始化活跃任务计数为 0
     // 防御性编程：确保至少有一个工作线程
     if (num_threads == 0) {
       num_threads = 1;
@@ -129,9 +129,8 @@ class ThreadPool {
       // C++20: std::jthread([this](std::stop_token st) { WorkerLoop(st); });
       //        stop_token 由 jthread 自动管理
       // ════════════════════════════════════════════════════════════════════
-      workers_.emplace_back([this](std::stop_token stop_token) {
-        WorkerLoop(stop_token);
-      });
+      workers_.emplace_back(
+          [this](std::stop_token stop_token) { WorkerLoop(stop_token); });
     }
   }
 
@@ -155,9 +154,7 @@ class ThreadPool {
    * - 明确表达关闭意图
    * - 在析构前统一发送停止信号
    */
-  ~ThreadPool() {
-    Shutdown();
-  }
+  ~ThreadPool() { Shutdown(); }
 
   // ==========================================================================
   // 禁用拷贝和移动
@@ -465,9 +462,8 @@ class ThreadPool {
   void WaitForAll() {
     std::unique_lock<std::mutex> lock(queue_mutex_);
     // 等待条件：队列为空 且 没有正在执行的任务
-    done_condition_.wait(lock, [this]() {
-      return tasks_.empty() && active_tasks_.load() == 0;
-    });
+    done_condition_.wait(
+        lock, [this]() { return tasks_.empty() && active_tasks_.load() == 0; });
   }
 
  private:
@@ -495,7 +491,8 @@ class ThreadPool {
   //
   // 当调用 wait(lock, stop_token, predicate) 时，内部会：
   // 1. 注册一个 stop_callback 到 stop_token
-  // 2. 当 stop_token.stop_requested() 变为 true 时，callback 自动调用 notify_all()
+  // 2. 当 stop_token.stop_requested() 变为 true 时，callback 自动调用
+  // notify_all()
   // 3. wait 被唤醒后检查 predicate，即使 predicate 为 false 也会因 stop 返回
   //
   // 这意味着：不需要在 Shutdown() 中手动 notify_all()！
@@ -535,9 +532,7 @@ class ThreadPool {
         // std::condition_variable 的 wait 只有两参数版本，不支持 stop_token。
         // std::condition_variable_any 才有三参数版本。
         // ════════════════════════════════════════════════════════════════════
-        condition_.wait(lock, stop_token, [this]() {
-          return !tasks_.empty();
-        });
+        condition_.wait(lock, stop_token, [this]() { return !tasks_.empty(); });
 
         // 检查是否因停止请求而唤醒（队列仍为空）
         if (stop_token.stop_requested() && tasks_.empty()) {
@@ -656,9 +651,9 @@ class ThreadPool {
   // --- 温数据区 (Warm Data) ---
   // 中等频率访问，互斥锁保护，不需要特殊对齐
   std::queue<std::function<void()>> tasks_;  // 任务队列
-  mutable std::mutex queue_mutex_;           // 队列锁（mutable 允许 const 方法中加锁）
-  std::condition_variable_any condition_;    // 任务到来/停止通知
-  std::condition_variable done_condition_;   // 任务完成通知
+  mutable std::mutex queue_mutex_;  // 队列锁（mutable 允许 const 方法中加锁）
+  std::condition_variable_any condition_;   // 任务到来/停止通知
+  std::condition_variable done_condition_;  // 任务完成通知
 
   // --- 热数据区 (Hot Data) ---
   // 高频访问，需要缓存行隔离，彻底消除伪共享

@@ -41,7 +41,8 @@ void TestBasicRaii() {
     std::cout << std::format("首字节值: 0x{:02X}\n", buffer.data()[0]);
 
     // 作用域即将结束...
-    std::cout << std::format("\n>>> 即将离开作用域，析构函数将被自动调用 <<<\n\n");
+    std::cout << std::format(
+        "\n>>> 即将离开作用域，析构函数将被自动调用 <<<\n\n");
   }
   // ← 离开作用域，buffer 自动析构，内存自动释放
 
@@ -61,8 +62,7 @@ void TestMoveSemantics() {
   SafeTensorBuffer original(2048);  // 2KB
   original.fill(0x55);
 
-  std::cout << std::format("原始缓冲区 - 大小: {}, 有效: {}\n",
-                           original.size(),
+  std::cout << std::format("原始缓冲区 - 大小: {}, 有效: {}\n", original.size(),
                            original.valid() ? "是" : "否");
 
   // 使用 std::move 转移所有权
@@ -70,10 +70,8 @@ void TestMoveSemantics() {
   SafeTensorBuffer moved(std::move(original));
 
   std::cout << std::format("原始缓冲区 - 大小: {}, 有效: {} (已被移动)\n",
-                           original.size(),
-                           original.valid() ? "是" : "否");
-  std::cout << std::format("新缓冲区   - 大小: {}, 有效: {}\n",
-                           moved.size(),
+                           original.size(), original.valid() ? "是" : "否");
+  std::cout << std::format("新缓冲区   - 大小: {}, 有效: {}\n", moved.size(),
                            moved.valid() ? "是" : "否");
 
   // 验证数据完整性
@@ -237,8 +235,7 @@ void TestExpectedErrorHandling() {
   // 正常创建
   auto result1 = SafeTensorBuffer::Create(1024);
   if (result1.has_value()) {
-    std::cout << std::format("Create(1024) 成功，大小: {}\n",
-                             result1->size());
+    std::cout << std::format("Create(1024) 成功，大小: {}\n", result1->size());
   }
 
   // 错误情况：size = 0

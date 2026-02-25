@@ -42,13 +42,13 @@
 #define CUSTOM_IMAGE_HPP_
 
 #include <algorithm>
-#include <concepts>    // C++20 Concepts
+#include <concepts>  // C++20 Concepts
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
-#include <format>      // C++20 std::format
+#include <format>  // C++20 std::format
 #include <iostream>
-#include <span>        // C++20 std::span
+#include <span>  // C++20 std::span
 #include <type_traits>
 #include <utility>
 
@@ -196,7 +196,8 @@ class CustomImage {
 
   // [Legacy C++11/17]: 使用原始指针 + size_t 参数传递数据 (T* data, size_t len)
   // [Pain Point]: 无边界检查、不知道长度、无法使用范围 for、类型不安全
-  // [Modern C++20/23]: std::span 提供类型安全的零拷贝视图，支持边界检查和范围遍历
+  // [Modern C++20/23]: std::span
+  // 提供类型安全的零拷贝视图，支持边界检查和范围遍历
   /**
    * @brief 获取只读数据视图 (C++20 std::span)
    *
@@ -267,8 +268,7 @@ class CustomImage {
     std::cout << std::format("=== CustomImage 统计 ===\n");
     std::cout << std::format("  构造次数: {}\n", construction_count_);
     std::cout << std::format("  析构次数: {}\n", destruction_count_);
-    std::cout << std::format("  拷贝次数: {} (每次约 {:.1f} MB)\n",
-                             copy_count_,
+    std::cout << std::format("  拷贝次数: {} (每次约 {:.1f} MB)\n", copy_count_,
                              static_cast<double>(kImageSize) / 1024.0 / 1024.0);
     std::cout << std::format("  移动次数: {} (零拷贝)\n", move_count_);
   }
@@ -290,7 +290,8 @@ class CustomImage {
 
 // [Legacy C++11/17]: 使用 std::enable_if + SFINAE 实现模板约束
 // [Pain Point]: 错误信息晦涩难懂、代码复杂难以维护
-// [Modern C++20/23]: std::movable 等 Concept 提供清晰的编译期类型约束和友好错误信息
+// [Modern C++20/23]: std::movable 等 Concept
+// 提供清晰的编译期类型约束和友好错误信息
 
 // 使用 C++20 Concepts 验证 CustomImage 满足 movable 要求
 static_assert(std::movable<CustomImage>,
@@ -325,7 +326,7 @@ inline double CalculateAveragePixel(std::span<const uint8_t> image_data) {
   if (image_data.empty()) {
     return 0.0;
   }
-  
+
   uint64_t sum = 0;
   for (uint8_t pixel : image_data) {  // span 支持范围 for
     sum += pixel;

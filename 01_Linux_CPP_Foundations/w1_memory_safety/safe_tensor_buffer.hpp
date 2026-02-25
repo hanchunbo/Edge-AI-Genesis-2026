@@ -15,16 +15,16 @@
 #ifndef SAFE_TENSOR_BUFFER_HPP_
 #define SAFE_TENSOR_BUFFER_HPP_
 
-#include <concepts>    // C++20 Concepts
+#include <concepts>  // C++20 Concepts
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
-#include <expected>    // C++23 std::expected
-#include <format>      // C++20 std::format
+#include <expected>  // C++23 std::expected
+#include <format>    // C++20 std::format
 #include <functional>
 #include <iostream>
 #include <memory>
-#include <span>        // C++20 std::span
+#include <span>  // C++20 std::span
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -37,10 +37,10 @@
 // [Modern C++20/23]: std::expected<T, E> 强制编译期处理，零运行时开销
 // ============================================================================
 enum class TensorError {
-  kZeroSize,       // 缓冲区大小为零
-  kAllocationFail, // 内存分配失败
-  kNullPointer,    // 空指针操作
-  kOutOfRange      // 越界访问
+  kZeroSize,        // 缓冲区大小为零
+  kAllocationFail,  // 内存分配失败
+  kNullPointer,     // 空指针操作
+  kOutOfRange       // 越界访问
 };
 
 // 错误转字符串（constexpr 编译期求值）
@@ -130,8 +130,8 @@ class SafeTensorBuffer {
     buffer.size_ = size;
     buffer.data_ = data;
     std::cout << std::format(
-        "[SafeTensorBuffer] Create: 分配 {} 字节, 地址 = {}\n",
-        size, static_cast<void*>(data));
+        "[SafeTensorBuffer] Create: 分配 {} 字节, 地址 = {}\n", size,
+        static_cast<void*>(data));
     return buffer;
   }
 
@@ -243,7 +243,7 @@ class SafeTensorBuffer {
   // 私有默认构造（供 Create 工厂使用）
   SafeTensorBuffer() : size_(0), data_(nullptr) {}
 
-  size_t size_;    // 成员变量后缀下划线 (Google Style)
+  size_t size_;  // 成员变量后缀下划线 (Google Style)
   uint8_t* data_;
 };
 
