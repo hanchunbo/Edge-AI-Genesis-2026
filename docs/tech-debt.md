@@ -1,6 +1,6 @@
 # 技术债记录
 
-> 最后更新：2026-02-26
+> 最后更新：2026-03-07
 
 ---
 
@@ -61,31 +61,31 @@ void Start() { thread_ = std::jthread(&ImageProducer::ProducerLoop, this, n); }
 
 ---
 
-## [OPEN] W3 ModelScanner 未做 hpp/cpp 分离
+## [FIXED] W3 ModelScanner 完成 hpp/cpp 分离
 
-**严重度**：🟡 中（类定义和 `main()` 混在同一个 `.cpp`，无法被其他模块引用）
+**修复**：2026-02-26（随 W1-W4 测试补齐一起完成）
 
-`model_scanner.cpp` 中 `ModelScanner` 类及相关类型应拆分为：
+已拆分为：
 - `model_scanner.hpp`：类声明、`ModelFileInfo` 结构体
 - `model_scanner.cpp`：实现 + `main()` 演示
 
 ---
 
-## [OPEN] W4 `.cpp` 文件含不当的头文件保护
+## [FIXED] W4 `.cpp` 文件不当头文件保护已移除
 
-**严重度**：🟢 低（不影响编译，但违反 C++ 惯例）
+**修复**：2026-02-26
 
-`producer_consumer.cpp` 第 48-49 行和末尾有 `#ifndef` / `#endif` 保护宏，
-`.cpp` 文件不应有头文件保护，应直接删除。
+`producer_consumer.cpp` 中历史遗留的 `#ifndef` / `#endif` 保护宏已删除，
+目前仅在头文件 `producer_consumer.hpp` 保留 include guard。
 
 ---
 
-## [OPEN] W2-W4 CMakeLists.txt 未显式设置 `CXX_STANDARD`
+## [FIXED] W2-W4 CMakeLists.txt 已显式设置 `CXX_STANDARD`
 
-**严重度**：🟢 低（当前依赖根目录的 C++20 默认值，未来升级时容易漏配）
+**修复**：2026-02-26
 
-W2、W3、W4 的 `CMakeLists.txt` 应补充：
+W2、W3、W4 的 `CMakeLists.txt` 已补充：
 ```cmake
 set_target_properties(<target> PROPERTIES CXX_STANDARD 20)
 ```
-（若将来引入 `std::expected` 则改为 23，与 W1/W6 保持一致）
+（若将来引入 `std::expected` 则按目标需要升级到 23，与 W1/W6 局部设置保持一致）

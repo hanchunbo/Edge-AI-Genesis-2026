@@ -37,10 +37,22 @@
 | W3 | C++20特性实战 | std::format, string_view | ✅ 完成 |
 | W4 | 多线程与任务同步 | counting_semaphore | ✅ 完成 |
 | W5 | 通用线程池架构 | jthread, stop_token, alignas(64) | ✅ 完成 |
-| W6 | 高性能I/O (mmap) | std::span | ⬜ 待开始 |
+| W6 | 高性能I/O (mmap) | std::span | ✅ 完成（实现+测试） |
 | W7-W8 | CMake工程构建 | C++20 模块支持 | ⬜ 待开始 |
 | W9-W11 | OpenCV底层实战 | std::mdspan (C++23) | ⬜ 待开始 |
 | W12-W13 | 阶段项目 | 全栈整合 | ⬜ 待开始 |
+
+---
+
+## 2026 上半年求职导向里程碑（成功率优先）
+
+| 时间窗口 | 必达产出 (P0) | 求职动作 |
+|------|------|------|
+| 2026-03 ~ 2026-04 | W6 benchmark + W7/W8 工程化完善 + W14 最小推理引擎 | 准备第一版简历、项目讲解稿、技术问答 |
+| 2026-04-15 ~ 2026-05-15 | W15/W16 最小 YOLO 管线可演示 | 第一批投递（C++工程优化/推理基础部署岗） |
+| 2026-06 ~ 2026-07 | W18 Profiling 报告 + W20 量化结果（可分步） | 第二批投递（端侧推理/量化优化岗） |
+
+> 执行原则：先拿到面试与 offer，再补齐 Qt 上位机与完整产品化能力。
 
 ---
 
@@ -84,7 +96,8 @@ Edge-AI-Genesis-2026/
 │   ├── w2_move_semantics/       # 移动语义 + std::span
 │   ├── w3_filesystem/           # std::format + string_view
 │   ├── w4_threading/            # counting_semaphore
-│   └── w5_thread_pool/          # jthread + stop_token + alignas(64)
+│   ├── w5_thread_pool/          # jthread + stop_token + alignas(64)
+│   └── w6_mmap_loader/          # mmap + std::span + std::expected
 ├── 02_Inference_Analysis/       # Q2 模型分析与性能报表
 ├── 03_Hardware_Acceleration/    # Q3 核心加速框架源码
 ├── 04_System_Integration/       # Q4 完整系统集成方案
