@@ -162,7 +162,7 @@ enum class MmapError {
 - [x] 测试：正常加载 float 数组
 - [x] 测试：文件大小不对齐返回 `kSizeMismatch`
 - [x] 测试：不存在的文件返回 `kOpenFailed`
-- [ ] Benchmark：mmap vs `std::ifstream` 读 128MB 文件
+- [x] Benchmark：mmap vs `std::ifstream` 读 128MB 文件
 
 ---
 
@@ -172,11 +172,17 @@ enum class MmapError {
 # 配置（首次或清理后）
 cmake -B build -S . -DCMAKE_CXX_COMPILER=g++-13
 
-# 只编译 w6
-cmake --build build --target w6_mmap_loader_test -j$(nproc)
+# 只编译 w6（测试 + benchmark）
+cmake --build build --target w6_mmap_loader_test w6_mmap_benchmark -j$(nproc)
 
-# 只跑 w6 测试
+# 快速验证：只跑功能测试（14 个 GTest case，不含 benchmark，速度快）
 ctest --test-dir build -R W6_MmapLoaderTest --output-on-failure
+
+# 最终验收：跑全部 W6（功能测试 + benchmark，用于提交前确认）
+ctest --test-dir build -R "W6_" --output-on-failure
+
+# 直接运行 benchmark 可执行文件（输出 mmap vs ifstream 吞吐量对比）
+./build/01_Linux_CPP_Foundations/w6_mmap_loader/w6_mmap_benchmark
 
 # 格式检查（CI 必须通过）
 find . -maxdepth 3 -regex '.*0[1-4]_.*' \( -name "*.cpp" -o -name "*.hpp" \) \

@@ -37,7 +37,7 @@
 | W3 | C++20特性实战 | std::format, string_view | ✅ 完成 |
 | W4 | 多线程与任务同步 | counting_semaphore | ✅ 完成 |
 | W5 | 通用线程池架构 | jthread, stop_token, alignas(64) | ✅ 完成 |
-| W6 | 高性能I/O (mmap) | std::span | ✅ 完成（实现+测试） |
+| W6 | 高性能I/O (mmap) | std::span | ✅ 完成（实现+测试+benchmark） |
 | W7-W8 | CMake工程构建 | C++20 模块支持 | ⬜ 待开始 |
 | W9-W11 | OpenCV底层实战 | std::mdspan (C++23) | ⬜ 待开始 |
 | W12-W13 | 阶段项目 | 全栈整合 | ⬜ 待开始 |
