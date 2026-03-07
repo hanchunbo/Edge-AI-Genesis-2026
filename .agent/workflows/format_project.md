@@ -1,29 +1,71 @@
 ---
-description: # 描执行 Google Style 自动化检查与修复
+description: 执行 Google Style 自动化格式检查与修复
 ---
 
 # 描述：执行 Google Style 自动化检查与修复
 # 触发指令：/google-format
 
-步骤：
-1. **修复与反馈**：
-   - 检查项目目录。若为 Flat 结构，自动创建 include/, src/, tests/, docs/ 文件夹。
-   - 将 .hpp 移动至 include/，.cpp 实现移动至 src/，测试代码移动至 tests/，notes.md 移动至 docs/。
-   - 更新 CMake：重写 CMakeLists.txt，使用 target_include_directories 包含 include 目录，并确保 add_executable 路径正确。
-2. **自动生成 .clang-format**：如果在根目录没找到，请自动根据 Google 官方标准生成一个 `.clang-format` 配置文件。
-3. **全场扫描**：使用 `clang-format` 扫描项目内所有的 `.cc`, `.h`, `.cpp`, `.hpp` 文件。
-4. **修复与反馈**：
-   - 自动执行 `clang-format -i` 修改文件。
-   - 检查命名规范。如果发现变量名不符合 `google_style_guide.md`（如私有变量没加下划线），请通过重构（Rename）方式进行修复。
-5. **演进式重构工作流 (Evolutionary Refactoring Workflow)**
-   - **触发条件**：任何从旧标准（C++11/14/17）向新标准（C++20/23）的代码转换。
-   - **强制注释模板**：在关键代码块上方必须插入：
-     ```cpp
-     // [Legacy C++11/17]: <描述旧版实现方式>
-     // [Pain Point]: <说明旧版的性能瓶颈或维护隐患，例如：手动内存管理风险、虚假唤醒、缺乏编译期约束>
-     // [Modern C++20/23]: <说明新特性如何解决问题，例如：jthread 的 RAII 特性、std::span 的零拷贝视图>
-     ```
-   - **笔记同步**：格式化代码后，自动在对应的 `notes.md` 中生成“技术演进复盘”小节，总结转换的核心逻辑差异。
-6. **编译验证**：修改完成后，自动运行 `cmake` 确保重命名操作没有破坏代码逻辑。
-   - 运行 cmake .. && make。
-   - 新增：如果存在 tests/ 目录，必须运行编译后的测试程序，验证逻辑未因重构损坏。
+> **重要说明**：本项目每个周次模块采用**扁平结构**（`.hpp` / `.cpp` 同在 `wx_xxx/` 目录下），
+> 禁止创建或重排 `include/` / `src/` / `tests/` 子目录，否则会破坏头文件相对路径引用，
+> 导致编译失败。
+
+## 步骤
+
+### 1. 生成或检查 .clang-format
+
+如果根目录没有 `.clang-format`，根据 Google 官方标准自动生成。
+如果已存在，跳过此步。
+
+### 2. 全量格式扫描与修复
+
+扫描所有季度目录下的 `.cpp` / `.hpp` 文件并自动修复：
+
+```bash
+find . -maxdepth 3 -regex '.*0[1-4]_.*' \( -name "*.cpp" -o -name "*.hpp" \) \
+  | xargs clang-format -i
+```
+
+修复后再做一次 dry-run 确认无残留违规：
+
+```bash
+find . -maxdepth 3 -regex '.*0[1-4]_.*' \( -name "*.cpp" -o -name "*.hpp" \) \
+  | xargs clang-format --dry-run --Werror
+```
+
+### 3. 命名规范检查
+
+检查 `.cpp` / `.hpp` 中是否有不符合 `google_style_guide.md` 的命名：
+
+- 私有成员变量必须有尾部下划线（如 `data_`）
+- 常量必须以 `k` 开头（如 `kMaxSize`）
+- 函数名必须大驼峰（如 `GetCount()`）
+
+如发现问题，通过重构（Rename）方式修复，**不要手动字符串替换**。
+
+### 4. 演进式注释检查
+
+触发条件：任何从旧标准（C++11/14/17）向新标准（C++20/23）转换的代码块。
+
+在关键代码上方必须插入以下三行演进注释（用中文填写尖括号内容）：
+
+```cpp
+// [Legacy C++11/17]: <描述旧版实现方式，如：手动 join std::thread>
+// [Pain Point]: <说明旧版的痛点，如：忘记 join 导致程序崩溃>
+// [Modern C++20/23]: <说明新特性如何解决，如：std::jthread RAII 自动汇合>
+```
+
+格式化代码后，在对应模块的 `notes.md` 中同步"技术演进复盘"小节，
+总结新旧写法的核心差异。
+
+### 5. 编译验证
+
+修改完成后，必须验证编译和测试全部通过：
+
+```bash
+# 项目根目录执行（build 目录若不存在会自动创建）
+cmake -B build -S . -DCMAKE_CXX_COMPILER=g++-13
+cmake --build build -j$(nproc)
+ctest --test-dir build --output-on-failure
+```
+
+如果测试失败，说明重构破坏了逻辑，必须回滚并排查原因，**不得跳过失败的测试**。
