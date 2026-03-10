@@ -1,23 +1,24 @@
-/**
- * @file benchmark_move_vs_copy.cpp
- * @brief 移动语义 vs 深拷贝性能对比 Benchmark
- *
- * 测试场景：将 N 帧 4K 图像存入 std::vector
- * 对比：深拷贝方式 vs 移动语义方式
- *
- * 预期结果：
- * - 深拷贝：每帧复制 ~24MB，耗时较长
- * - 移动语义：仅指针转移，耗时接近 0ms
- *
- * 注意：为了准确测量拷贝/移动的差异，需要排除内存分配时间
- */
+// Copyright 2026 Edge-AI-Genesis-2026
+//
+// ============================================================================
+// 文件功能：移动语义 vs 深拷贝性能对比 Benchmark
+// ============================================================================
+//
+// 测试场景：将 N 帧 4K 图像存入 std::vector
+// 对比：深拷贝方式 vs 移动语义方式
+//
+// 预期结果：
+// - 深拷贝：每帧复制 ~24MB，耗时较长
+// - 移动语义：仅指针转移，耗时接近 0ms
+//
+// 注意：为了准确测量拷贝/移动的差异，需要排除内存分配时间
+
+#include "custom_image.hpp"
 
 #include <chrono>
 #include <iomanip>
 #include <iostream>
 #include <vector>
-
-#include "custom_image.hpp"
 
 // =============================================================================
 //                          Benchmark 配置
@@ -48,7 +49,8 @@ Duration BenchmarkPureCopy(size_t frame_count) {
   std::cout << "  帧数: " << frame_count << std::endl;
 
   // 步骤1：预先分配所有源图像（不计入时间）
-  std::cout << "  准备阶段: 预分配 " << frame_count << " 个源图像..." << std::endl;
+  std::cout << "  准备阶段: 预分配 " << frame_count << " 个源图像..."
+            << std::endl;
   std::vector<CustomImage> sources;
   sources.reserve(frame_count);
   for (size_t i = 0; i < frame_count; ++i) {
@@ -91,7 +93,8 @@ Duration BenchmarkPureMove(size_t frame_count) {
   std::cout << "  帧数: " << frame_count << std::endl;
 
   // 步骤1：预先分配所有源图像（不计入时间）
-  std::cout << "  准备阶段: 预分配 " << frame_count << " 个源图像..." << std::endl;
+  std::cout << "  准备阶段: 预分配 " << frame_count << " 个源图像..."
+            << std::endl;
   std::vector<CustomImage> sources;
   sources.reserve(frame_count);
   for (size_t i = 0; i < frame_count; ++i) {
@@ -236,13 +239,15 @@ void PrintPureSummary(Duration pure_copy, Duration pure_move) {
   std::cout << std::fixed << std::setprecision(2);
   std::cout << "\n| 操作     | 耗时 (ms)    | 性能提升      |" << std::endl;
   std::cout << "|----------|--------------|---------------|" << std::endl;
-  std::cout << "| 深拷贝   | " << std::setw(12) << copy_ms << " | 基准       |" << std::endl;
+  std::cout << "| 深拷贝   | " << std::setw(12) << copy_ms << " | 基准       |"
+            << std::endl;
   std::cout << "| 移动语义 | " << std::setw(12) << move_ms << " | "
             << std::setw(10) << (copy_ms / move_ms) << "x |" << std::endl;
 
   std::cout << "\n[关键发现]" << std::endl;
-  std::cout << "  - 移动语义相比深拷贝快 " << (copy_ms / move_ms) << " 倍!" << std::endl;
-  
+  std::cout << "  - 移动语义相比深拷贝快 " << (copy_ms / move_ms) << " 倍!"
+            << std::endl;
+
   if (move_ms < 1.0) {
     std::cout << "  ✓ 移动操作耗时 < 1ms，接近零拷贝！" << std::endl;
   }
@@ -257,7 +262,7 @@ void PrintPureSummary(Duration pure_copy, Duration pure_move) {
 }
 
 void PrintTypicalSummary(Duration typical_copy, Duration typical_move,
-                          Duration emplace) {
+                         Duration emplace) {
   std::cout << "\n" << std::string(60, '=') << std::endl;
   std::cout << "            典型使用场景对比 (包含内存分配)" << std::endl;
   std::cout << std::string(60, '=') << std::endl;
@@ -267,9 +272,10 @@ void PrintTypicalSummary(Duration typical_copy, Duration typical_move,
   double emplace_ms = emplace.count();
 
   std::cout << std::fixed << std::setprecision(2);
-  std::cout << "\n| 方式          | 耗时 (ms)    | 相对性能      |" << std::endl;
+  std::cout << "\n| 方式          | 耗时 (ms)    | 相对性能      |"
+            << std::endl;
   std::cout << "|---------------|--------------|---------------|" << std::endl;
-  std::cout << "| 创建+拷贝     | " << std::setw(12) << copy_ms 
+  std::cout << "| 创建+拷贝     | " << std::setw(12) << copy_ms
             << " | 1.00x (基准) |" << std::endl;
   std::cout << "| 创建+移动     | " << std::setw(12) << move_ms << " | "
             << std::setw(10) << (copy_ms / move_ms) << "x |" << std::endl;
@@ -302,7 +308,8 @@ void ShowCompileTimeVerification() {
   std::cout << "  ✓ std::is_copy_assignable_v<CustomImage>" << std::endl;
 
   std::cout << "\n[noexcept 的重要性]" << std::endl;
-  std::cout << "  移动操作标记 noexcept 后，std::vector 扩容时会优先使用移动" << std::endl;
+  std::cout << "  移动操作标记 noexcept 后，std::vector 扩容时会优先使用移动"
+            << std::endl;
   std::cout << "  而非保守地使用拷贝，这对容器性能至关重要。" << std::endl;
 }
 
@@ -320,9 +327,8 @@ int main() {
   std::cout << "  图像尺寸: " << CustomImage::Width() << " x "
             << CustomImage::Height() << " x " << CustomImage::Channels()
             << " (4K BGR)" << std::endl;
-  std::cout << "  单帧大小: "
-            << (CustomImage::kImageSize / 1024.0 / 1024.0) << " MB"
-            << std::endl;
+  std::cout << "  单帧大小: " << (CustomImage::kImageSize / 1024.0 / 1024.0)
+            << " MB" << std::endl;
 
   // =========================================================================
   // 第一组测试：纯拷贝 vs 纯移动（排除内存分配时间）

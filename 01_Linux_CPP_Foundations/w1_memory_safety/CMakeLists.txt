@@ -1,18 +1,12 @@
-cmake_minimum_required(VERSION 3.16)
-project(SafeTensorDemo LANGUAGES CXX)
+# Copyright 2026 Edge-AI-Genesis
+# W1: Memory Safety - RAII + SafeTensorBuffer (C++23)
 
-# 设置 C++ 标准
-set(CMAKE_CXX_STANDARD 17)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_CXX_EXTENSIONS OFF)
-
-# 编译选项
-add_compile_options(
-    -Wall       # 开启所有警告
-    -Wextra     # 额外警告
-    -Wpedantic  # 严格标准警告
-    -g          # 调试信息（用于 Valgrind）
-)
-
-# 可执行文件
 add_executable(safe_tensor_demo main.cpp)
+set_target_properties(safe_tensor_demo PROPERTIES CXX_STANDARD 23)
+
+# GTest 单元测试
+add_executable(w1_memory_safety_test w1_memory_safety_test.cpp)
+set_target_properties(w1_memory_safety_test PROPERTIES CXX_STANDARD 23)
+target_include_directories(w1_memory_safety_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_link_libraries(w1_memory_safety_test PRIVATE GTest::gtest_main)
+add_test(NAME W1_MemorySafetyTest COMMAND w1_memory_safety_test)

@@ -1,18 +1,13 @@
-cmake_minimum_required(VERSION 3.16)
-project(MoveSemanticsDemo LANGUAGES CXX)
+# Copyright 2026 Edge-AI-Genesis
+# W2: Move Semantics - Benchmark (C++20)
 
-# 设置 C++ 标准
-set(CMAKE_CXX_STANDARD 17)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_CXX_EXTENSIONS OFF)
-
-# 编译选项
-add_compile_options(
-    -Wall       # 开启所有警告
-    -Wextra     # 额外警告
-    -Wpedantic  # 严格标准警告
-    -O2         # 优化等级（用于准确的性能测试）
-)
-
-# 可执行文件
 add_executable(benchmark_move_vs_copy benchmark_move_vs_copy.cpp)
+set_target_properties(benchmark_move_vs_copy PROPERTIES CXX_STANDARD 20)
+target_compile_options(benchmark_move_vs_copy PRIVATE -O2)
+
+# GTest 单元测试
+add_executable(w2_move_semantics_test w2_move_semantics_test.cpp)
+set_target_properties(w2_move_semantics_test PROPERTIES CXX_STANDARD 20)
+target_include_directories(w2_move_semantics_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_link_libraries(w2_move_semantics_test PRIVATE GTest::gtest_main)
+add_test(NAME W2_MoveSemanticsTest COMMAND w2_move_semantics_test)

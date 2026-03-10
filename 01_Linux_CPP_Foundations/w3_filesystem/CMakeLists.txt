@@ -1,23 +1,13 @@
-# Copyright 2026 Edge-AI-Genesis-2026
-# CMake configuration for W3: Filesystem Model Scanner
+# Copyright 2026 Edge-AI-Genesis
+# W3: Filesystem - Model Scanner (C++20)
 
-cmake_minimum_required(VERSION 3.14)
-project(ModelScanner LANGUAGES CXX)
-
-# 要求 C++17 标准
-set(CMAKE_CXX_STANDARD 17)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_CXX_EXTENSIONS OFF)
-
-# 编译选项
-add_compile_options(-Wall -Wextra -Wpedantic)
-
-# 添加可执行文件
 add_executable(model_scanner model_scanner.cpp)
+set_target_properties(model_scanner PROPERTIES CXX_STANDARD 20)
+target_include_directories(model_scanner PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 
-# 在某些旧版本 GCC 上可能需要链接 stdc++fs
-# GCC 9+ 和 Clang 9+ 已将 filesystem 内置，无需额外链接
-# 但为了兼容性，我们检测并添加
-if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND CMAKE_CXX_COMPILER_VERSION VERSION_LESS 9.0)
-  target_link_libraries(model_scanner PRIVATE stdc++fs)
-endif()
+# GTest 单元测试
+add_executable(w3_filesystem_test w3_filesystem_test.cpp)
+set_target_properties(w3_filesystem_test PROPERTIES CXX_STANDARD 20)
+target_include_directories(w3_filesystem_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_link_libraries(w3_filesystem_test PRIVATE GTest::gtest_main)
+add_test(NAME W3_FilesystemTest COMMAND w3_filesystem_test)
