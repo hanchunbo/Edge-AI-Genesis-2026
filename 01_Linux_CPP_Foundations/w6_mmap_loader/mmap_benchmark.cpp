@@ -29,6 +29,10 @@
 namespace w6 {
 
 // 128 MB 测试文件，内容为递增 float 序列（0.0f, 1.0f, 2.0f, ...）
+// ULL 后缀（unsigned long long）：确保乘法在 64 位无符号整数域进行。
+// 若写成 128 * 1024 * 1024，字面量默认类型为 int（32 位），
+// 当有人将 128 改为 4096（4 GB）时会在赋值前静默溢出为负数或 0。
+// 加 ULL 后，C++ 规则会将整条乘法链提升为 64 位，防御未来维护引入的溢出 bug。
 constexpr std::size_t kBenchFileSizeBytes = 128ULL * 1024 * 1024;
 constexpr std::size_t kBenchFloatCount = kBenchFileSizeBytes / sizeof(float);
 
@@ -39,7 +43,10 @@ constexpr std::size_t kBenchFloatCount = kBenchFileSizeBytes / sizeof(float);
 static void CreateBenchFile(const std::filesystem::path& path) {
   std::ofstream ofs(path, std::ios::binary);
   std::vector<float> data(kBenchFloatCount);
-  // iota 填充递增序列，确保编译器无法将后续读取优化为常量
+  // std::iota（来自 <numeric>）：用递增序列填充范围，等价于：
+  //   data[0]=0.0f, data[1]=1.0f, data[2]=2.0f, ...
+  // 作用：生成内容确定、非全零的数据集，模拟真实模型权重场景。
+  // 全零可能被 OS/编译器优化掉，随机数则生成较慢且不可复现。
   std::iota(data.begin(), data.end(), 0.0f);
   ofs.write(reinterpret_cast<const char*>(data.data()),
             static_cast<std::streamsize>(kBenchFileSizeBytes));
@@ -49,10 +56,17 @@ static void CreateBenchFile(const std::filesystem::path& path) {
 // 防止编译器将"只读不用"的循环消除（死代码消除规避）
 // 将累加和写入 volatile 变量，产生可见副作用
 // ============================================================================
+// 「Sink」命名来源：数据流中与 Source（源）相对的「汇/接收器」，
+// 语义是「假装消费掉计算结果」，让编译器不敢删除前面的求和循环。
+// 函数签名使用 static（文件内部链接），而非返回值修饰：
+//   static 在函数前 = 限制可见性（仅本 .cpp），不对外导出符号。
+//   const double Foo() 中的 const 修饰的是按值返回的副本，无实际约束力。
 static void Sink(float val) {
   static volatile float s_sink;
   s_sink = val;
-  // 强制读回，抑制 GCC "set but not used" 警告（写后读保证副作用不被优化）
+  // (void) 转型：C/C++ 标准惯用法，主动「使用」一个值但明确丢弃结果。
+  // 这是抑制「写了但没读」编译器警告的唯一标准写法；
+  // 改写为 (int)s_sink 或 (bool)s_sink 虽能编译，但仍会产生警告。
   (void)s_sink;
 }
 
@@ -71,6 +85,12 @@ using Seconds = std::chrono::duration<double>;
 // 计时范围覆盖 MmapLoader::Load()（mmap 系统调用）+ 全量顺序求和。
 // mmap 本身几乎瞬时完成（仅建立页表映射），实际 I/O 由 Page Fault 惰性触发。
 // MADV_SEQUENTIAL 指示内核激进预读，将 Page Fault 代价分摊到后台。
+//
+// [[nodiscard]]（C++17 引入，C++20 支持附加说明字符串）：
+//   调用方若忽略返回值，编译器发出 warning。函数全部价值在于返回的耗时数值，
+//   忽略它等于整轮 Benchmark 白跑，[[nodiscard]] 在编译期拦截此类失误。
+// static（链接属性，非返回值修饰）：
+//   此函数仅在本编译单元内可见，不导出符号，避免与其他文件的同名函数冲突。
 //
 // @return 本轮耗时（秒）
 [[nodiscard]] static double BenchmarkMmap(const std::filesystem::path& path) {
