@@ -38,7 +38,8 @@
 | W4 | 多线程与任务同步 | counting_semaphore | ✅ 完成 |
 | W5 | 通用线程池架构 | jthread, stop_token, alignas(64) | ✅ 完成 |
 | W6 | 高性能I/O (mmap) | std::span | ✅ 完成（实现+测试+benchmark） |
-| W7-W8 | CMake工程构建 | C++20 模块支持 | ⬜ 待开始 |
+| W7 | CMake工程化 (I) | INTERFACE/PUBLIC/PRIVATE, Generator Expressions | 🚧 进行中 |
+| W8 | CMake工程化 (II) | FetchContent, 覆盖率 | ⬜ 待开始 |
 | W9-W11 | OpenCV底层实战 | std::mdspan (C++23) | ⬜ 待开始 |
 | W12-W13 | 阶段项目 | 全栈整合 | ⬜ 待开始 |
 
@@ -97,7 +98,8 @@ Edge-AI-Genesis-2026/
 │   ├── w3_filesystem/           # std::format + string_view
 │   ├── w4_threading/            # counting_semaphore
 │   ├── w5_thread_pool/          # jthread + stop_token + alignas(64)
-│   └── w6_mmap_loader/          # mmap + std::span + std::expected
+│   ├── w6_mmap_loader/          # mmap + std::span + std::expected
+│   └── w7_cmake_engineering/    # CMake lib/app/tests 三层结构 + C++20 模块
 ├── 02_Inference_Analysis/       # Q2 模型分析与性能报表
 ├── 03_Hardware_Acceleration/    # Q3 核心加速框架源码
 ├── 04_System_Integration/       # Q4 完整系统集成方案
@@ -108,22 +110,60 @@ Edge-AI-Genesis-2026/
 
 ## 快速开始
 
+### 前提条件
+
 ```bash
+# 确认 GCC 13+ 已安装
+g++-13 --version
+
 # 克隆仓库
 git clone https://github.com/hanchunbo/Edge-AI-Genesis-2026.git
 cd Edge-AI-Genesis-2026
+```
 
-# 确保 GCC 13+ 已安装
-g++-13 --version
+### 场景一：有网络（默认）
 
-# 构建 Q1 项目（以 W5 线程池为例）
-cd 01_Linux_CPP_Foundations/w5_thread_pool
-mkdir build && cd build
-cmake .. -DCMAKE_BUILD_TYPE=Release
-make -j$(nproc)
+单元测试通过 FetchContent 自动下载 GoogleTest：
 
-# 运行测试
-./thread_pool_test
+```bash
+cmake -B build -S . -DCMAKE_CXX_COMPILER=g++-13
+cmake --build build -j$(nproc)
+ctest --test-dir build --output-on-failure
+```
+
+### 场景二：无网络 / 公司内网
+
+**方式 A（推荐）—— 使用系统包，零配置**
+
+```bash
+sudo apt install libgtest-dev libgmock-dev
+
+cmake -B build -S . -DCMAKE_CXX_COMPILER=g++-13
+cmake --build build -j$(nproc)
+ctest --test-dir build --output-on-failure
+```
+
+> CMake 会优先检测系统 GTest，找到后不发起任何网络请求。
+
+**方式 B —— 使用本地 zip 缓存**
+
+```bash
+# 在有网环境提前下载（或通过其他渠道传入）：
+# https://github.com/google/googletest/archive/refs/tags/v1.15.2.zip
+# 解压到任意目录，如 ~/gtest-src/
+
+cmake -B build -S . -DCMAKE_CXX_COMPILER=g++-13 \
+      -DFETCHCONTENT_SOURCE_DIR_GOOGLETEST=~/gtest-src/googletest-1.15.2
+cmake --build build -j$(nproc)
+ctest --test-dir build --output-on-failure
+```
+
+**方式 C —— 跳过测试，只编译功能程序**
+
+```bash
+cmake -B build -S . -DCMAKE_CXX_COMPILER=g++-13 -DBUILD_TESTING=OFF
+cmake --build build -j$(nproc)
+# 此时无需 GTest，所有演示程序和 benchmark 均可正常编译运行
 ```
 
 ---
