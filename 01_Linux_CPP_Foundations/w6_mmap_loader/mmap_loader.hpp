@@ -157,13 +157,15 @@ class MmapLoader {
 
     // 步骤 5：建立内存映射（核心系统调用）
     // mmap 将文件直接映射到进程虚拟地址空间，用户态代码通过指针零拷贝读取数据；
-    // 传统 read() 需额外将内核 Page Cache 拷贝到用户缓冲区，mmap 省去了这次拷贝。
+    // 传统 read() 需额外将内核 Page Cache 拷贝到用户缓冲区，mmap
+    // 省去了这次拷贝。
     //   nullptr    → 让内核自动选择映射地址
     //   byte_size  → 映射的字节范围
     //   PROT_READ  → 只读保护，任何写操作触发 SIGSEGV
     //   MAP_PRIVATE→ 私有映射（写时复制），修改不回写磁盘，比 MAP_SHARED 更安全
     //   fd, 0      → 从文件头（offset=0，满足页对齐要求）开始映射
-    // 调用成功后 addr 即为文件内容在内存中的起始地址，按需 Page Fault 惰性加载。
+    // 调用成功后 addr 即为文件内容在内存中的起始地址，按需 Page Fault
+    // 惰性加载。
     void* addr = ::mmap(nullptr, byte_size, PROT_READ, MAP_PRIVATE, fd, 0);
 
     // 步骤 6：mmap 建立后立即关闭 fd
@@ -188,13 +190,15 @@ class MmapLoader {
   // 调用方可直接用于 std::ranges 算法、范围 for、subspan 切片
   [[nodiscard]] span_type Span() const noexcept {
     if (addr_ == nullptr) return {};
-    // addr_ 是 void*（mmap 返回无类型指针，内核只管地址，不知道存的是什么类型）。
-    // std::span 不接受 void*，需分两步转换：
+    // addr_ 是 void*（mmap
+    // 返回无类型指针，内核只管地址，不知道存的是什么类型）。 std::span 不接受
+    // void*，需分两步转换：
     //   1. static_cast<const T*>(addr_)：程序员对编译器的承诺——
     //      「这块内存里存的是 T 类型数据，请按 T 解释它」。
     //   2. byte_size_ / sizeof(T)：将字节数换算为元素个数
     //      （例：128 MB / 4 = 33,554,432 个 float）。
-    // std::span 拿到「首元素指针 + 元素个数」后，即可安全遍历、切片，无任何数据拷贝。
+    // std::span 拿到「首元素指针 +
+    // 元素个数」后，即可安全遍历、切片，无任何数据拷贝。
     return span_type(static_cast<const T*>(addr_), byte_size_ / sizeof(T));
   }
 
