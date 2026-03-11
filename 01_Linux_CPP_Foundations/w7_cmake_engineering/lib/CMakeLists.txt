@@ -1,6 +1,12 @@
 # Copyright 2026 Edge-AI-Genesis
 # W7 lib/：核心演示 —— add_library + INTERFACE/PRIVATE/PUBLIC 三种权限
 
+# GNUInstallDirs：提供平台无关的标准安装路径变量
+#   CMAKE_INSTALL_LIBDIR     = lib（x86）或 lib/x86_64-linux-gnu（Debian 多架构）
+#   CMAKE_INSTALL_INCLUDEDIR = include
+# 硬编码 "lib" 在 Debian/Ubuntu 64 位系统上路径错误，是生产项目的常见坑
+include(GNUInstallDirs)
+
 add_library(w7_tensor_utils STATIC tensor_utils.cpp)
 
 # =============================================================================
@@ -14,17 +20,22 @@ add_library(w7_tensor_utils STATIC tensor_utils.cpp)
 # 这里 tensor_utils.hpp 既是本库实现需要的，也是消费者需要 include 的
 # → 用 PUBLIC，消费者只写 target_link_libraries 就能自动找到头文件，无需手动指定路径
 #
-# Generator Expression $<BUILD_INTERFACE:...>：
-#   构建阶段 → 指向源码树中的真实目录
-#   install 阶段 → 切换为安装后的路径（本项目暂不配置 install）
+# Generator Expression $<BUILD_INTERFACE:...> / $<INSTALL_INTERFACE:...>：
+#   构建阶段 → BUILD_INTERFACE 生效，指向源码树中的真实目录
+#   install 阶段 → INSTALL_INTERFACE 生效，指向安装后的相对路径（见下方 install() 规则）
 target_include_directories(
   w7_tensor_utils
   PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
          $<INSTALL_INTERFACE:include/w7>)
 
 # PRIVATE 编译选项：只影响 tensor_utils.cpp 的编译，不传染给 app/tests
-# 如果改为 PUBLIC/INTERFACE，app 和 tests 也会被加上 -O2，可能掩盖调试信息
-target_compile_options(w7_tensor_utils PRIVATE -O2)
+# 如果改为 PUBLIC/INTERFACE，app 和 tests 也会被加上优化选项，可能掩盖调试信息
+#
+# 用生成器表达式按构建类型条件设置，而非硬编码 -O2：
+#   硬编码 -O2 会绕过 CMAKE_BUILD_TYPE=Debug，导致 Debug 构建也被优化，无法调试
+#   $<CONFIG:Release>：只有 Release 构建类型时该表达式为 1，优化选项才生效
+target_compile_options(w7_tensor_utils
+                       PRIVATE $<$<CONFIG:Release>:-O2>)
 
 # INTERFACE 定义演示：本库自身编译时 *不* 定义此宏，但 app/tests 会自动获得
 # 现实中用于让消费者知道库的版本，而无需本库头文件显式导出
@@ -46,18 +57,28 @@ target_compile_definitions(w7_tensor_utils
 install(
   TARGETS w7_tensor_utils
   EXPORT W7TensorUtilsTargets
-  ARCHIVE DESTINATION lib
-  INCLUDES DESTINATION include)
+  ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+  INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
 
 # 安装头文件到 include/w7/：
 #   采用子目录（w7/）而非直接放 include/ 根，避免与其他库头文件命名冲突
-install(FILES tensor_utils.hpp DESTINATION include/w7)
+install(FILES tensor_utils.hpp
+        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/w7)
 
 # 导出 targets 文件：让外部项目可以 find_package(W7TensorUtils) 后直接 link
 # NAMESPACE w7::：消费者写 target_link_libraries(app PRIVATE w7::w7_tensor_utils)
-# Destination：cmake 模块的惯用安装路径，pkg-config 工具链可自动发现
 install(
   EXPORT W7TensorUtilsTargets
   FILE W7TensorUtilsTargets.cmake
   NAMESPACE w7::
-  DESTINATION lib/cmake/W7TensorUtils)
+  DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/W7TensorUtils)
+
+# W7TensorUtilsConfig.cmake：find_package(W7TensorUtils) 的入口文件
+# 没有这个文件，find_package 找不到本库，只有 Targets.cmake 是不够的
+# configure_file 将 @变量@ 替换后写入 build 目录，再由 install() 安装到目标位置
+configure_file(
+  "${CMAKE_CURRENT_SOURCE_DIR}/W7TensorUtilsConfig.cmake.in"
+  "${CMAKE_CURRENT_BINARY_DIR}/W7TensorUtilsConfig.cmake"
+  @ONLY)
+install(FILES "${CMAKE_CURRENT_BINARY_DIR}/W7TensorUtilsConfig.cmake"
+        DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/W7TensorUtils)
