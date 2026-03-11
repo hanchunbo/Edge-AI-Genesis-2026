@@ -116,6 +116,46 @@ target_sources(mymodule PUBLIC
 
 **本项目状态**：GCC 13 对具名模块支持有限（实验性），需要 CMake 3.28+。
 模块演示在 `modules/CMakeLists.txt` 中加了版本检查，低版本会跳过并打印提示。
+Consumer 演示在 `modules/module_consumer.cpp`，GCC < 14 时自动跳过编译。
+
+---
+
+### 6. INSTALL 规则（生产级安装配置）
+
+**为什么需要 install()**：
+构建树（build tree）中的 `target_include_directories` 只在当前构建有效。
+外部项目通过 `find_package()` 使用本库时，必须有 install() 生成的 export 配置。
+
+```cmake
+# 1. 安装库文件 + 声明 export 集合名
+install(
+  TARGETS w7_tensor_utils
+  EXPORT W7TensorUtilsTargets
+  ARCHIVE DESTINATION lib          # .a 文件 → ${prefix}/lib/
+  INCLUDES DESTINATION include)   # 头文件根路径声明（配合 INSTALL_INTERFACE）
+
+# 2. 安装头文件（用子目录避免命名冲突）
+install(FILES tensor_utils.hpp DESTINATION include/w7)
+
+# 3. 生成 targets cmake 文件（外部项目 find_package 时读取）
+install(
+  EXPORT W7TensorUtilsTargets
+  FILE W7TensorUtilsTargets.cmake
+  NAMESPACE w7::              # 消费者写 w7::w7_tensor_utils
+  DESTINATION lib/cmake/W7TensorUtils)
+```
+
+**验证安装**：
+```bash
+cmake --install build --prefix /tmp/w7_install_test
+ls /tmp/w7_install_test/lib/                        # libw7_tensor_utils.a
+ls /tmp/w7_install_test/include/w7/                 # tensor_utils.hpp
+ls /tmp/w7_install_test/lib/cmake/W7TensorUtils/    # W7TensorUtilsTargets.cmake
+```
+
+**Checklist**：
+- [x] INSTALL 规则：`install(TARGETS/FILES/EXPORT)`，`$<INSTALL_INTERFACE:include>` 生成器表达式
+- [x] Consumer 演示：`modules/module_consumer.cpp`，`import w7.hello;` 完整调用链
 
 ---
 
