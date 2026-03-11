@@ -166,6 +166,20 @@ cmake --build build -j$(nproc)
 # 此时无需 GTest，所有演示程序和 benchmark 均可正常编译运行
 ```
 
+### 调试专用（ASAN / TSAN）
+
+```bash
+# 内存越界 / use-after-free 检测
+cmake -B build -S . -DCMAKE_CXX_COMPILER=g++-13 -DENABLE_ASAN=ON
+cmake --build build --target <目标名> -j$(nproc)
+ctest --test-dir build -R "<周次正则>" --output-on-failure
+
+# 线程竞争检测
+cmake -B build -S . -DCMAKE_CXX_COMPILER=g++-13 -DENABLE_TSAN=ON
+cmake --build build --target <目标名> -j$(nproc)
+ctest --test-dir build -R "<周次正则>" --output-on-failure
+```
+
 ---
 
 ## 工程复盘点

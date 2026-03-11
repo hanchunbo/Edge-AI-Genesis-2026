@@ -3,111 +3,33 @@
 > 本文件是给 Claude Code AI 助手的项目说明书。Claude 每次进入项目时都会读取此文件，
 > 按照这里的规范来写代码、命名、注释和提交。
 
-## Project Overview（项目概述）
-
-### 项目背景与目标
-
-**Edge-AI-Genesis-2026** 是一个面向 AI 部署工程师转型的实战学习计划，核心目标是：
-> 用现代 C++20/23 构建**可演示、可测量、有技术深度**的端侧 AI 推理工程能力，
-> 支撑从软件外包（18K）向 AI 部署/应用专家（30K+）的职业跳转。
-
-技术路线聚焦**不可替代性**：AI 推理的终局在端侧（手机/车机/IoT），
-需要同时懂模型 + 懂 C++ 工程 + 懂资源约束，纯算法工程师和纯业务 C++ 工程师都做不到这一点。
-
-### 当前进度
+## 当前进度
 
 **当前处于 Q1 W7（CMake 工程化）阶段，W1-W6 已全部完成。**
 每开始新的 week，必须更新此处的进度描述。
 
-### 周次速查表（Q1）
+## Build（构建速查）
 
-| 阶段 | 周次 | 主题 | 关键技术 | 状态 |
-|------|------|------|----------|------|
-| 一 | W1 | 内存安全与 RAII | `unique_ptr`, `shared_ptr`, Concepts | ✅ |
-| 一 | W2 | 移动语义与零拷贝 | `std::span`, 右值引用 | ✅ |
-| 一 | W3 | C++20 特性实战 | `std::format`, `string_view` | ✅ |
-| 一 | W4 | 多线程与任务同步 | `counting_semaphore` | ✅ |
-| 一 | W5 | 通用线程池架构 | `jthread`, `stop_token`, `alignas(64)` | ✅ |
-| 二 | W6 | 高性能 I/O (mmap) | `mmap`, `std::span`, `std::expected` | ✅ |
-| 二 | W7 | CMake 工程化 | C++20 模块支持 | 🚧 进行中 |
-| 二 | W8 | CMake 进阶 | 待定 | ⬜ |
-| 三 | W9-W11 | OpenCV 底层实战 | `std::mdspan` (C++23), SIMD | ⬜ |
-| 三 | W12-W13 | 阶段性项目 | 全栈整合 | ⬜ |
-
-## Build Commands（构建命令）
-
-### 首次配置
+详细命令见 `README.md` Quick Start 节（含离线/ASAN/TSAN 场景）。常用命令：
 
 ```bash
-# 必须用 g++-13，清理 build/ 后也需要重新执行
-cmake -B build -S . -DCMAKE_CXX_COMPILER=g++-13
+cmake -B build -S . -DCMAKE_CXX_COMPILER=g++-13           # 首次配置
+cmake --build build --target <目标名> -j$(nproc)            # 编译当前周目标
+ctest --test-dir build -R "W7_" --output-on-failure        # 当前周测试
+find . -maxdepth 3 -regex '.*0[1-4]_.*' \( -name "*.cpp" -o -name "*.hpp" \) | xargs clang-format --dry-run --Werror  # 格式检查（CI 强制）
 ```
 
-### 当前周次模块的编译与验证（最常用）
-
-每个周次的**目标名**就是该模块 `CMakeLists.txt` 里 `add_executable(xxx ...)` 的 `xxx`；
-**CTest 名**就是 `add_test(NAME Yyy ...)` 的 `Yyy`。
-
-```bash
-# 只编译当前周的目标（以 W6 为例，有多个目标时空格分隔）
-cmake --build build --target w6_mmap_loader_test w6_mmap_benchmark -j$(nproc)
-
-# 只跑当前周的测试（-R 后面是正则，W6_ 可匹配该周所有 CTest 条目）
-ctest --test-dir build -R "W6_" --output-on-failure
-
-# 快速验证功能正确性（只跑 GTest，不跑耗时的 benchmark）
-ctest --test-dir build -R W6_MmapLoaderTest --output-on-failure
-```
-
-> **如何查目标名**：`cmake --build build --target help 2>/dev/null | grep "w[0-9]"`
-> 或直接看该周 `CMakeLists.txt` 里的 `add_executable` / `add_test`。
-
-### 整体项目的编译与验证
-
-```bash
-# 编译所有目标
-cmake --build build -j$(nproc)
-
-# 跑所有测试
-ctest --test-dir build --output-on-failure
-```
-
-### 格式检查（CI 强制，提交前必须通过）
-
-```bash
-# 检查（失败则 PR 无法合入）
-find . -maxdepth 3 -regex '.*0[1-4]_.*' \( -name "*.cpp" -o -name "*.hpp" \) | xargs clang-format --dry-run --Werror
-
-# 自动修复（检查失败后先跑这条，再重新检查）
-find . -maxdepth 3 -regex '.*0[1-4]_.*' \( -name "*.cpp" -o -name "*.hpp" \) | xargs clang-format -i
-```
-
-### 调试专用（排查 bug 时才需要）
-
-```bash
-# 内存越界 / use-after-free 检测
-cmake -B build -S . -DCMAKE_CXX_COMPILER=g++-13 -DENABLE_ASAN=ON
-cmake --build build --target <目标名> -j$(nproc)
-ctest --test-dir build -R "<周次正则>" --output-on-failure
-
-# 线程竞争检测
-cmake -B build -S . -DCMAKE_CXX_COMPILER=g++-13 -DENABLE_TSAN=ON
-cmake --build build --target <目标名> -j$(nproc)
-ctest --test-dir build -R "<周次正则>" --output-on-failure
-```
+> 查目标名：`cmake --build build --target help 2>/dev/null | grep "w[0-9]"`
 
 ## Architecture（目录结构）
 
-**季度目录**对应不同学习阶段：
-- `01_Linux_CPP_Foundations/` — C++20/23 系统编程（当前进行中，W1-W6 已完成，W7 进行中）
-- `02_Inference_Analysis/` — ONNX Runtime 推理与模型优化（规划中）
-- `03_Hardware_Acceleration/` — TensorRT、CUDA 加速（规划中）
-- `04_System_Integration/` — 完整部署流水线（规划中）
+- `01_Linux_CPP_Foundations/` — C++20/23 系统编程（当前活跃，W1-W7 进行中）
+- `02_Inference_Analysis/`、`03_Hardware_Acceleration/`、`04_System_Integration/` — 规划中
 
-**周次模块**（如 `w1_memory_safety/`、`w2_move_semantics/`）各自有独立的 `CMakeLists.txt`，
-从根目录的 CMakeLists.txt 通过 `add_subdirectory` 引入。每个模块使用独立命名空间（`w1`、`w2`、`w5` 等）。
+**周次模块**（如 `w7_cmake_engineering/`）各自有独立 `CMakeLists.txt`，
+从根目录通过 `add_subdirectory` 引入，使用独立命名空间（`w1`、`w2`… `w7`）。
 
-**分支命名规则**：每个周次模块用 `dev-W{N}-{Feature}-chunbo`，完成后合入 `main`。
+**分支命名**：`dev-W{N}-{Feature}-chunbo`，完成后合入 `main`。
 
 ## C++ Standards and Conventions（C++ 规范）
 
@@ -161,20 +83,12 @@ ctest --test-dir build -R "<周次正则>" --output-on-failure
 
 ### Evolutionary Comment Pattern（演进式注释）
 
-源文件使用以下固定注释格式，解释为什么用新写法代替旧写法（尖括号内容用中文填写）：
+源文件使用以下固定注释格式，解释为什么用新写法代替旧写法：
 
 ```cpp
-// [Legacy C++11/17]: <描述旧版实现方式，如：手动 join std::thread>
-// [Pain Point]: <说明旧版的痛点，如：忘记 join 导致线程泄漏或程序崩溃>
-// [Modern C++20/23]: <说明新特性如何解决，如：std::jthread 析构时自动汇合，RAII 安全>
-```
-
-实际示例（来自 W5 ThreadPool）：
-
-```cpp
-// [Legacy C++11/17]: std::thread + 手动 join + atomic<bool> 停止标志
-// [Pain Point]: 忘记 join 导致程序崩溃；atomic 标志与条件变量配合繁琐，易死锁
-// [Modern C++20/23]: std::jthread 析构自动汇合；stop_token 标准化停止，无需额外标志
+// [Legacy C++11/17]: <描述旧版实现方式>
+// [Pain Point]: <说明旧版的痛点>
+// [Modern C++20/23]: <说明新特性如何解决>
 ```
 
 ### File Header（文件头模板）
@@ -204,12 +118,7 @@ ctest --test-dir build -R "<周次正则>" --output-on-failure
    find . -maxdepth 3 -regex '.*0[1-4]_.*' \( -name "*.cpp" -o -name "*.hpp" \) | xargs clang-format --dry-run --Werror
    ```
 
-2. **文档进度同步**：检查 `docs/` 目录中的以下文件，确认进度描述与代码实际状态一致，**如有不符必须先更新文档再 commit**：
-   - `README.md` — 当前周次的任务状态（✅ / 🚧 / ⬜）
-   - `docs/Q1.md` 或 `docs/Q2.md` — 对应季度阶段进度
-   - `docs/career_assessment.md` — 若涉及里程碑节点（P0 门槛达成等）
-   - `docs/tech-debt.md` — 若本次修复了已记录的技术债，将 `[OPEN]` 改为 `[FIXED]`
-   - 对应模块的 `notes.md` — Checklist 项目打勾，新增验证命令等
+2. **文档进度同步**：确认 `README.md`、`docs/Q1.md`、`docs/tech-debt.md`、模块 `notes.md` 进度与代码一致，**不符则先更新再 commit**。
 
 3. **commit author**：格式为 `Hanchunbo <hanchunbo@users.noreply.github.com>`，并附 `Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>`
 
