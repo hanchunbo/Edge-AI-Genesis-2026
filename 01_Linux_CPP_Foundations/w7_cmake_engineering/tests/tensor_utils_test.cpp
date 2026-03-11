@@ -1,7 +1,8 @@
 // Copyright 2026 Edge-AI-Genesis
 //
 // ============================================================================
-// 文件功能：TensorShape 单元测试 —— 同样无需手动指定 include 路径，验证 PUBLIC 传播
+// 文件功能：TensorShape 单元测试 —— 同样无需手动指定 include 路径，验证 PUBLIC
+// 传播
 // ============================================================================
 
 #include "tensor_utils.hpp"
@@ -33,10 +34,10 @@ TEST(TensorShapeTest, SpanConstruct) {
 
 TEST(TensorShapeTest, IndexAccess) {
   w7::TensorShape shape{1, 3, 224, 224};
-  EXPECT_EQ(shape[0], 1u);   // batch
-  EXPECT_EQ(shape[1], 3u);   // channels
-  EXPECT_EQ(shape[2], 224u); // height
-  EXPECT_EQ(shape[3], 224u); // width
+  EXPECT_EQ(shape[0], 1u);    // batch
+  EXPECT_EQ(shape[1], 3u);    // channels
+  EXPECT_EQ(shape[2], 224u);  // height
+  EXPECT_EQ(shape[3], 224u);  // width
 }
 
 TEST(TensorShapeTest, IndexOutOfRangeThrows) {

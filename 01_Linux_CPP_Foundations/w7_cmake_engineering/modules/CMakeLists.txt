@@ -33,3 +33,18 @@ target_sources(w7_hello_module PUBLIC FILE_SET CXX_MODULES FILES
 
 set_target_properties(w7_hello_module PROPERTIES CXX_STANDARD 20
                                                   CXX_EXTENSIONS OFF)
+
+# consumer 可执行文件：演示 import 具名模块的完整调用链
+# GCC 13 对具名模块的 consumer 支持不稳定，仅在 GCC 14+ 下编译
+if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND CMAKE_CXX_COMPILER_VERSION
+                                            VERSION_LESS "14")
+  message(
+    STATUS
+      "[W7 模块演示] GCC ${CMAKE_CXX_COMPILER_VERSION} 跳过 consumer 编译"
+      "（GCC 14+ 才有完整的具名模块 consumer 支持）")
+else()
+  add_executable(w7_module_consumer module_consumer.cpp)
+  target_link_libraries(w7_module_consumer PRIVATE w7_hello_module)
+  set_target_properties(w7_module_consumer PROPERTIES CXX_STANDARD 20
+                                                       CXX_EXTENSIONS OFF)
+endif()

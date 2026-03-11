@@ -24,7 +24,9 @@ std::size_t TensorShape::NumElements() const noexcept {
                          std::multiplies<>{});
 }
 
-std::size_t TensorShape::Rank() const noexcept { return dims_.size(); }
+std::size_t TensorShape::Rank() const noexcept {
+  return dims_.size();
+}
 
 std::size_t TensorShape::operator[](std::size_t i) const {
   // 边界检查：边缘部署场景下越界是严重 bug，明确抛出异常优于 UB

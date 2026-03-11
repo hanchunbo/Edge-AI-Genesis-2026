@@ -1,7 +1,8 @@
 // Copyright 2026 Edge-AI-Genesis
 //
 // ============================================================================
-// 文件功能：张量形状工具库的公开头文件 —— 随 STATIC 库以 PUBLIC 方式暴露给消费者
+// 文件功能：张量形状工具库的公开头文件 —— 随 STATIC 库以 PUBLIC
+// 方式暴露给消费者
 // ============================================================================
 
 #pragma once
@@ -13,9 +14,9 @@
 
 namespace w7 {
 
-// [Modern C++20]: Concept 约束合法的张量标量类型（float/int/uint8_t 等数值类型）
-// [Pain Point]: 旧版用 SFINAE/enable_if，错误信息难以阅读
-// [Modern C++20]: concept + requires 编译期约束，报错直接指向调用处
+// [Modern C++20]: Concept 约束合法的张量标量类型（float/int/uint8_t
+// 等数值类型） [Pain Point]: 旧版用 SFINAE/enable_if，错误信息难以阅读 [Modern
+// C++20]: concept + requires 编译期约束，报错直接指向调用处
 template <typename T>
 concept TensorScalar = std::is_arithmetic_v<T>;
 

@@ -5,10 +5,10 @@
 // ============================================================================
 
 // 关键演示点：
-//   app/CMakeLists.txt 只写了 target_link_libraries(w7_app PRIVATE w7_tensor_utils)
-//   没有任何 target_include_directories！
-//   但这里直接 #include "tensor_utils.hpp" 可以编译通过，
-//   因为 CMake 自动把 lib/ 的 PUBLIC include 路径传递给所有链接该库的目标。
+//   app/CMakeLists.txt 只写了 target_link_libraries(w7_app PRIVATE
+//   w7_tensor_utils) 没有任何 target_include_directories！ 但这里直接 #include
+//   "tensor_utils.hpp" 可以编译通过， 因为 CMake 自动把 lib/ 的 PUBLIC include
+//   路径传递给所有链接该库的目标。
 #include "tensor_utils.hpp"
 
 #include <format>
