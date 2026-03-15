@@ -7,7 +7,7 @@
 // [Legacy C++]: #include "tensor_utils.hpp" 将头文件内容直接粘贴进翻译单元，
 //              编译器每次都要重新解析整个头文件，大型项目中重复解析数百次。
 // [Pain Point]: 宏定义全局泄漏、头文件顺序敏感、#pragma once 无法跨目录去重。
-// [Modern C++20/23]: import 模块名; 直接使用编译好的 BMI（Binary Module Interface），
+// [Modern C++20/23]: import 模块名; 直接使用编译好的 BMI，
 //                   不再重复解析，无宏泄漏，接口与实现边界清晰。
 
 // 生产级写法：consumer 不写任何 #include，所有依赖通过 import 获取
