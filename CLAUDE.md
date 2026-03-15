@@ -13,7 +13,7 @@
 详细命令见 `README.md` Quick Start 节（含离线/ASAN/TSAN 场景）。常用命令：
 
 ```bash
-cmake -B build -S . -DCMAKE_CXX_COMPILER=g++-13           # 首次配置
+cmake -B build -S . -DCMAKE_CXX_COMPILER=g++-15 -G Ninja  # 首次配置（Ninja 必须，C++20 模块不支持 Unix Makefiles）
 cmake --build build --target <目标名> -j$(nproc)            # 编译当前周目标
 ctest --test-dir build -R "W7_" --output-on-failure        # 当前周测试
 find . -maxdepth 3 -regex '.*0[1-4]_.*' \( -name "*.cpp" -o -name "*.hpp" \) | xargs clang-format --dry-run --Werror  # 格式检查（CI 强制）
@@ -34,7 +34,8 @@ find . -maxdepth 3 -regex '.*0[1-4]_.*' \( -name "*.cpp" -o -name "*.hpp" \) | x
 ## C++ Standards and Conventions（C++ 规范）
 
 - **默认标准**：C++20。部分目标需要 C++23（如 W1 用到 `std::expected`，需在 CMakeLists 单独指定）。
-- **编译器**：只用 GCC 13+，通过 `CMAKE_CXX_COMPILER=g++-13` 指定，不支持 clang 或旧版 GCC。
+- **编译器**：只用 GCC 15+，通过 `CMAKE_CXX_COMPILER=g++-15` 指定，不支持 clang 或旧版 GCC。
+- **构建工具**：必须用 Ninja（`-G Ninja`），C++20 具名模块不支持 Unix Makefiles 生成器。
 - **风格**：Google C++ Style Guide（2026 增强版），由 `.clang-format` 和 `.clang-tidy` 自动检查。
 
 ### Naming（命名规范，来自 .clang-tidy）

@@ -7,15 +7,13 @@
 // [Legacy C++]: #include "tensor_utils.hpp" 将头文件内容直接粘贴进翻译单元，
 //              编译器每次都要重新解析整个头文件，大型项目中重复解析数百次。
 // [Pain Point]: 宏定义全局泄漏、头文件顺序敏感、#pragma once 无法跨目录去重。
-// [Modern C++20]: import 模块名; 直接使用编译好的 BMI（Binary Module
-// Interface），
-//                不再重复解析，无宏泄漏，接口与实现边界清晰。
+// [Modern C++20/23]: import 模块名; 直接使用编译好的 BMI（Binary Module Interface），
+//                   不再重复解析，无宏泄漏，接口与实现边界清晰。
 
-// 具名模块消费方式：import 而非 #include
-// 注意：import 语句必须在任何非模块代码之前（全局模块片段除外）
+// 生产级写法：consumer 不写任何 #include，所有依赖通过 import 获取
+// w7.hello 模块内部做了 export import std;，所以 consumer 导入 w7.hello 后
+// 自动获得 std::cout、std::string 等全部标准库符号
 import w7.hello;
-
-#include <iostream>
 
 int main() {
   // 调用从 w7.hello 模块导出的 Greet 函数

@@ -4,7 +4,11 @@
 cmake_minimum_required(VERSION 3.16)
 
 # 编译器设置（必须在 project() 之前）
-set(CMAKE_CXX_COMPILER "g++-13" CACHE STRING "C++ compiler")
+set(CMAKE_CXX_COMPILER "g++-15" CACHE STRING "C++ compiler")
+
+# import std; 实验性支持（必须在 project() 之前，即 CXX 语言启用之前）
+# UUID 是 CMake 内部令牌，用于确认开发者知道这是实验性 API（版本变化时 UUID 会变）
+set(CMAKE_EXPERIMENTAL_CXX_IMPORT_STD "d0edc3af-4c50-42ea-a356-e2862fe7a444")
 
 project(EdgeAIGenesis2026 LANGUAGES CXX)
 

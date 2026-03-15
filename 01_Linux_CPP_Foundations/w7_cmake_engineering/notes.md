@@ -40,6 +40,17 @@ target_compile_options(w7_tensor_utils PRIVATE -O2)
 target_compile_definitions(w7_tensor_utils INTERFACE W7_TENSOR_UTILS_AVAILABLE=1)
 ```
 
+**INTERFACE 宏的真正语义**：
+`W7_TENSOR_UTILS_AVAILABLE` 不是"检测库是否编译成功"的手段——它不具备检测能力。
+它的语义是：**CMake 通知消费者"我已经把这个库链接给你了，你可以放心调用它"**。
+能走到"编译 app.cpp"这一步，库就已经存在了（否则 CMake 早在链接阶段报错）。
+典型用途是**可选依赖**：CMakeLists 用 `if` 条件决定是否链接库，app.cpp 用 `#ifdef` 决定走哪条代码路径。
+
+**W7 的核心本质**：
+`app/main.cpp` 和 `tests/tensor_utils_test.cpp` 能直接写 `#include "tensor_utils.hpp"`，
+而不需要在各自的 CMakeLists.txt 里配置任何路径——这就是 W7 要达到的目标。
+PUBLIC 可见性让库自己声明头文件位置，消费者只写 `target_link_libraries`，路径自动传递。
+
 ---
 
 ### 3. Generator Expressions（生成器表达式）
@@ -114,13 +125,52 @@ target_sources(mymodule PUBLIC
 - `.ixx`：MSVC 常用
 - `.mpp`：部分社区使用
 
-**本项目状态**：GCC 13 对具名模块支持有限（实验性），需要 CMake 3.28+。
+**本项目状态**：需要 GCC 15+ 和 CMake 3.28+（`import std;` 需要 GCC 15 稳定支持），
+且必须用 Ninja 生成器（`-G Ninja`），Unix Makefiles 不支持 `FILE_SET CXX_MODULES`。
 模块演示在 `modules/CMakeLists.txt` 中加了版本检查，低版本会跳过并打印提示。
-Consumer 演示在 `modules/module_consumer.cpp`，GCC < 14 时自动跳过编译。
+
+**本项目采用的生产级方案（GCC 15 + C++23）**：
+
+```cpp
+// hello_module.cppm —— 模块接口
+export module w7.hello;
+export import std;        // 把整个标准库重新导出给所有消费者
+export namespace w7 { ... }
+
+// module_consumer.cpp —— 消费端
+import w7.hello;          // 唯一的 import，无任何 #include
+// std::cout、std::string 等全部通过 export import std; 链传入
+```
+
+**为什么用 `export import std;` 而非 `#include`**：
+- `import std;` 替代 global module fragment 的 `#include`，规避 GCC 符号 `@模块名` 冲突
+- `export import std;` 把 std 重新导出，consumer 零 `#include`，彻底避免混用冲突
+- 这是 C++23 模块在生产代码中的推荐写法
+
+**GCC 15 + CMake 4.x consumer 端的已知限制（2026 现状）**：
+CMake 不为普通 consumer `.cpp` 文件自动生成 dyndep，导致 Ninja 不知道等待 `.gcm` 生成。
+当前项目用以下三个手动配置绕过：
+
+```cmake
+# 1. 手动加编译器标志（GCC 15 中 -fmodules-ts 改名为 -fmodules）
+target_compile_options(w7_module_consumer PRIVATE -fmodules -fmodule-mapper=...)
+
+# 2. stamp 文件：桥接"模块库链接完成 → .gcm 已就绪"这一事件
+add_custom_command(OUTPUT stamp DEPENDS $<TARGET_FILE:w7_hello_module> ...)
+
+# 3. OBJECT_DEPENDS：在源文件编译粒度上声明对 stamp 的依赖
+set_source_files_properties(module_consumer.cpp PROPERTIES OBJECT_DEPENDS stamp)
+```
+
+这些配置随 CMake + GCC 模块工具链的成熟会逐步消失，目前无明确的版本承诺。
 
 ---
 
 ### 6. INSTALL 规则（生产级安装配置）
+
+> **注意**：install 规则不在 W7 核心任务范围内（见 Q1.md W7 节），是为演示
+> `$<INSTALL_INTERFACE:...>` 生成器表达式的完整用法而补充的。理解"是干什么的"即可，
+> 不需要深究 find_package / 导出集的细节。
 
 **为什么需要 install()**：
 构建树（build tree）中的 `target_include_directories` 只在当前构建有效。
@@ -162,14 +212,21 @@ ls /tmp/w7_install_test/lib/cmake/W7TensorUtils/    # W7TensorUtilsTargets.cmake
 ## 构建与测试命令
 
 ```bash
+# 首次配置（必须用 Ninja，C++20 具名模块不支持 Unix Makefiles）
+# 编译器必须 GCC 15+（import std; 需要 GCC 15 稳定支持）
+cmake -B build -S . -DCMAKE_CXX_COMPILER=g++-15 -G Ninja
+
 # 编译 W7 全部目标
-cmake --build build --target w7_app w7_tensor_utils_test -j$(nproc)
+cmake --build build --target w7_app w7_tensor_utils_test w7_module_consumer -j$(nproc)
 
 # 跑 W7 所有测试
 ctest --test-dir build -R "W7_" --output-on-failure
 
 # 只跑功能测试（跳过 App 演示程序）
 ctest --test-dir build -R W7_TensorUtilsTest --output-on-failure
+
+# 运行模块演示
+./build/01_Linux_CPP_Foundations/w7_cmake_engineering/modules/w7_module_consumer
 ```
 
 ## 验证 PUBLIC 传播的方法

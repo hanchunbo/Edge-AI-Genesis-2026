@@ -70,7 +70,7 @@
 
 | 环境 | 配置详情 | 用途 |
 |------|----------|------|
-| **VPS** | x86 64 Bit, 2GB RAM, **GCC 13.4.0** | 远程开发、CI/CD |
+| **VPS** | x86 64 Bit, 2GB RAM, **GCC 15.2.0** | 远程开发、CI/CD |
 | **本地笔记本** | 笔记本, i5-12500H, 16GB RAM, RTX 3060, 512GB SSD | 本地开发、GPU 推理测试 |
 
 ---
@@ -113,8 +113,8 @@ Edge-AI-Genesis-2026/
 ### 前提条件
 
 ```bash
-# 确认 GCC 13+ 已安装
-g++-13 --version
+# 确认 GCC 15+ 已安装
+g++-15 --version
 
 # 克隆仓库
 git clone https://github.com/hanchunbo/Edge-AI-Genesis-2026.git
@@ -126,7 +126,7 @@ cd Edge-AI-Genesis-2026
 单元测试通过 FetchContent 自动下载 GoogleTest：
 
 ```bash
-cmake -B build -S . -DCMAKE_CXX_COMPILER=g++-13
+cmake -B build -S . -DCMAKE_CXX_COMPILER=g++-15 -G Ninja
 cmake --build build -j$(nproc)
 ctest --test-dir build --output-on-failure
 ```
@@ -138,7 +138,7 @@ ctest --test-dir build --output-on-failure
 ```bash
 sudo apt install libgtest-dev libgmock-dev
 
-cmake -B build -S . -DCMAKE_CXX_COMPILER=g++-13
+cmake -B build -S . -DCMAKE_CXX_COMPILER=g++-15 -G Ninja
 cmake --build build -j$(nproc)
 ctest --test-dir build --output-on-failure
 ```
@@ -152,7 +152,7 @@ ctest --test-dir build --output-on-failure
 # https://github.com/google/googletest/archive/refs/tags/v1.15.2.zip
 # 解压到任意目录，如 ~/gtest-src/
 
-cmake -B build -S . -DCMAKE_CXX_COMPILER=g++-13 \
+cmake -B build -S . -DCMAKE_CXX_COMPILER=g++-15 -G Ninja \
       -DFETCHCONTENT_SOURCE_DIR_GOOGLETEST=~/gtest-src/googletest-1.15.2
 cmake --build build -j$(nproc)
 ctest --test-dir build --output-on-failure
@@ -161,7 +161,7 @@ ctest --test-dir build --output-on-failure
 **方式 C —— 跳过测试，只编译功能程序**
 
 ```bash
-cmake -B build -S . -DCMAKE_CXX_COMPILER=g++-13 -DBUILD_TESTING=OFF
+cmake -B build -S . -DCMAKE_CXX_COMPILER=g++-15 -G Ninja -DBUILD_TESTING=OFF
 cmake --build build -j$(nproc)
 # 此时无需 GTest，所有演示程序和 benchmark 均可正常编译运行
 ```
@@ -170,12 +170,12 @@ cmake --build build -j$(nproc)
 
 ```bash
 # 内存越界 / use-after-free 检测
-cmake -B build -S . -DCMAKE_CXX_COMPILER=g++-13 -DENABLE_ASAN=ON
+cmake -B build -S . -DCMAKE_CXX_COMPILER=g++-15 -G Ninja -DENABLE_ASAN=ON
 cmake --build build --target <目标名> -j$(nproc)
 ctest --test-dir build -R "<周次正则>" --output-on-failure
 
 # 线程竞争检测
-cmake -B build -S . -DCMAKE_CXX_COMPILER=g++-13 -DENABLE_TSAN=ON
+cmake -B build -S . -DCMAKE_CXX_COMPILER=g++-15 -G Ninja -DENABLE_TSAN=ON
 cmake --build build --target <目标名> -j$(nproc)
 ctest --test-dir build -R "<周次正则>" --output-on-failure
 ```
