@@ -148,21 +148,19 @@ import w7.hello;          // 唯一的 import，无任何 #include
 - 这是 C++23 模块在生产代码中的推荐写法
 
 **GCC 15 + CMake 4.x consumer 端的已知限制（2026 现状）**：
-CMake 不为普通 consumer `.cpp` 文件自动生成 dyndep，导致 Ninja 不知道等待 `.gcm` 生成。
-当前项目用以下三个手动配置绕过：
+CMake 不为普通 consumer `.cpp` 文件自动添加 `-fmodules`/`-fmodule-mapper` 标志，需手动指定：
 
 ```cmake
-# 1. 手动加编译器标志（GCC 15 中 -fmodules-ts 改名为 -fmodules）
-target_compile_options(w7_module_consumer PRIVATE -fmodules -fmodule-mapper=...)
-
-# 2. stamp 文件：桥接"模块库链接完成 → .gcm 已就绪"这一事件
-add_custom_command(OUTPUT stamp DEPENDS $<TARGET_FILE:w7_hello_module> ...)
-
-# 3. OBJECT_DEPENDS：在源文件编译粒度上声明对 stamp 的依赖
-set_source_files_properties(module_consumer.cpp PROPERTIES OBJECT_DEPENDS stamp)
+target_compile_options(w7_module_consumer PRIVATE
+  -fmodules
+  -fmodule-mapper=.../hello_module.cppm.o.modmap)
 ```
 
-这些配置随 CMake + GCC 模块工具链的成熟会逐步消失，目前无明确的版本承诺。
+**编译顺序问题已由 CMake 4.x + Ninja dyndep 自动解决**：
+早期（CMake < 4.x）需要用 stamp 文件 + `OBJECT_DEPENDS` 手动桥接
+"模块库链接完成 → `.gcm` 已就绪"这一事件，防止 consumer 提前编译。
+CMake 4.x 的 `FILE_SET CXX_MODULES` 会为模块目标生成 dyndep 文件，
+Ninja 据此自动排序，stamp workaround 已完全不需要（验证于 CMake 4.2.3）。
 
 ---
 
