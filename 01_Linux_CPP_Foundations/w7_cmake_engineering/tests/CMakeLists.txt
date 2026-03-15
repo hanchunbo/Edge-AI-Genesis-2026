@@ -26,3 +26,10 @@ target_link_libraries(
 # 注册 CTest 测试
 # 命名格式 W7_XxxTest 是本项目约定，方便用 ctest -R "W7_" 统一跑所有 W7 测试
 add_test(NAME W7_TensorUtilsTest COMMAND w7_tensor_utils_test)
+
+# W8 覆盖率支持：cmake -DW8_COVERAGE=ON 时注入 gcov 插桩
+# --coverage 等价于 -fprofile-arcs -ftest-coverage；-O0 防止插桩被优化掉
+if(W8_COVERAGE)
+  target_compile_options(w7_tensor_utils_test PRIVATE --coverage -O0 -g)
+  target_link_options(w7_tensor_utils_test PRIVATE --coverage)
+endif()

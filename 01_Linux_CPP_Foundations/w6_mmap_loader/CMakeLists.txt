@@ -17,3 +17,11 @@ if(BUILD_TESTING)
   # 注册为 CTest，CI 可验证 benchmark 能正常编译并运行（不检查性能数值）
   add_test(NAME W6_MmapBenchmark COMMAND w6_mmap_benchmark)
 endif()
+
+# W8 覆盖率支持：cmake -DW8_COVERAGE=ON 时注入 gcov 插桩
+# --coverage 等价于 -fprofile-arcs -ftest-coverage；-O0 防止插桩被优化掉
+# 只给测试目标插桩，不给 benchmark 插桩（benchmark 需要 -O2 优化，插桩会干扰结果）
+if(W8_COVERAGE)
+  target_compile_options(w6_mmap_loader_test PRIVATE --coverage -O0 -g)
+  target_link_options(w6_mmap_loader_test PRIVATE --coverage)
+endif()
