@@ -1,0 +1,12 @@
+# W7TensorUtilsConfig.cmake.in
+# find_package(W7TensorUtils) 的入口文件模板
+#
+# 外部项目使用方式：
+#   find_package(W7TensorUtils REQUIRED)
+#   target_link_libraries(my_app PRIVATE w7::w7_tensor_utils)
+#
+# configure_file 会将 @...@ 替换为 CMake 变量后写入 build 目录
+
+@PACKAGE_INIT@
+
+include("${CMAKE_CURRENT_LIST_DIR}/W7TensorUtilsTargets.cmake")
