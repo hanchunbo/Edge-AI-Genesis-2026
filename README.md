@@ -38,8 +38,8 @@
 | W4 | 多线程与任务同步 | counting_semaphore | ✅ 完成 |
 | W5 | 通用线程池架构 | jthread, stop_token, alignas(64) | ✅ 完成 |
 | W6 | 高性能I/O (mmap) | std::span | ✅ 完成（实现+测试+benchmark） |
-| W7 | CMake工程化 (I) | INTERFACE/PUBLIC/PRIVATE, Generator Expressions | 🚧 进行中 |
-| W8 | CMake工程化 (II) | FetchContent, 覆盖率 | 🚧 进行中 |
+| W7 | CMake工程化 (I) | INTERFACE/PUBLIC/PRIVATE, Generator Expressions | ✅ 完成 |
+| W8 | CMake工程化 (II) & 自动化单元测试 | FetchContent（本地 zip）, lcov/genhtml 覆盖率 | ✅ 完成 |
 | W9-W11 | OpenCV底层实战 | std::mdspan (C++23) | ⬜ 待开始 |
 | W12-W13 | 阶段项目 | 全栈整合 | ⬜ 待开始 |
 
@@ -121,9 +121,10 @@ git clone https://github.com/hanchunbo/Edge-AI-Genesis-2026.git
 cd Edge-AI-Genesis-2026
 ```
 
-### 场景一：有网络（默认）
+> GTest 源码已随仓库内置于 `third_party/v1.15.2.zip`，FetchContent 直接读取本地 zip，
+> configure / build / ctest **全程无需网络**，内网环境开箱即用。
 
-单元测试通过 FetchContent 自动下载 GoogleTest：
+### 场景一：标准构建（含单元测试）
 
 ```bash
 cmake -B build -S . -DCMAKE_CXX_COMPILER=g++-15 -G Ninja
@@ -131,34 +132,27 @@ cmake --build build -j$(nproc)
 ctest --test-dir build --output-on-failure
 ```
 
-### 场景二：无网络 / 公司内网
-
-**方式 A（推荐）—— 使用系统包，零配置**
+### 场景二：W8 覆盖率报告
 
 ```bash
-sudo apt install libgtest-dev libgmock-dev
+# 开启 gcov 插桩重新配置
+cmake -B build -S . -DCMAKE_CXX_COMPILER=g++-15 -G Ninja -DW8_COVERAGE=ON
 
-cmake -B build -S . -DCMAKE_CXX_COMPILER=g++-15 -G Ninja
+# 编译
+cmake --build build --target w7_hello_module -j1  # C++20 模块需先单独编译
 cmake --build build -j$(nproc)
-ctest --test-dir build --output-on-failure
+
+# 生成报告（自动运行 W1-W7 全部测试 → 采集 → 过滤 → HTML）
+cmake --build build --target w8_coverage
+
+# 在本机浏览器访问报告（VPS 无桌面，用 HTTP server）
+python3 -m http.server 8080 --directory build/w8_coverage_report
+# → 浏览器访问 http://VPS_IP:8080
 ```
 
-> CMake 会优先检测系统 GTest，找到后不发起任何网络请求。
+> 覆盖率基线（W1-W7 合计）：行覆盖率 **98.7%**，函数覆盖率 **100%**
 
-**方式 B —— 使用本地 zip 缓存**
-
-```bash
-# 在有网环境提前下载（或通过其他渠道传入）：
-# https://github.com/google/googletest/archive/refs/tags/v1.15.2.zip
-# 解压到任意目录，如 ~/gtest-src/
-
-cmake -B build -S . -DCMAKE_CXX_COMPILER=g++-15 -G Ninja \
-      -DFETCHCONTENT_SOURCE_DIR_GOOGLETEST=~/gtest-src/googletest-1.15.2
-cmake --build build -j$(nproc)
-ctest --test-dir build --output-on-failure
-```
-
-**方式 C —— 跳过测试，只编译功能程序**
+### 场景三：跳过测试，只编译功能程序
 
 ```bash
 cmake -B build -S . -DCMAKE_CXX_COMPILER=g++-15 -G Ninja -DBUILD_TESTING=OFF

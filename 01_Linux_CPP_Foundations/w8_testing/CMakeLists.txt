@@ -23,14 +23,15 @@ if(W8_COVERAGE)
             --directory ${CMAKE_BINARY_DIR}
             --output-file ${CMAKE_BINARY_DIR}/w8_raw.info
             --ignore-errors mismatch,inconsistent
-    # 过滤第三方代码（gtest/系统头文件）
+    # 过滤第三方代码（系统头文件 + FetchContent 解压的 googletest 源码位于 _deps/）
+    # --ignore-errors unused：shell 展开 /usr/* 后部分路径（如 /usr/bin）不在 tracefile 中，
+    #   lcov 2.x 会将"无匹配的排除模式"视为 error，加 unused 忽略即可
     COMMAND ${LCOV_PATH}
             --remove ${CMAKE_BINARY_DIR}/w8_raw.info
             "/usr/*"
-            "*/googletest/*"
-            "*/gtest/*"
-            "*/googlemock/*"
+            "*/_deps/*"
             --output-file ${CMAKE_BINARY_DIR}/w8_filtered.info
+            --ignore-errors mismatch,inconsistent,unused
     # 生成 HTML 可视化报告
     COMMAND ${GENHTML_PATH}
             ${CMAKE_BINARY_DIR}/w8_filtered.info

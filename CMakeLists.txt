@@ -44,33 +44,38 @@ if(ENABLE_ASAN)
 endif()
 
 # =============================================================================
-# Google Test 集成（仅支持系统包）
+# Google Test 集成（本地 zip，离线 / 内网环境零网络依赖）
 # =============================================================================
 #
-# 完全跳过测试（无需 GTest，只编译功能程序）：
-#   cmake -DBUILD_TESTING=OFF ...
+# GTest 源码 zip 存放于 third_party/v1.15.2.zip，FetchContent 直接读取本地文件，
+# configure / build / ctest 全程无需网络访问。
 #
-# 测试前提：系统必须已安装 GTest，安装命令：
-#   sudo apt install libgtest-dev libgmock-dev
+# 完全跳过测试（只编译功能程序）：
+#   cmake -DBUILD_TESTING=OFF ...
 
 option(BUILD_TESTING "构建单元测试（关闭后无需 GTest，仅编译功能程序）" ON)
 
 if(BUILD_TESTING)
   enable_testing()
   include(CTest)
+  include(FetchContent)
 
-  # 强制要求系统已安装 GTest，不再支持 FetchContent 降级
-  find_package(GTest REQUIRED)
+  # 使用项目内 zip，file:// 协议指向本地路径，不发起任何网络请求
+  # DOWNLOAD_EXTRACT_TIMESTAMP TRUE：解压后使用当前时间戳，避免 CMP0135 警告
+  FetchContent_Declare(
+    googletest
+    URL file://${CMAKE_SOURCE_DIR}/third_party/v1.15.2.zip
+    DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+  )
 
-  message(STATUS "[GTest] 使用系统版本")
-  # CMake < 3.20 的 FindGTest 只提供 GTest::GTest / GTest::Main，
-  # 本项目所有子模块统一使用 GTest::gtest_main，这里补全别名保持兼容
-  if(NOT TARGET GTest::gtest_main AND TARGET GTest::Main)
-    add_library(GTest::gtest_main ALIAS GTest::Main)
-  endif()
-  if(NOT TARGET GTest::gtest AND TARGET GTest::GTest)
-    add_library(GTest::gtest ALIAS GTest::GTest)
-  endif()
+  # 防止 googletest 的 install() 规则污染父项目安装树
+  set(INSTALL_GTEST OFF CACHE BOOL "" FORCE)
+  # Windows 下保持 CRT 链接方式一致（Linux 无影响，保留以备跨平台）
+  set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
+
+  FetchContent_MakeAvailable(googletest)
+
+  message(STATUS "[GTest] 使用本地 zip: third_party/v1.15.2.zip")
 endif() # BUILD_TESTING
 
 # =============================================================================

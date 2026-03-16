@@ -3,10 +3,7 @@
 ## 工具安装
 
 ```bash
-# GTest 系统包（cmake configure 阶段必须已安装，不再使用 FetchContent）
-sudo apt install libgtest-dev libgmock-dev
-
-# 覆盖率工具
+# 覆盖率工具（GTest 不需要单独安装，已集成为本地 zip）
 sudo apt install lcov
 
 # 验证版本（项目使用 lcov 2.x，--ignore-errors mismatch,inconsistent 需要 2.x）
@@ -14,16 +11,16 @@ lcov --version
 genhtml --version
 ```
 
-### 内网 / 离线环境说明
+### GTest 集成方式：本地 zip（FetchContent）
 
-系统包模式比 FetchContent **更适合内网**：FetchContent 在 configure 阶段从 GitHub
-拉源码，断网直接失败；系统包安装一次后 cmake/ctest 完全本地运行，零网络依赖。
+`third_party/v1.15.2.zip` 已随仓库提交，CMake 使用 `file://` 协议直接读取，
+configure / build / ctest **全程零网络依赖**，内网 / 离线机器开箱即用。
 
 | 场景 | 处理方式 |
 |------|---------|
-| 内网有 apt 镜像（Nexus/Artifactory） | `sudo apt install libgtest-dev` 照常用 |
-| 完全离线机器 | 在联网机上 `apt download libgtest-dev googletest libgmock-dev`，把 `.deb` 拷入后 `sudo dpkg -i *.deb` |
-| 包已安装的机器 | cmake configure → build → ctest，全程零网络 |
+| 内网 / 无网络 | 直接 `cmake -B build -S .`，FetchContent 读本地 zip |
+| 完全离线（不含 zip 的机器） | 把 `third_party/v1.15.2.zip` 随代码一起拷入即可 |
+| 跳过测试 | `cmake -DBUILD_TESTING=OFF`，不需要 GTest |
 
 ---
 
@@ -33,14 +30,17 @@ genhtml --version
 # 1. 开启覆盖率插桩重新配置（必须加 -DW8_COVERAGE=ON）
 cmake -B build -S . -DCMAKE_CXX_COMPILER=g++-15 -G Ninja -DW8_COVERAGE=ON
 
-# 2. 编译全部目标（含 W1-W7 测试目标）
+# 2. C++20 模块必须先单独编译（并行构建存在依赖竞态）
+cmake --build build --target w7_hello_module -j1
+
+# 3. 编译全部目标（含 W1-W7 测试目标）
 cmake --build build -j$(nproc)
 
-# 3. 生成覆盖率报告（自动运行测试 → 采集 → 过滤 → HTML）
+# 4. 生成覆盖率报告（自动运行测试 → 采集 → 过滤 → HTML）
 cmake --build build --target w8_coverage
 
-# 4. 在浏览器打开报告
-xdg-open build/w8_coverage_report/index.html
+# 5. 启动临时 HTTP server，在本机浏览器访问 http://VPS_IP:8080
+python3 -m http.server 8080 --directory build/w8_coverage_report
 ```
 
 ### 仅跑单周覆盖率（调试时用）
@@ -70,6 +70,7 @@ ctest --test-dir build -R "W[1-7]_" --output-on-failure
 ```bash
 # 1. 开启插桩重新配置 + 编译
 cmake -B build -S . -DCMAKE_CXX_COMPILER=g++-15 -G Ninja -DW8_COVERAGE=ON
+cmake --build build --target w7_hello_module -j1
 cmake --build build -j$(nproc)
 
 # 2. 清零历史数据并跑测试
@@ -77,10 +78,12 @@ lcov --zerocounters --directory build
 ctest --test-dir build -R "W[1-7]_" -Q
 
 # 3. 采集 → 过滤第三方 → 生成 HTML
+#    /usr/* 和 */_deps/* 需加 --ignore-errors unused（见下方 lcov 问题 4）
 lcov --capture --directory build --output-file build/w8_raw.info \
      --ignore-errors mismatch,inconsistent
-lcov --remove build/w8_raw.info "/usr/*" "*/googletest/*" "*/gtest/*" "*/googlemock/*" \
-     --output-file build/w8_filtered.info
+lcov --remove build/w8_raw.info "/usr/*" "*/_deps/*" \
+     --output-file build/w8_filtered.info \
+     --ignore-errors mismatch,inconsistent,unused
 genhtml build/w8_filtered.info \
      --output-directory build/w8_coverage_report \
      --title "Edge-AI-Genesis-2026 W1-W7 Coverage"
@@ -88,8 +91,8 @@ genhtml build/w8_filtered.info \
 # 4. 查看文字摘要（无需浏览器）
 lcov --list build/w8_filtered.info
 
-# 5. 浏览器打开 HTML（可选）
-xdg-open build/w8_coverage_report/index.html
+# 5. 启动临时 HTTP server 浏览 HTML（可选）
+python3 -m http.server 8080 --directory build/w8_coverage_report
 ```
 
 **判断标准：**
@@ -108,7 +111,7 @@ xdg-open build/w8_coverage_report/index.html
 | W5 | thread_pool.hpp | 94.3% | 100% |
 | W6 | mmap_loader.hpp | 95.0% | 100% |
 | W7 | tensor_utils（lib） | 100% | 100% |
-| **合计** | | **98.6%** | **100%** |
+| **合计** | | **98.7%** | **100%** |
 
 ---
 
@@ -145,18 +148,42 @@ xdg-open build/w8_coverage_report/index.html
 
 ---
 
-### 问题 3：覆盖率数据包含系统头/gtest 代码
+### 问题 3：覆盖率数据包含 _deps/ 下的 gtest 代码
 
-解决：`lcov --remove` 步骤过滤了 `/usr/*`、`*/googletest/*`、`*/gtest/*`、`*/googlemock/*`，只保留项目源文件数据。
+FetchContent 把 GTest 源码解压到 `build/_deps/googletest-src/`，这些路径会出现
+在覆盖率数据中。`lcov --remove` 的 `*/_deps/*` 模式负责过滤它们。
 
 ---
 
-### 问题 4：`-O0` 与 benchmark 冲突
+### 问题 4：`lcov --remove` 报 `unused` error（exit code 25）
+
+原因：cmake custom target 不使用 shell 引号，`/usr/*` 会被 shell 展开为
+`/usr/bin`、`/usr/lib` 等具体路径。这些路径在 tracefile 中无匹配，
+lcov 2.x 将"未使用的排除模式"视为 error（exit 25）。
+
+解决：`--remove` 步骤加 `--ignore-errors mismatch,inconsistent,unused`（已写入 CMakeLists.txt）。
+
+---
+
+### 问题 5：`-O0` 与 benchmark 冲突
 
 W6 benchmark（`w6_mmap_benchmark`）需要 `-O2` 才能体现真实性能，故覆盖率插桩**只加在测试目标**上，不加在 benchmark 目标上。这也是 W6 `CMakeLists.txt` 覆盖率块只针对 `w6_mmap_loader_test` 的原因。
 
 ---
 
-### 问题 5：覆盖率与 AddressSanitizer 不兼容
+### 问题 6：覆盖率与 AddressSanitizer 不兼容
 
 `--coverage` 与 `-fsanitize=address` 同时开启会导致链接错误。需要分别跑两个 build：一个开 ASAN，一个开覆盖率，不能合并。
+
+---
+
+### 问题 7：C++20 模块并行构建竞态
+
+W7 的 `w7_module_consumer.cpp` 依赖 `w7_hello_module`（`.gcm` 文件），
+`-j$(nproc)` 并行构建时可能在模块编译完成前就尝试编译 consumer，导致 `w7.hello: No such file` 错误。
+
+解决：先单独构建模块再并行编译全部目标：
+```bash
+cmake --build build --target w7_hello_module -j1
+cmake --build build -j$(nproc)
+```
