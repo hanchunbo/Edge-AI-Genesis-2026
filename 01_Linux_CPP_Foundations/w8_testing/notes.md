@@ -30,10 +30,7 @@ configure / build / ctest **全程零网络依赖**，内网 / 离线机器开�
 # 1. 开启覆盖率插桩重新配置（必须加 -DW8_COVERAGE=ON）
 cmake -B build -S . -DCMAKE_CXX_COMPILER=g++-15 -G Ninja -DW8_COVERAGE=ON
 
-# 2. C++20 模块必须先单独编译（并行构建存在依赖竞态）
-cmake --build build --target w7_hello_module -j1
-
-# 3. 编译全部目标（含 W1-W7 测试目标）
+# 2. 编译全部目标（含 W1-W7 测试目标，C++20 模块依赖竞态已通过 OBJECT_DEPENDS 修复）
 cmake --build build -j$(nproc)
 
 # 4. 生成覆盖率报告（自动运行测试 → 采集 → 过滤 → HTML）
@@ -70,7 +67,6 @@ ctest --test-dir build -R "W[1-7]_" --output-on-failure
 ```bash
 # 1. 开启插桩重新配置 + 编译
 cmake -B build -S . -DCMAKE_CXX_COMPILER=g++-15 -G Ninja -DW8_COVERAGE=ON
-cmake --build build --target w7_hello_module -j1
 cmake --build build -j$(nproc)
 
 # 2. 清零历史数据并跑测试
@@ -177,13 +173,12 @@ W6 benchmark（`w6_mmap_benchmark`）需要 `-O2` 才能体现真实性能，故
 
 ---
 
-### 问题 7：C++20 模块并行构建竞态
+### ~~问题 7：C++20 模块并行构建竞态~~（已修复）
 
-W7 的 `w7_module_consumer.cpp` 依赖 `w7_hello_module`（`.gcm` 文件），
-`-j$(nproc)` 并行构建时可能在模块编译完成前就尝试编译 consumer，导致 `w7.hello: No such file` 错误。
+**根因**：GCC 15 + CMake 4.x dyndep 机制在跨目标场景下无法在 Ninja 加载 `CXX.dd`
+之前通知 `module_consumer.cpp.o` 等待 `w7.hello.gcm`。
 
-解决：先单独构建模块再并行编译全部目标：
-```bash
-cmake --build build --target w7_hello_module -j1
-cmake --build build -j$(nproc)
-```
+**修复**（`w7_cmake_engineering/modules/CMakeLists.txt`）：
+用 `set_source_files_properties(module_consumer.cpp PROPERTIES OBJECT_DEPENDS hello_module.cppm.o)`
+声明文件级编译依赖。`hello_module.cppm.o` 是 Ninja 的已知 primary output，
+其编译完成时 `.gcm` 必然存在，无需额外的手动分步命令。

@@ -139,7 +139,6 @@ ctest --test-dir build --output-on-failure
 cmake -B build -S . -DCMAKE_CXX_COMPILER=g++-15 -G Ninja -DW8_COVERAGE=ON
 
 # 编译
-cmake --build build --target w7_hello_module -j1  # C++20 模块需先单独编译
 cmake --build build -j$(nproc)
 
 # 生成报告（自动运行 W1-W7 全部测试 → 采集 → 过滤 → HTML）
