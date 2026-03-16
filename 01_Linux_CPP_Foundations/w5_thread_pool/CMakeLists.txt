@@ -15,3 +15,10 @@ if(BUILD_TESTING)
   # 注册为 CTest，CI 可验证演示程序能正常编译并运行
   add_test(NAME W5_ThreadPoolDemo COMMAND w5_thread_pool_demo)
 endif()
+
+# W8 覆盖率支持：cmake -DW8_COVERAGE=ON 时注入 gcov 插桩
+# --coverage 等价于 -fprofile-arcs -ftest-coverage；-O0 防止插桩被优化掉
+if(W8_COVERAGE)
+  target_compile_options(w5_thread_pool_test PRIVATE --coverage -O0 -g)
+  target_link_options(w5_thread_pool_test PRIVATE --coverage)
+endif()
