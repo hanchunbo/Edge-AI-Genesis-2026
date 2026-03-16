@@ -57,6 +57,22 @@ target_link_libraries(w7_module_consumer PRIVATE w7_hello_module)
 set_target_properties(w7_module_consumer PROPERTIES CXX_STANDARD 23
                                                      CXX_EXTENSIONS OFF)
 
+# [Legacy CMake dyndep]: FILE_SET CXX_MODULES + target_link_libraries 理论上通过
+#   dyndep 自动处理跨目标的模块编译顺序（.gcm 声明为 implicit output）。
+# [Pain Point]: GCC 15 + CMake 4.x 实验性模块支持中，dyndep 文件（CXX.dd）在被
+#   加载之前 Ninja 不知道 .gcm 是 hello_module.cppm.o 的 implicit output。
+#   并行构建时 Ninja 可能在 CXX.dd 加载前调度 module_consumer.cpp.o，
+#   导致 "w7.hello.gcm: missing and no known rule to make it" 错误。
+# [Modern Fix]: OBJECT_DEPENDS 声明 module_consumer.cpp.o 依赖
+#   hello_module.cppm.o（已知的 primary output）。该文件构建完成时 .gcm 必然存在，
+#   Ninja 在调度 module_consumer.cpp.o 之前会先等待 hello_module.cppm.o 完成。
+set_source_files_properties(
+  module_consumer.cpp
+  PROPERTIES
+    OBJECT_DEPENDS
+    "${CMAKE_CURRENT_BINARY_DIR}/CMakeFiles/w7_hello_module.dir/hello_module.cppm.o"
+)
+
 # CMake 对 FILE_SET CXX_MODULES 文件自动加 -fmodules，但不传播给消费者 .cpp
 # 消费者需要手动指定：
 #   -fmodules        → 启用模块解析（import 关键字）

@@ -1,6 +1,6 @@
 # 技术债记录
 
-> 最后更新：2026-03-07
+> 最后更新：2026-03-16
 
 ---
 
@@ -23,6 +23,29 @@
 | W4 | `w4_threading_test.cpp`（附带提取 `producer_consumer.hpp`） | 12 |
 
 全部 6 个测试套件 `ctest` 通过（共 84 个用例）。
+
+---
+
+## [OPEN] W8 CI 缺少覆盖率门禁
+
+**发现**：2026-03-16（W8 验收评审）
+**严重度**：🟡 中（缺少自动质量保障，覆盖率下降不会阻断 PR 合并）
+
+**现状**：`.github/workflows/ci.yml` 只执行 build + ctest，不检查覆盖率阈值。
+开发者提交新代码后，若行覆盖率低于基线（98.7%），CI 不会自动拒绝。
+
+**期望行为**：CI 在覆盖率环节执行：
+```bash
+cmake -B build -S . -DCMAKE_CXX_COMPILER=g++-15 -G Ninja -DW8_COVERAGE=ON
+cmake --build build -j$(nproc)
+cmake --build build --target w8_coverage
+lcov --summary build/w8_filtered.info | grep "lines" | awk '{if ($2+0 < 90) exit 1}'
+```
+覆盖率低于 90% 时 CI job 以非零退出码失败，阻断 PR。
+
+**暂缓原因**：W8 阶段 VPS 上运行完整覆盖率构建约需 30s，CI 时间可接受；
+但 lcov 尚未集成到 CI，需要在 ci.yml 中新增覆盖率 job 并处理 lcov 安装。
+优先级低于 W9 开发推进，待 Q1 末或 W13 阶段项目时一并完善。
 
 ---
 
