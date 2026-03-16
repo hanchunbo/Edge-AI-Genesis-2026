@@ -1,6 +1,6 @@
 # 技术债记录
 
-> 最后更新：2026-03-16
+> 最后更新：2026-03-16（W9 准备期：升级 g++-15，W8 覆盖率验证通过）
 
 ---
 
@@ -23,6 +23,19 @@
 | W4 | `w4_threading_test.cpp`（附带提取 `producer_consumer.hpp`） | 12 |
 
 全部 6 个测试套件 `ctest` 通过（共 84 个用例）。
+
+---
+
+## [FIXED] g++-15 升级 + W8 覆盖率流水线适配
+
+**修复**：2026-03-16（W9 准备期）
+
+1. **g++-15 (15.2.0) 安装**：通过 `ppa:ubuntu-toolchain-r/test` 在本机 WSL2 Ubuntu 24.04 安装，与 VPS 环境统一。
+2. **W7 模块演示 CMake 版本检查**：`import std;` 通过 `-fmodule-mapper=` 运行时不回退 `gcm.cache/`，需要 CMake 3.30+ 的 `CMAKE_CXX_MODULE_STD ON`。在 CMake < 3.30 时跳过演示，文档说明原因。
+3. **W8 gcov 版本匹配**：lcov 默认使用 gcov-13，但代码用 GCC 15 编译，格式不兼容。通过 `--gcov-tool gcov-15` 修复。
+4. **多线程 gcov 竞态**：W4/W5 多线程测试覆盖率计数器出现负数。加 `-fprofile-update=atomic` 后稳定。
+
+**当前覆盖率（g++-15 编译）**：行 98.6%，函数 100.0%（W1-W7 合计）
 
 ---
 

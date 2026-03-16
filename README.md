@@ -40,7 +40,7 @@
 | W6 | 高性能I/O (mmap) | std::span | ✅ 完成（实现+测试+benchmark） |
 | W7 | CMake工程化 (I) | INTERFACE/PUBLIC/PRIVATE, Generator Expressions | ✅ 完成 |
 | W8 | CMake工程化 (II) & 自动化单元测试 | FetchContent（本地 zip）, lcov/genhtml 覆盖率 | ✅ 完成 |
-| W9-W11 | OpenCV底层实战 | std::mdspan (C++23) | ⬜ 待开始 |
+| W9-W11 | OpenCV底层实战 | std::mdspan (C++23) | 🔄 W9 进行中 |
 | W12-W13 | 阶段项目 | 全栈整合 | ⬜ 待开始 |
 
 ---
@@ -112,11 +112,23 @@ Edge-AI-Genesis-2026/
 
 ### 前提条件
 
-```bash
-# 确认 GCC 15+ 已安装
-g++-15 --version
+**一次性安装所有依赖（Ubuntu 24.04 / WSL2）：**
 
-# 克隆仓库
+```bash
+# 1. 添加 GCC 15 PPA（Ubuntu 24.04 官方源尚未收录）
+sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test
+sudo apt-get update -q
+
+# 2. 安装编译器、覆盖率工具、构建工具
+sudo apt-get install -y g++-15 gcc-15 lcov ninja-build cmake
+
+# 3. 验证
+g++-15 --version    # 期望：15.2.0+
+gcov-15 --version   # 期望：15.2.0+（lcov 覆盖率需要与编译器版本一致）
+ninja --version     # 期望：1.10+
+cmake --version     # 期望：3.28+（3.30+ 可启用 import std; 模块演示）
+
+# 4. 克隆仓库
 git clone https://github.com/hanchunbo/Edge-AI-Genesis-2026.git
 cd Edge-AI-Genesis-2026
 ```
@@ -149,7 +161,7 @@ python3 -m http.server 8080 --directory build/w8_coverage_report
 # → 浏览器访问 http://VPS_IP:8080
 ```
 
-> 覆盖率基线（W1-W7 合计）：行覆盖率 **98.7%**，函数覆盖率 **100%**
+> 覆盖率基线（W1-W7 合计，g++-15 编译）：行覆盖率 **98.6%**，函数覆盖率 **100%**
 
 ### 场景三：跳过测试，只编译功能程序
 

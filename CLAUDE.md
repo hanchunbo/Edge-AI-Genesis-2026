@@ -15,7 +15,7 @@
 ```bash
 cmake -B build -S . -DCMAKE_CXX_COMPILER=g++-15 -G Ninja  # 首次配置（Ninja 必须，C++20 模块不支持 Unix Makefiles）
 cmake --build build --target <目标名> -j$(nproc)            # 编译当前周目标
-ctest --test-dir build -R "W7_" --output-on-failure        # 当前周测试
+ctest --test-dir build -R "W9_" --output-on-failure        # 当前周测试
 find . -maxdepth 3 -regex '.*0[1-4]_.*' \( -name "*.cpp" -o -name "*.hpp" \) | xargs clang-format --dry-run --Werror  # 格式检查（CI 强制）
 ```
 
@@ -23,11 +23,11 @@ find . -maxdepth 3 -regex '.*0[1-4]_.*' \( -name "*.cpp" -o -name "*.hpp" \) | x
 
 ## Architecture（目录结构）
 
-- `01_Linux_CPP_Foundations/` — C++20/23 系统编程（当前活跃，W1-W7 进行中）
+- `01_Linux_CPP_Foundations/` — C++20/23 系统编程（当前活跃，W1-W8 已完成，W9 进行中）
 - `02_Inference_Analysis/`、`03_Hardware_Acceleration/`、`04_System_Integration/` — 规划中
 
-**周次模块**（如 `w7_cmake_engineering/`）各自有独立 `CMakeLists.txt`，
-从根目录通过 `add_subdirectory` 引入，使用独立命名空间（`w1`、`w2`… `w7`）。
+**周次模块**（如 `w9_opencv_optimized/`）各自有独立 `CMakeLists.txt`，
+从根目录通过 `add_subdirectory` 引入，使用独立命名空间（`w1`、`w2`… `w9`）。
 
 **分支命名**：`dev-W{N}-{Feature}-chunbo`，完成后合入 `main`。
 
@@ -121,7 +121,9 @@ find . -maxdepth 3 -regex '.*0[1-4]_.*' \( -name "*.cpp" -o -name "*.hpp" \) | x
 
 2. **文档进度同步**：确认 `README.md`、`docs/Q1.md`、`docs/tech-debt.md`、模块 `notes.md` 进度与代码一致，**不符则先更新再 commit**。
 
-3. **commit author**：格式为 `Hanchunbo <hanchunbo@users.noreply.github.com>`，并附 `Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>`
+3. **环境依赖同步**：若本次开发安装了新工具（编译器、调试器、覆盖率工具等），必须同步更新 `README.md` 的「前提条件」安装命令。目的：VPS 上积累的隐式环境依赖若不记录，换机器（如 WSL、CI）时会批量复现已解决的问题。
+
+4. **commit author**：格式为 `Hanchunbo <hanchunbo@users.noreply.github.com>`，并附 `Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>`
 
 ## CI（持续集成）
 
