@@ -5,7 +5,8 @@
 #   #include → 每个翻译单元都重复解析头文件，编译慢、宏污染全局
 #   import   → 编译器只解析一次模块接口，生成 BMI，后续直接复用
 #
-# 环境要求：CMake 3.28+（FILE_SET CXX_MODULES 语法）、GCC 15+（import std;）、Ninja
+# 环境要求：CMake 3.30+（CMAKE_CXX_MODULE_STD 自动预编译 std）、
+#           GCC 15+（import std; 稳定支持）、Ninja
 
 # CMake < 3.28 不认识 FILE_SET CXX_MODULES，直接报错，版本不够就跳过
 if(CMAKE_VERSION VERSION_LESS "3.28")
@@ -24,7 +25,20 @@ if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND CMAKE_CXX_COMPILER_VERSION
   return()
 endif()
 
-# 告诉 CMake 此项目使用 import std;，CMake 会自动预编译标准库模块
+# [Legacy CMake 3.28]: CMAKE_CXX_MODULE_STD 是 CMake 3.30 新增的变量。
+# [Pain Point]: 3.28 下 import std; 编译时 -fmodule-mapper= 优先于 gcm.cache 查找，
+#   即使手动预编译了 std.gcm，GCC 仍会报 "unknown compiled module interface"。
+#   根本原因：CMake 生成的 modmap 文件不包含 std 条目，且 GCC 3.28 无法自动追加。
+# [Modern Fix]: CMake 3.30+ 通过 CMAKE_CXX_MODULE_STD ON 自动解决上述所有问题。
+#   在此之前（3.28-3.29），import std; 无法在 CMake 管理的构建中可靠使用。
+if(CMAKE_VERSION VERSION_LESS "3.30")
+  message(
+    STATUS
+    "[W7 模块演示] CMake ${CMAKE_VERSION} < 3.30，跳过（import std; 需要 CMake 3.30+）")
+  return()
+endif()
+
+# CMake 3.30+ 原生支持：自动预编译标准库模块，解决 import std; 的 modmap 映射问题
 set(CMAKE_CXX_MODULE_STD ON)
 
 # ── 模块库 ──────────────────────────────────────────────────────────────────

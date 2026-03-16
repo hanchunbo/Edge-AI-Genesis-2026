@@ -40,7 +40,7 @@
 | W6 | 高性能I/O (mmap) | std::span | ✅ 完成（实现+测试+benchmark） |
 | W7 | CMake工程化 (I) | INTERFACE/PUBLIC/PRIVATE, Generator Expressions | ✅ 完成 |
 | W8 | CMake工程化 (II) & 自动化单元测试 | FetchContent（本地 zip）, lcov/genhtml 覆盖率 | ✅ 完成 |
-| W9-W11 | OpenCV底层实战 | std::mdspan (C++23) | ⬜ 待开始 |
+| W9-W11 | OpenCV底层实战 | std::mdspan (C++23) | 🔄 W9 进行中 |
 | W12-W13 | 阶段项目 | 全栈整合 | ⬜ 待开始 |
 
 ---
@@ -149,7 +149,7 @@ python3 -m http.server 8080 --directory build/w8_coverage_report
 # → 浏览器访问 http://VPS_IP:8080
 ```
 
-> 覆盖率基线（W1-W7 合计）：行覆盖率 **98.7%**，函数覆盖率 **100%**
+> 覆盖率基线（W1-W7 合计，g++-15 编译）：行覆盖率 **98.6%**，函数覆盖率 **100%**
 
 ### 场景三：跳过测试，只编译功能程序
 

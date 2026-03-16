@@ -19,6 +19,8 @@ endif()
 # W8 覆盖率支持：cmake -DW8_COVERAGE=ON 时注入 gcov 插桩
 # --coverage 等价于 -fprofile-arcs -ftest-coverage；-O0 防止插桩被优化掉
 if(W8_COVERAGE)
-  target_compile_options(w5_thread_pool_test PRIVATE --coverage -O0 -g)
+  # -fprofile-update=atomic：线程池并发执行任务时防止 gcov 计数器竞态（负数计数）
+  target_compile_options(w5_thread_pool_test PRIVATE
+    --coverage -O0 -g -fprofile-update=atomic)
   target_link_options(w5_thread_pool_test PRIVATE --coverage)
 endif()
