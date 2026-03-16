@@ -93,3 +93,5 @@ add_subdirectory(01_Linux_CPP_Foundations/w7_cmake_engineering)
 option(W8_COVERAGE "为 W1-W7 所有测试目标启用 gcov/lcov 覆盖率插桩（同时强制 -O0）" OFF)
 
 add_subdirectory(01_Linux_CPP_Foundations/w8_testing)
+
+add_subdirectory(01_Linux_CPP_Foundations/w9_opencv_optimized)
