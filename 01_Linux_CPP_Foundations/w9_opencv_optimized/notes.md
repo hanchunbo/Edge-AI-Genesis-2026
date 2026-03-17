@@ -44,7 +44,7 @@ std::mdspan<const uint8_t,
 ## 构建与测试
 
 ```bash
-# 前提：已安装 OpenCV（见 third_party/opencv-debs/install.sh）
+# 前提：sudo apt-get install -y libopencv-dev
 cmake -B build -S . -DCMAKE_CXX_COMPILER=g++-15 -G Ninja
 cmake --build build --target w9_bgr2gray w9_bgr2gray_test -j$(nproc)
 
@@ -54,11 +54,6 @@ ctest --test-dir build -R "W9_" --output-on-failure
 # 运行 benchmark
 ./build/01_Linux_CPP_Foundations/w9_opencv_optimized/w9_bgr2gray
 ```
-
-## OpenCV 离线依赖
-
-存储于 `third_party/opencv-debs/`（32 个 .deb），版本 4.10.0+dfsg-7。
-换机器时执行：`sudo bash third_party/opencv-debs/install.sh`
 
 ## mdspan 兼容层
 
