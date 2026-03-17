@@ -2,8 +2,8 @@ find_package(OpenCV REQUIRED COMPONENTS core imgproc)
 find_package(Threads REQUIRED)
 
 # ============================================================================
-# w9_bgr2gray_lib：三版实现编译为静态库，供 bench 和 test 共用
-# C++23 因 std::mdspan 多下标语法要求
+# w9_bgr2gray_lib：多版实现编译为静态库，供 bench 和 test 共用
+# C++23 因 std::mdspan 多下标语法要求；-mavx2 用于 V4 SIMD 路径
 # ============================================================================
 add_library(w9_bgr2gray_lib STATIC bgr2gray.cpp)
 set_property(TARGET w9_bgr2gray_lib PROPERTY CXX_STANDARD 23)
@@ -12,6 +12,8 @@ target_include_directories(w9_bgr2gray_lib PUBLIC
     ${CMAKE_SOURCE_DIR}/third_party/mdspan
     ${OpenCV_INCLUDE_DIRS})
 target_link_libraries(w9_bgr2gray_lib PUBLIC ${OpenCV_LIBS})
+# 启用 AVX2 + FMA，对应 V4 intrinsics；非 x86-64 平台可去掉此行（V4 自动回退 V2）
+target_compile_options(w9_bgr2gray_lib PRIVATE -mavx2 -mfma)
 
 # ============================================================================
 # w9_bgr2gray：benchmark 可执行文件

@@ -39,37 +39,35 @@
 
 ---
 
-## [OPEN] W9 预处理 API 与推理管道对接存在多项不足
+## [FIXED] W9 预处理 API P0/P1 技术债修复
 
 **发现**：2026-03-16（W9 AI 部署专家评估）
-**严重度**：🔴 高（直接影响生产部署可行性）
+**修复**：2026-03-17（dev-W9-OpenCV-chunbo 分支）
 
-### P0 — 输入无校验 + API 强制堆分配
+### [FIXED] P0 — 输入无校验 + API 强制堆分配
 
-`BgrToGrayV1/V2/V3` 三个函数均无 `src.empty()` / `src.type()` 校验，空帧或非 BGR 图传入会导致 UB 或崩溃。边缘设备摄像头断流是常态，必须在系统边界防御。
+**修复内容**：
+- 提取公共 `ValidateSrc(src)` 辅助函数，统一检查 `src.empty()` 和 `src.type() != CV_8UC3`，任意版本收到空帧或非 BGR 输入均抛出 `std::invalid_argument`
+- 为 V1/V2/V3/V4 全部新增 `void BgrToGrayVx(const cv::Mat& src, cv::Mat& dst)` 重载；`dst.create()` 在尺寸/类型已匹配时是 no-op，生产管道可复用帧缓冲区实现零额外分配
+- 测试覆盖：EmptyInputThrows、WrongTypeThrows、VoidOverloadReuseBuffer（共 3 个测试用例）
 
-此外，函数返回 `cv::Mat`（每次调用内部 new），无法给调用方传入预分配缓冲区。生产管道应提供：
-```cpp
-void BgrToGrayV2(const cv::Mat& src, cv::Mat& dst);  // 零额外分配
-```
+### [FIXED] P1 — 缺少 SIMD 实现
 
-### P1 — 缺少 SIMD 实现，与 cv::cvtColor 差距 2.6×
+**修复内容**：
+- 新增 `BgrToGrayV4`（AVX2，`-mavx2 -mfma` 编译）：每批处理 8 像素，
+  用 `_mm_shuffle_epi8` 直接从 BGR 字节流提取各通道，
+  `_mm256_mullo_epi16` + `_mm256_packus_epi16` 完成定点乘加和打包
+- 无 `__AVX2__` 时编译期回退 V2，行为等价
+- 缓冲区安全：循环条件 `i+10<=total` 保证 hi 段 128-bit 加载不越界
+- 测试覆盖：V4ConsistentWithV1（1080P 梯度图）、V4TailPixelsCorrect（17 像素奇数尺寸）
 
-`bgr2gray.cpp:134-141` 的 AVX2 注释从未落地：
-```
-V3 mdspan:   ~2.9 ms/frame
-cv::cvtColor: ~1.1 ms/frame  ← 差距 2.6×
-```
-边缘设备上预处理通常是推理管道瓶颈，缺 SIMD 会拖慢整条流水线。
-应实现 V4（AVX2/NEON），使用 `_mm256_maddubs_epi16` shuffle 通道分离，预期提升 3-5×。
+### [FIXED] P1 — 缺少 float32 归一化 + CHW layout 输出
 
-### P1 — 缺少 float32 归一化 + CHW layout 输出
-
-推理引擎（ONNX Runtime / TensorRT）的标准输入格式为：
-```
-uint8 BGR → float32 归一化 [0,1] → CHW layout → 模型 tensor
-```
-W9 只完成第一步，输出是 HWC uint8，与实际推理管道差两步转换，缺少端到端演示。
+**修复内容**：
+- 新增 `BgrToNormCHW(const cv::Mat& src) → std::vector<float>`，
+  转换链：`uint8 BGR HWC → ÷255 → float32 [0,1] → CHW (channel-first)`，
+  输出格式与 ONNX Runtime / TensorRT `{1,3,H,W}` 输入对齐
+- 测试覆盖：ValueRangeIsZeroToOne、CHWLayoutCorrect、OutputSizeCorrect
 
 ### P2 — 基准测试设计存在缺陷
 
