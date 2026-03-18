@@ -105,3 +105,5 @@ option(W8_COVERAGE "为 W1-W7 所有测试目标启用 gcov/lcov 覆盖率插桩
 add_subdirectory(01_Linux_CPP_Foundations/w8_testing)
 
 add_subdirectory(01_Linux_CPP_Foundations/w9_opencv_optimized)
+
+add_subdirectory(01_Linux_CPP_Foundations/w10_resize)
