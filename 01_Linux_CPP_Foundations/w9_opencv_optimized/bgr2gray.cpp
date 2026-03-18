@@ -206,7 +206,8 @@ void BgrToGrayV4(const cv::Mat& src, cv::Mat& dst) {
 
   // shuf_bg：从 4 像素 BGR 流中提取 [B0,G0, B1,G1, B2,G2, B3,G3, 0×8]
   // shuf_gr：提取 [G0,R0, G1,R1, G2,R2, G3,R3, 0×8]
-  // 输入格式：B0,G0,R0, B1,G1,R1, B2,G2,R2, B3,G3,R3, ?,?,?,?（16 字节，低 12 有效）
+  // 输入格式：B0,G0,R0, B1,G1,R1, B2,G2,R2, B3,G3,R3, ?,?,?,?（16 字节，低 12
+  // 有效）
   const __m128i shuf_bg =
       _mm_set_epi8(-1, -1, -1, -1, -1, -1, -1, -1, 10, 9, 7, 6, 4, 3, 1, 0);
   const __m128i shuf_gr =
@@ -243,10 +244,10 @@ void BgrToGrayV4(const cv::Mat& src, cv::Mat& dst) {
                                     _mm_shuffle_epi8(lo_a, shuf_gr));
 
     // maddubs：B*29+G*99 和 G*51+R*77，vpaddw wrapping 相加后 >>8 = 灰度值
-    __m256i gray16_a = _mm256_srli_epi16(
-        _mm256_add_epi16(_mm256_maddubs_epi16(bg_a, w_bg),
-                         _mm256_maddubs_epi16(gr_a, w_gr)),
-        8);
+    __m256i gray16_a =
+        _mm256_srli_epi16(_mm256_add_epi16(_mm256_maddubs_epi16(bg_a, w_bg),
+                                           _mm256_maddubs_epi16(gr_a, w_gr)),
+                          8);
 
     // ── 批次 B：像素 8-15 ────────────────────────────────────────────
     __m128i lo_b = _mm_loadu_si128(reinterpret_cast<const __m128i*>(sp + 24));
@@ -257,10 +258,10 @@ void BgrToGrayV4(const cv::Mat& src, cv::Mat& dst) {
     __m256i gr_b = _mm256_set_m128i(_mm_shuffle_epi8(hi_b, shuf_gr),
                                     _mm_shuffle_epi8(lo_b, shuf_gr));
 
-    __m256i gray16_b = _mm256_srli_epi16(
-        _mm256_add_epi16(_mm256_maddubs_epi16(bg_b, w_bg),
-                         _mm256_maddubs_epi16(gr_b, w_gr)),
-        8);
+    __m256i gray16_b =
+        _mm256_srli_epi16(_mm256_add_epi16(_mm256_maddubs_epi16(bg_b, w_bg),
+                                           _mm256_maddubs_epi16(gr_b, w_gr)),
+                          8);
 
     // ── 打包 16 个灰度值 → 16 字节连续输出 ──────────────────────────
     // packus: lane0=[G0-G3,0×4,G8-G11,0×4] lane1=[G4-G7,0×4,G12-G15,0×4]
