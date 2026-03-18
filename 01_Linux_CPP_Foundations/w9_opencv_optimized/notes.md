@@ -62,16 +62,107 @@ Debian GCC 15.2.0 打包版本缺少 `<mdspan>` 头文件（上游 GCC 13+ 已�
 自动回退到 `third_party/mdspan/`（kokkos P0009 参考实现，v0.6.0）。
 等 Debian 修复打包后，只需删除 `third_party/mdspan/` 即可无缝切换到标准库。
 
-## Benchmark 结果（1080P, Release, 100 rounds）
+## Benchmark 结果（1080P, Release -O3 -mavx2, 100 rounds）
 
 | 实现 | ms/frame | 说明 |
 |------|----------|------|
-| V1 ptr | ~4.2ms | 双层循环基准 |
-| V2 span | ~3.5ms | 展平后编译器更易向量化 |
-| V3 mdspan | ~2.9ms | kokkos 实现优化了索引计算 |
-| cvtColor | ~1.1ms | OpenCV 内部有 SIMD 优化 |
+| V1 ptr | ~1.6ms | 双层循环基准（标量） |
+| V2 span | ~0.54ms | -O3 自动 AVX2 向量化，3×256-bit 加载 32 像素/迭代 |
+| V3 mdspan | ~0.50ms | 与 V2 相当（kokkos 展开后相同向量化路径） |
+| V4 AVX2 | ~0.31ms | vpmaddubsw 手写，接近 cvtColor |
+| cvtColor | ~0.28ms | OpenCV 内部 AVX2 + 流水线优化 |
 
-与 cvtColor 3-4x 差距来自 SIMD：手写版是标量，cvtColor 用了 AVX2 向量化。
+**关键教训**：
+- Debug 模式下 V3 mdspan 会退化到 560ms（模板层未内联），必须用 Release 跑 benchmark。
+  根因修复：根 CMakeLists.txt 加了 `if(NOT CMAKE_BUILD_TYPE)` 默认 Release 保护。
+- V2/V3 在 Release 下已被编译器自动 AVX2 向量化（3×vmovdqu 32 字节，32 像素/迭代）；
+  "手写 SIMD 一定更快"的直觉是错的，编译器 shuffle table 与我们的 naive intrinsics 打平。
+- V4 改用 `_mm256_maddubs_epi16`（vpmaddubsw，一条指令完成 uint8×int8 乘加）后，
+  算术指令从 6×mullo+4×add 压缩为 2×maddubs+1×add，取得 ~1.7× V2 加速，逼近 cvtColor。
+- V4 与 cvtColor 剩余 ~12% 差距来自 OpenCV 的预取调度和更大批次流水线。
+
+## 🐛 踩坑实录（本次调试过程）
+
+### 坑1：Debug 模式下性能数据严重失真
+
+**现象**：首次跑 benchmark，结果完全违反直觉：
+```
+[V2 span  ] 19.7ms   ← 比 V1 慢 4x？
+[V3 mdspan] 560ms    ← 极度异常
+[V4 AVX2  ]  4.8ms   ← 和 V1 一样慢？
+```
+
+**排查过程**：检查 CMake 构建类型，发现没有传 `-DCMAKE_BUILD_TYPE`，默认走了 Debug（`-O0`）。
+
+**根因**：
+- V2 `std::span` 的下标运算符在 Debug 下有边界检查，每次访问 `src_flat[i*3+k]` 都走检查逻辑，比裸指针的 V1 还慢
+- V3 kokkos mdspan 是多层模板封装，Debug 下完全不内联，每次 `view[r, c, ch]` 都展开成完整调用链，560ms 是真实结果
+- V4 AVX2 intrinsics 在 Debug 下退化为普通函数调用，SIMD 优势归零
+
+**修复**：根 `CMakeLists.txt` 加保护：
+```cmake
+if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
+  set(CMAKE_BUILD_TYPE "Release" CACHE STRING "" FORCE)
+endif()
+```
+**教训**：**跑性能 benchmark 必须用 Release，哪怕只是"看一眼数据"也不能省**。模板重的代码（mdspan、span）Debug 惩罚远超普通代码。
+
+---
+
+### 坑2：手写 AVX2（V4）比编译器自动向量化（V2）还慢
+
+**现象**：切换 Release 后数据合理了，但 V4 仍然输给了 V2：
+```
+[V2 span ] 0.54ms
+[V4 AVX2 ] 0.71ms   ← 手写 SIMD 竟然更慢？
+```
+
+**排查过程**：编译到汇编，对比 V2 和 V4 的指令数：
+- V2 汇编：423 条向量指令，热循环有 36 条 `vpmovzxbd`
+- V4 汇编：190 条向量指令
+
+V2 的编译器生成了 **3×`vmovdqu`（256-bit）每迭代处理 32 像素**的代码，用预计算好的 shuffle table（`.LC4`～`.LC15`）做通道解交织；而我们的 V4 每迭代只处理 16 像素，4 次 128-bit 加载。
+
+**根因**：我们 V4 的算术路径指令太多。每 8 像素需要：
+- 6×`vpmullw`（B×29, G×150, R×77 各一对 lo/hi）
+- 4×`vpaddw`
+- 6×`_mm_cvtepu8_epi16`（通道扩展到 16-bit）
+合计 16 条，而编译器对 V2 生成的代码更紧凑。
+
+**修复**：改用 `_mm256_maddubs_epi16`（vpmaddubsw 指令），一条指令完成 `uint8×int8 → int16` 的乘加：
+
+权重拆分方案：
+```
+[B, G] × [29, 99] → B×29 + G×99    max=255×128=32640 < int16上限 ✓
+[G, R] × [51, 77] → G×51 + R×77    max=32640 ✓
+vpaddw（wrapping）  → B×29+G×150+R×77  max=65280，wrapping后>>8仍正确 ✓
+```
+
+算术指令：6×mullo+4×add → **2×maddubs+1×add**，减少约 50%。
+
+结果 V4 降到 0.31ms，比 V2 快 1.7×。
+
+**教训**：**"手写 SIMD 一定比自动向量化快"是错的**。编译器在 `-O3 -mavx2` 下会生成更大批次的循环展开和更优的 shuffle 序列。想赢过编译器，必须用更高效的指令（如 maddubs），而不是简单地把标量逻辑翻译成 intrinsics。
+
+---
+
+### 坑3：vpmaddubsw 权重溢出问题
+
+**困惑**：想直接用 `maddubs([B,G], [29,150])` 一步算完，但 150 作为 int8 是负数（> 127），结果完全错误。
+
+**根因**：`_mm256_maddubs_epi16` 的 b 操作数是**有符号 int8**，范围 -128～127。权重 150 超出范围，被解释为 -106，计算结果错误。
+
+**解决**：把 G 的权重 150 拆成两部分，保证每个权重 ≤ 127：
+```
+150 = 99 + 51
+对 [B,G] 用权重 [29, 99]，对 [G,R] 用权重 [51, 77]
+```
+
+验证两对权重和各自 ≤ 128，最大乘积 255×128=32640 < 32767（int16上限），不饱和截断。
+
+**教训**：使用 `vpmaddubsw` 时，b 向量的权重必须是有符号 int8（-128～127）。G 权重 150 是 W9 BGR→Gray 的典型陷阱，拆分方案 `99+51` 是正确解。
+
+---
 
 ## 💡 疑难解惑集锦 (Q&A 总结)
 

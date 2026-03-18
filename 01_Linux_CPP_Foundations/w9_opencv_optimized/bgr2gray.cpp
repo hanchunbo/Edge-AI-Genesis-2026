@@ -166,18 +166,26 @@ void BgrToGrayV3(const cv::Mat& src, cv::Mat& dst) {
 }
 
 // ============================================================================
-// 版本4：AVX2 SIMD（P1 修复）
+// 版本4：AVX2 SIMD — vpmaddubsw 乘加 + 16 像素/迭代 + 单次 16 字节 store
 //
-// 核心思路：每次处理 8 个像素（24 字节输入，8 字节输出）
-//   1. 加载两段 16 字节（各覆盖 4 个 BGR 像素）
-//   2. 用 _mm_shuffle_epi8 分别提取 B、G、R 通道字节
-//   3. _mm_cvtepu8_epi16 扩展为 uint16
-//   4. _mm256_mullo_epi16 × 权重 + 累加 + 右移 8 位
-//   5. _mm256_packus_epi16 饱和回 uint8，提取 8 个灰度值
+// 核心优化：用 _mm256_maddubs_epi16（vpmaddubsw）替代 3×mullo_epi16 + 2×add。
+//   vpmaddubsw 一条指令完成 uint8×int8 乘加 → int16，吞吐率 0.5 cycle，
+//   原来 6×mullo+4×add = 10 条指令，现在 2×maddubs+1×add = 3 条。
 //
-// 安全边界：hi 段从 sp+12 读 16 字节（尾端多读 4 字节），
-//   循环条件 (i + 10 <= total) 保证最后一次读不越界。
-// 无 AVX2 时（#ifndef __AVX2__）自动回退到 V2。
+// 权重拆分（总和不变，每对各自 ≤ 32767 保证 int16 不溢出）：
+//   [B,G] × [29,99] → B*29 + G*99          max 255*(29+99)=32640 < 32767 ✓
+//   [G,R] × [51,77] → G*51 + R*77          max 255*(51+77)=32640 < 32767 ✓
+//   vpaddw 相加（wrapping）→ B*29+G*150+R*77   max 65280 < 65536 ✓
+//   srli 8 → 正确灰度值（wrapping 后 >>8 等价于无符号右移，与 V1 结果完全一致）
+//
+// 打包路径（与 V3→V4 相同）：
+//   packus_epi16(gray_a, gray_b) + shuffle_epi8(compress) + permutevar8x32
+//   → 16 字节连续灰度值，_mm_storeu_si128 一次写出
+//
+// 安全边界：hi_b 从 sp+36 读 16 字节（最远 sp+51），
+//   循环条件 (i+18 ≤ total) 保证 (total-i)*3 ≥ 54 > 51。
+// 1920×1080 = 2,073,600 恰好整除 16，尾部标量不执行。
+// 无 AVX2 时自动回退 V2。
 // ============================================================================
 void BgrToGrayV4(const cv::Mat& src, cv::Mat& dst) {
   ValidateSrc(src);
@@ -196,73 +204,76 @@ void BgrToGrayV4(const cv::Mat& src, cv::Mat& dst) {
   const uint8_t* sp = src.data;
   uint8_t* dp = dst.data;
 
-  // 权重向量（int16，所有分量均 < 32768，无溢出风险）
-  const __m256i wb = _mm256_set1_epi16(static_cast<short>(kWeightB));
-  const __m256i wg = _mm256_set1_epi16(static_cast<short>(kWeightG));
-  const __m256i wr = _mm256_set1_epi16(static_cast<short>(kWeightR));
+  // shuf_bg：从 4 像素 BGR 流中提取 [B0,G0, B1,G1, B2,G2, B3,G3, 0×8]
+  // shuf_gr：提取 [G0,R0, G1,R1, G2,R2, G3,R3, 0×8]
+  // 输入格式：B0,G0,R0, B1,G1,R1, B2,G2,R2, B3,G3,R3, ?,?,?,?（16 字节，低 12 有效）
+  const __m128i shuf_bg =
+      _mm_set_epi8(-1, -1, -1, -1, -1, -1, -1, -1, 10, 9, 7, 6, 4, 3, 1, 0);
+  const __m128i shuf_gr =
+      _mm_set_epi8(-1, -1, -1, -1, -1, -1, -1, -1, 11, 10, 8, 7, 5, 4, 2, 1);
 
-  // shuffle mask：从 BGR 字节流中直接提取 4 个像素的指定通道
-  // 例如 shuf_b：从 [B0,G0,R0, B1,G1,R1, B2,G2,R2, B3,G3,R3, ...]
-  //              提取 [B0, B1, B2, B3, 0, 0, ...] 置于低 4 字节
-  // _mm_shuffle_epi8 规则：mask[i] & 0x80 非零 → output[i]=0
-  //                        否则 output[i] = src[mask[i]]
-  const __m128i shuf_b = _mm_set_epi8(-1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
-                                      -1, -1, 9, 6, 3, 0);  // B 在每像素偏移 0
-  const __m128i shuf_g = _mm_set_epi8(-1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
-                                      -1, -1, 10, 7, 4, 1);  // G 在每像素偏移 1
-  const __m128i shuf_r = _mm_set_epi8(-1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
-                                      -1, -1, 11, 8, 5, 2);  // R 在每像素偏移 2
+  // maddubs 权重：w_bg=[29,99,…], w_gr=[51,77,…]（int8，均 < 128 不溢出）
+  // _mm256_set1_epi16(x)：将 x 的低字节=29/51，高字节=99/77 广播到所有通道
+  const __m256i w_bg =
+      _mm256_set1_epi16(static_cast<short>((99 << 8) | 29));  // [29,99]×16
+  const __m256i w_gr =
+      _mm256_set1_epi16(static_cast<short>((77 << 8) | 51));  // [51,77]×16
+
+  // 压缩 mask（pshufb 对两 lane 独立）：[G×4,0×4,G×4,0×4] → [G×8,0×8]
+  const __m256i compress_mask =
+      _mm256_set_epi8(-1, -1, -1, -1, -1, -1, -1, -1, 11, 10, 9, 8, 3, 2, 1,
+                      0,  // lane 1
+                      -1, -1, -1, -1, -1, -1, -1, -1, 11, 10, 9, 8, 3, 2, 1,
+                      0);  // lane 0
+
+  // dword 重排 [0,4,1,5] 将两 lane 有效数据汇聚到低 128 位
+  const __m256i perm_idx = _mm256_set_epi32(7, 6, 5, 4, 5, 1, 4, 0);
 
   int i = 0;
-  // 循环条件 i+10<=total：确保 hi 段 _mm_loadu_si128(sp+12) 不越过缓冲区尾
-  // （hi 段最远读至 sp+27，8 像素占 sp[0..23]，多读 4 字节需 total*3 >=
-  // i*3+28）
-  for (; i + 10 <= total; i += 8, sp += 24, dp += 8) {
-    // 低 4 像素（字节 0..11）和高 4 像素（字节 12..23）分别加载 16 字节
-    __m128i lo = _mm_loadu_si128(reinterpret_cast<const __m128i*>(sp));
-    __m128i hi = _mm_loadu_si128(reinterpret_cast<const __m128i*>(sp + 12));
+  // 每次处理 16 像素；hi_b 读至 sp+51，需剩余 ≥ 18 像素
+  for (; i + 18 <= total; i += 16, sp += 48, dp += 16) {
+    // ── 批次 A：像素 0-7（2×128-bit 加载，各覆盖 4 像素）────────────
+    __m128i lo_a = _mm_loadu_si128(reinterpret_cast<const __m128i*>(sp));
+    __m128i hi_a = _mm_loadu_si128(reinterpret_cast<const __m128i*>(sp + 12));
 
-    // 提取低/高各 4 像素的 B、G、R 通道字节
-    __m128i lo_b = _mm_shuffle_epi8(lo, shuf_b);  // [B0..B3, 0×12]
-    __m128i lo_g = _mm_shuffle_epi8(lo, shuf_g);
-    __m128i lo_r = _mm_shuffle_epi8(lo, shuf_r);
-    __m128i hi_b = _mm_shuffle_epi8(hi, shuf_b);  // [B4..B7, 0×12]
-    __m128i hi_g = _mm_shuffle_epi8(hi, shuf_g);
-    __m128i hi_r = _mm_shuffle_epi8(hi, shuf_r);
+    // 提取 [B,G] 和 [G,R] 对，合并为 256-bit（lane0=lo 4像素，lane1=hi 4像素）
+    __m256i bg_a = _mm256_set_m128i(_mm_shuffle_epi8(hi_a, shuf_bg),
+                                    _mm_shuffle_epi8(lo_a, shuf_bg));
+    __m256i gr_a = _mm256_set_m128i(_mm_shuffle_epi8(hi_a, shuf_gr),
+                                    _mm_shuffle_epi8(lo_a, shuf_gr));
 
-    // uint8→uint16 扩展（cvtepu8_epi16 取低 8 字节，恰好是我们的 4 个有效值）
-    // 合并为 256-bit：low lane = 低 4 像素，high lane = 高 4 像素
-    __m256i b16 =
-        _mm256_set_m128i(_mm_cvtepu8_epi16(hi_b), _mm_cvtepu8_epi16(lo_b));
-    __m256i g16 =
-        _mm256_set_m128i(_mm_cvtepu8_epi16(hi_g), _mm_cvtepu8_epi16(lo_g));
-    __m256i r16 =
-        _mm256_set_m128i(_mm_cvtepu8_epi16(hi_r), _mm_cvtepu8_epi16(lo_r));
+    // maddubs：B*29+G*99 和 G*51+R*77，vpaddw wrapping 相加后 >>8 = 灰度值
+    __m256i gray16_a = _mm256_srli_epi16(
+        _mm256_add_epi16(_mm256_maddubs_epi16(bg_a, w_bg),
+                         _mm256_maddubs_epi16(gr_a, w_gr)),
+        8);
 
-    // BT.601 定点乘加：(B*29 + G*150 + R*77) >> 8
-    // 最大值：255*(29+150+77)=255*256=65280 < 65535，uint16 无溢出
-    __m256i sum =
-        _mm256_add_epi16(_mm256_add_epi16(_mm256_mullo_epi16(b16, wb),
-                                          _mm256_mullo_epi16(g16, wg)),
-                         _mm256_mullo_epi16(r16, wr));
-    __m256i gray16 = _mm256_srli_epi16(sum, 8);
+    // ── 批次 B：像素 8-15 ────────────────────────────────────────────
+    __m128i lo_b = _mm_loadu_si128(reinterpret_cast<const __m128i*>(sp + 24));
+    __m128i hi_b = _mm_loadu_si128(reinterpret_cast<const __m128i*>(sp + 36));
 
-    // uint16→uint8 饱和打包（值在 0-255，不会饱和截断）
-    // packus_epi16 对每 128-bit lane 独立操作：
-    //   low lane 结果:  [g0,g1,g2,g3, 0×4, 0×8]
-    //   high lane 结果: [g4,g5,g6,g7, 0×4, 0×8]
-    __m256i packed = _mm256_packus_epi16(gray16, _mm256_setzero_si256());
+    __m256i bg_b = _mm256_set_m128i(_mm_shuffle_epi8(hi_b, shuf_bg),
+                                    _mm_shuffle_epi8(lo_b, shuf_bg));
+    __m256i gr_b = _mm256_set_m128i(_mm_shuffle_epi8(hi_b, shuf_gr),
+                                    _mm_shuffle_epi8(lo_b, shuf_gr));
 
-    // 取每 lane 前 4 字节（uint32）并写出
-    uint32_t lo4 = static_cast<uint32_t>(
-        _mm_cvtsi128_si32(_mm256_castsi256_si128(packed)));
-    uint32_t hi4 = static_cast<uint32_t>(
-        _mm_cvtsi128_si32(_mm256_extracti128_si256(packed, 1)));
-    std::memcpy(dp, &lo4, 4);
-    std::memcpy(dp + 4, &hi4, 4);
+    __m256i gray16_b = _mm256_srli_epi16(
+        _mm256_add_epi16(_mm256_maddubs_epi16(bg_b, w_bg),
+                         _mm256_maddubs_epi16(gr_b, w_gr)),
+        8);
+
+    // ── 打包 16 个灰度值 → 16 字节连续输出 ──────────────────────────
+    // packus: lane0=[G0-G3,0×4,G8-G11,0×4] lane1=[G4-G7,0×4,G12-G15,0×4]
+    __m256i packed = _mm256_packus_epi16(gray16_a, gray16_b);
+    // compress: lane0=[G0-G3,G8-G11,0×8] lane1=[G4-G7,G12-G15,0×8]
+    __m256i compressed = _mm256_shuffle_epi8(packed, compress_mask);
+    // permute dword[0,4,1,5] → 低128位 = G0..G15 顺序正确
+    __m256i result = _mm256_permutevar8x32_epi32(compressed, perm_idx);
+    _mm_storeu_si128(reinterpret_cast<__m128i*>(dp),
+                     _mm256_castsi256_si128(result));
   }
 
-  // 尾部处理（剩余 0-9 个像素，标量路径）
+  // 尾部标量（剩余 0-17 像素；1080P 整除 16，此段不执行）
   for (; i < total; ++i, sp += 3, ++dp) {
     *dp = static_cast<uint8_t>(
         (sp[0] * kWeightB + sp[1] * kWeightG + sp[2] * kWeightR) >> 8);
