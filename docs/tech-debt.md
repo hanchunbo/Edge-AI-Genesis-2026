@@ -1,6 +1,6 @@
 # 技术债记录
 
-> 最后更新：2026-03-16（W9 准备期：升级 g++-15，W8 覆盖率验证通过）
+> 最后更新：2026-03-16（W9 实现评估，新增 W9 技术债）
 
 ---
 
@@ -36,6 +36,60 @@
 4. **多线程 gcov 竞态**：W4/W5 多线程测试覆盖率计数器出现负数。加 `-fprofile-update=atomic` 后稳定。
 
 **当前覆盖率（g++-15 编译）**：行 98.6%，函数 100.0%（W1-W7 合计）
+
+---
+
+## [FIXED] W9 预处理 API P0/P1 技术债修复
+
+**发现**：2026-03-16（W9 AI 部署专家评估）
+**修复**：2026-03-17（dev-W9-OpenCV-chunbo 分支）
+
+### [FIXED] P0 — 输入无校验 + API 强制堆分配
+
+**修复内容**：
+- 提取公共 `ValidateSrc(src)` 辅助函数，统一检查 `src.empty()` 和 `src.type() != CV_8UC3`，任意版本收到空帧或非 BGR 输入均抛出 `std::invalid_argument`
+- 为 V1/V2/V3/V4 全部新增 `void BgrToGrayVx(const cv::Mat& src, cv::Mat& dst)` 重载；`dst.create()` 在尺寸/类型已匹配时是 no-op，生产管道可复用帧缓冲区实现零额外分配
+- 测试覆盖：EmptyInputThrows、WrongTypeThrows、VoidOverloadReuseBuffer（共 3 个测试用例）
+
+### [FIXED] P1 — 缺少 SIMD 实现
+
+**修复内容**：
+- 新增 `BgrToGrayV4`（AVX2，`-mavx2 -mfma` 编译）：每批处理 8 像素，
+  用 `_mm_shuffle_epi8` 直接从 BGR 字节流提取各通道，
+  `_mm256_mullo_epi16` + `_mm256_packus_epi16` 完成定点乘加和打包
+- 无 `__AVX2__` 时编译期回退 V2，行为等价
+- 缓冲区安全：循环条件 `i+10<=total` 保证 hi 段 128-bit 加载不越界
+- 测试覆盖：V4ConsistentWithV1（1080P 梯度图）、V4TailPixelsCorrect（17 像素奇数尺寸）
+
+### [FIXED] P1 — 缺少 float32 归一化 + CHW layout 输出
+
+**修复内容**：
+- 新增 `BgrToNormCHW(const cv::Mat& src) → std::vector<float>`，
+  转换链：`uint8 BGR HWC → ÷255 → float32 [0,1] → CHW (channel-first)`，
+  输出格式与 ONNX Runtime / TensorRT `{1,3,H,W}` 输入对齐
+- 测试覆盖：ValueRangeIsZeroToOne、CHWLayoutCorrect、OutputSizeCorrect
+
+### P2 — 基准测试设计存在缺陷
+
+- 纯色图像是最优 cache 场景，与真实摄像头帧差异大
+- 缺少 warmup 轮次（前几帧有 TLB miss / branch predictor cold start）
+- 只测平均延迟，缺 P99（实时推理更关心尾延迟）
+- 未测量内存带宽占用（1080P BGR = 6.2 MB/帧，是边缘设备真实瓶颈）
+
+### P2 — 色彩标准硬编码 BT.601 但未显式声明
+
+若模型训练预处理用的是 BT.709，高饱和像素误差可达 15 gray level，属系统性偏差。
+当前测试 `max_diff=2` 无法覆盖此类问题。应在 API 文档注释和 notes.md 中明确声明所用标准。
+
+### P3 — 测试集缺少边界场景
+
+| 缺少的测试场景 | 为什么重要 |
+|---|---|
+| 奇数宽高（如 1921×1081） | SIMD 对齐边界处理 |
+| 从磁盘加载的真实图片 | `step[0]` 可能带对齐 padding |
+| 并发调用（多线程同时处理） | 静态/全局状态线程安全 |
+
+**暂缓原因**：W9 属于底层技术演示阶段，P0/P1 项在进入实际推理流水线集成（Q2 规划）前修复即可。
 
 ---
 

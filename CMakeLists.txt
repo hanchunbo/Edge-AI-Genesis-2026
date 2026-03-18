@@ -13,6 +13,16 @@ set(CMAKE_EXPERIMENTAL_CXX_IMPORT_STD "d0edc3af-4c50-42ea-a356-e2862fe7a444")
 project(EdgeAIGenesis2026 LANGUAGES CXX)
 
 # =============================================================================
+# 默认构建类型
+# =============================================================================
+# 不指定 -DCMAKE_BUILD_TYPE 时默认 Release，避免 Debug 下 std::span/mdspan
+# 模板层未内联导致的性能数据严重失真（W9 遇坑：V3 mdspan Debug 下 560ms → Release 0.5ms）
+if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
+  set(CMAKE_BUILD_TYPE "Release" CACHE STRING "构建类型（默认 Release）" FORCE)
+  message(STATUS "[BuildType] 未指定，默认设为 Release（边缘端性能场景）")
+endif()
+
+# =============================================================================
 # 公共默认配置
 # =============================================================================
 set(CMAKE_CXX_STANDARD 20)
@@ -93,3 +103,5 @@ add_subdirectory(01_Linux_CPP_Foundations/w7_cmake_engineering)
 option(W8_COVERAGE "为 W1-W7 所有测试目标启用 gcov/lcov 覆盖率插桩（同时强制 -O0）" OFF)
 
 add_subdirectory(01_Linux_CPP_Foundations/w8_testing)
+
+add_subdirectory(01_Linux_CPP_Foundations/w9_opencv_optimized)

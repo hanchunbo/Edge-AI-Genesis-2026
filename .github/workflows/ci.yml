@@ -12,10 +12,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install GCC 13
+      - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y g++-13
+          sudo apt-get install -y g++-13 libopencv-dev
 
       - name: Configure CMake
         run: cmake -B build -DCMAKE_CXX_COMPILER=g++-13
