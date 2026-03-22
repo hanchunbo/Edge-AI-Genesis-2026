@@ -231,3 +231,7 @@ W2、W3、W4 的 `CMakeLists.txt` 已补充：
 set_target_properties(<target> PROPERTIES CXX_STANDARD 20)
 ```
 （若将来引入 `std::expected` 则按目标需要升级到 23，与 W1/W6 局部设置保持一致）
+
+### [FIXED] AI 部署内存初识化冗余及算法语义优化
+**详情**：在 W11 `fixed_lab.cpp` 中发现 AI 部署的反模式：使用 `std::vector` 作为张量预分配缓冲区时自带强制清零动作，浪费显存带宽。已重构为 `std::make_unique_for_overwrite`；并将组合式查找更新为语义精确的 `std::binary_search`。
+**日期**：2026-03-22

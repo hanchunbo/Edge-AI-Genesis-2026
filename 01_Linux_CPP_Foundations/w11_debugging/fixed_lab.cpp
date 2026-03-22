@@ -15,6 +15,7 @@
 #include "fixed_lab.hpp"
 
 #include <algorithm>
+#include <memory>
 #include <chrono>
 #include <cstring>
 #include <format>
@@ -30,9 +31,10 @@ namespace fixed {
 // ============================================================================
 void SimulateFrameProcessing(int frame_count) {
   for (int i = 0; i < frame_count; ++i) {
-    // [FIXED] std::vector 析构时自动释放，Valgrind 不再报泄漏
-    std::vector<uint8_t> buf(1024 * 1024);
-    std::memset(buf.data(), static_cast<int>(i % 256), buf.size());
+    // [FIXED] RAII 自动释放，使用 make_unique_for_overwrite 消除了 std::vector 
+    //         默认的大面积清零开销，在大张量预分配时节省大量内存带宽。
+    auto buf = std::make_unique_for_overwrite<uint8_t[]>(1024 * 1024);
+    std::memset(buf.get(), static_cast<int>(i % 256), 1024 * 1024);
     // buf 在此处析构，内存立即归还
   }
 }
@@ -75,8 +77,8 @@ std::vector<int> FindTarget(const std::vector<int>& data,
   std::vector<int> result;
   result.reserve(targets.size());
   for (int t : targets) {
-    auto it = std::lower_bound(sorted_data.begin(), sorted_data.end(), t);
-    if (it != sorted_data.end() && *it == t) {
+    // [FIXED] 语义更直白的二分查找，提升工程可读性
+    if (std::binary_search(sorted_data.begin(), sorted_data.end(), t)) {
       result.push_back(t);
     }
   }
