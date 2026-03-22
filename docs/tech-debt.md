@@ -1,8 +1,60 @@
 # 技术债记录
 
-> 最后更新：2026-03-16（W9 实现评估，新增 W9 技术债）
+> 最后更新：2026-03-22（W10 技术债修复：assert→异常 + LetterboxToTensor）
 
 ---
+
+## [FIXED] W10 高/中优先级技术债修复
+
+**发现**：2026-03-22（W10 AI 部署专家评估）
+**修复**：2026-03-22（dev-W10-Resize-chunbo 分支）
+
+### [FIXED] 中优 — assert 在 Release 下被 NDEBUG 消除
+
+**问题**：`ResizeNearest` / `ResizeBilinear` / `Letterbox` 用 `assert` 做输入校验，
+Release 模式下 `NDEBUG` 宏使 assert 完全消失，传入空图或灰度图会导致静默 UB。
+
+**修复**：
+- 提取公共 `ValidateSrc(const cv::Mat&)` 辅助函数，检查 `src.empty()` 和 `src.type() != CV_8UC3`
+- 不合法时抛 `std::invalid_argument`（含实际类型信息），Release 下同样生效
+- 同步将 `dst_w/dst_h ≤ 0` 的参数校验也改为抛异常
+- 测试覆盖：`InputValidation.EmptyInputThrows`、`InputValidation.WrongTypeThrows`（共 6 个 EXPECT_THROW）
+
+### [FIXED] 高优 — 输出硬编码 uint8 BGR，推理引擎无法直接使用
+
+**问题**：V1/V2/V3 输出均为 `CV_8UC3 HWC`，ONNX Runtime / TensorRT
+接受的 tensor layout 为 `float32 CHW {1,3,H,W}`，需外部手写两步转换，链路不完整。
+
+**修复**：
+- 新增 `LetterboxToTensor(src, dst_w, dst_h, info) → std::vector<float>`
+  转换链：`uint8 BGR HWC → Letterbox → ÷255 → float32 [0,1] → CHW`
+- 输出 layout：`[B面, G面, R面]`，与 ONNX Runtime / TensorRT `{1,3,H,W}` 完全对齐
+- `LetterboxInfo` 同步返回，用于后处理坐标反算，无额外开销
+- 测试覆盖：`OutputSize`、`ValueRangeIsZeroToOne`、`CHWLayoutCorrect`
+
+**测试结果**：18/18 全部通过（原 13 + 新增 5），零编译警告。
+
+---
+
+## [OPEN] W10 V2 双线性性能优化
+
+**发现**：2026-03-22（从 W10 notes.md 技术债迁移）
+**严重度**：🟡 中（自定义实现比 OpenCV 慢 6×，MCU 等无 OpenCV 平台上有实际影响）
+
+**现状**：V2 双线性内循环为朴素双层嵌套，每像素随机访问 4 个源像素，
+编译器无法自动向量化（非连续访存）。实测 1920×1080→640×640 耗时约 **5.85 ms**，
+而 OpenCV INTER_LINEAR 仅 **0.97 ms**（6× 差距）。
+
+**优化方向**（参考 OpenCV 内部实现）：
+1. **行预计算**：对每个目标行 `dy`，先计算所有源行 `sy` 的水平插值结果（行缓冲），
+   访存从随机变为顺序，充分利用 L1 cache line
+2. **垂直方向 SIMD**：行缓冲已连续，可用 SSE2/AVX2 批量做垂直加权
+
+**暂缓原因**：推理预处理主路径走 V3 Letterbox（内部调用 `cv::resize`）性能已足够；
+V2 自定义实现的价值在于算法理解和无 OpenCV 平台移植，Q2 ONNX Runtime 集成阶段按需优化。
+
+---
+
 
 ## [FIXED] W1-W5 clang-format 不通过
 
