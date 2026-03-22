@@ -204,3 +204,63 @@ TEST(ResizeBilinear, CoordModeDiffers) {
   // 非整数倍 scale 下，两种模式采样偏移 0.25 像素，渐变图上必然产生差异
   EXPECT_GT(cv::norm(asym, half, cv::NORM_L1), 0.0);
 }
+
+// ============================================================================
+// 输入校验：空图 / 错误类型应抛 std::invalid_argument（中优技术债修复验证）
+// ============================================================================
+TEST(InputValidation, EmptyInputThrows) {
+  cv::Mat empty;
+  w10::LetterboxInfo info{};
+  EXPECT_THROW((void)w10::ResizeNearest(empty, 64, 64), std::invalid_argument);
+  EXPECT_THROW((void)w10::ResizeBilinear(empty, 64, 64), std::invalid_argument);
+  EXPECT_THROW((void)w10::Letterbox(empty, 64, 64, info), std::invalid_argument);
+}
+
+TEST(InputValidation, WrongTypeThrows) {
+  // CV_8UC1 灰度图（非 CV_8UC3）
+  cv::Mat gray(64, 64, CV_8UC1, cv::Scalar(128));
+  w10::LetterboxInfo info{};
+  EXPECT_THROW((void)w10::ResizeNearest(gray, 32, 32), std::invalid_argument);
+  EXPECT_THROW((void)w10::ResizeBilinear(gray, 32, 32), std::invalid_argument);
+  EXPECT_THROW((void)w10::Letterbox(gray, 32, 32, info), std::invalid_argument);
+}
+
+// ============================================================================
+// LetterboxToTensor：float32 CHW 输出正确性（高优技术债修复验证）
+// ============================================================================
+TEST(LetterboxToTensor, OutputSize) {
+  cv::Mat src(540, 960, CV_8UC3, cv::Scalar(100, 150, 200));
+  w10::LetterboxInfo info{};
+  auto tensor = w10::LetterboxToTensor(src, 640, 640, info);
+  // 输出尺寸 = 3 * dst_h * dst_w
+  EXPECT_EQ(static_cast<int>(tensor.size()), 3 * 640 * 640);
+}
+
+TEST(LetterboxToTensor, ValueRangeIsZeroToOne) {
+  // 纯色图：BGR = (0, 128, 255)，归一化后各通道值应在 [0, 1]
+  cv::Mat src(64, 64, CV_8UC3, cv::Scalar(0, 128, 255));
+  w10::LetterboxInfo info{};
+  auto tensor = w10::LetterboxToTensor(src, 64, 64, info);
+  for (float v : tensor) {
+    EXPECT_GE(v, 0.0f);
+    EXPECT_LE(v, 1.0f);
+  }
+}
+
+TEST(LetterboxToTensor, CHWLayoutCorrect) {
+  // 纯色图 BGR=(10, 20, 30)，无填充（正方形→正方形等比）
+  // B 面 = 10/255, G 面 = 20/255, R 面 = 30/255
+  cv::Mat src(64, 64, CV_8UC3, cv::Scalar(10, 20, 30));
+  w10::LetterboxInfo info{};
+  auto tensor = w10::LetterboxToTensor(src, 64, 64, info);
+
+  const int n = 64 * 64;
+  const float kTol = 1.0f / 255.0f;  // 允许 1 个量化步长的误差
+
+  // B 面（channel 0）：tensor[0..n-1]
+  EXPECT_NEAR(tensor[0], 10.0f / 255.0f, kTol);
+  // G 面（channel 1）：tensor[n..2n-1]
+  EXPECT_NEAR(tensor[n], 20.0f / 255.0f, kTol);
+  // R 面（channel 2）：tensor[2n..3n-1]
+  EXPECT_NEAR(tensor[2 * n], 30.0f / 255.0f, kTol);
+}

@@ -14,13 +14,27 @@
 #include "custom_resize.hpp"
 
 #include <algorithm>
-#include <cassert>
 #include <cmath>
+#include <stdexcept>
 #include <opencv2/imgproc.hpp>
 
 namespace w10 {
 
 namespace {
+
+// ----------------------------------------------------------------------------
+// 输入校验辅助函数（统一错误处理，Release 下同样有效）
+// ----------------------------------------------------------------------------
+inline void ValidateSrc(const cv::Mat& src) {
+  if (src.empty()) {
+    throw std::invalid_argument("Resize: src Mat 为空");
+  }
+  if (src.type() != CV_8UC3) {
+    throw std::invalid_argument(
+        "Resize: 仅支持 CV_8UC3 输入，实际类型 = " +
+        std::to_string(src.type()));
+  }
+}
 
 // ----------------------------------------------------------------------------
 // 坐标映射辅助函数
@@ -43,8 +57,10 @@ inline float MapCoord(int dst_coord, float scale, CoordMode mode) {
 // ============================================================================
 cv::Mat ResizeNearest(const cv::Mat& src, int dst_w, int dst_h,
                       CoordMode coord_mode) {
-  assert(src.type() == CV_8UC3 && "ResizeNearest: 仅支持 BGR uint8 输入");
-  assert(dst_w > 0 && dst_h > 0);
+  ValidateSrc(src);
+  if (dst_w <= 0 || dst_h <= 0) {
+    throw std::invalid_argument("ResizeNearest: dst_w/dst_h 必须 > 0");
+  }
 
   cv::Mat dst(dst_h, dst_w, CV_8UC3);
 
@@ -96,8 +112,10 @@ cv::Mat ResizeNearest(const cv::Mat& src, int dst_w, int dst_h,
 //
 cv::Mat ResizeBilinear(const cv::Mat& src, int dst_w, int dst_h,
                        CoordMode coord_mode) {
-  assert(src.type() == CV_8UC3 && "ResizeBilinear: 仅支持 BGR uint8 输入");
-  assert(dst_w > 0 && dst_h > 0);
+  ValidateSrc(src);
+  if (dst_w <= 0 || dst_h <= 0) {
+    throw std::invalid_argument("ResizeBilinear: dst_w/dst_h 必须 > 0");
+  }
 
   cv::Mat dst(dst_h, dst_w, CV_8UC3);
 
@@ -167,8 +185,10 @@ cv::Mat ResizeBilinear(const cv::Mat& src, int dst_w, int dst_h,
 //
 cv::Mat Letterbox(const cv::Mat& src, int dst_w, int dst_h, LetterboxInfo& info,
                   cv::Scalar pad_color) {
-  assert(src.type() == CV_8UC3 && "Letterbox: 仅支持 BGR uint8 输入");
-  assert(dst_w > 0 && dst_h > 0);
+  ValidateSrc(src);
+  if (dst_w <= 0 || dst_h <= 0) {
+    throw std::invalid_argument("Letterbox: dst_w/dst_h 必须 > 0");
+  }
 
   // 等比缩放比（取宽高中的较小值，保证不超出目标框）
   float scale_w = static_cast<float>(dst_w) / static_cast<float>(src.cols);
@@ -202,6 +222,47 @@ cv::Mat Letterbox(const cv::Mat& src, int dst_w, int dst_h, LetterboxInfo& info,
   info.pad_top = pad_top;
 
   return dst;
+}
+
+// ============================================================================
+// V4：Letterbox + 归一化(÷255) + CHW 转置（推理引擎直连版）
+// ============================================================================
+//
+// 转换链路：
+//   uint8 BGR HWC  →  Letterbox  →  ÷255  →  float32 [0,1]  →  CHW
+//
+// CHW layout：
+//   [B 面, G 面, R 面]，内存顺序与 ONNX Runtime / TensorRT {1,3,H,W} 对齐。
+//
+std::vector<float> LetterboxToTensor(const cv::Mat& src, int dst_w, int dst_h,
+                                     LetterboxInfo& info,
+                                     cv::Scalar pad_color) {
+  // Letterbox 内部已做 ValidateSrc，无需重复检测
+  cv::Mat lb_bgr = Letterbox(src, dst_w, dst_h, info, pad_color);
+
+  const int total_pixels = dst_h * dst_w;
+  std::vector<float> tensor(3 * total_pixels);
+
+  // CHW 转置：将 HWC 内存布局拆分为三个单通道面
+  // 分别起始地址： channel B = tensor[0..n-1]
+  //                  channel G = tensor[n..2n-1]
+  //                  channel R = tensor[2n..3n-1]
+  float* ch_b = tensor.data();
+  float* ch_g = tensor.data() + total_pixels;
+  float* ch_r = tensor.data() + 2 * total_pixels;
+
+  int idx = 0;
+  for (int y = 0; y < dst_h; ++y) {
+    const auto* row = lb_bgr.ptr<cv::Vec3b>(y);
+    for (int x = 0; x < dst_w; ++x, ++idx) {
+      // OpenCV 默认 BGR 顺序
+      ch_b[idx] = static_cast<float>(row[x][0]) / 255.0f;
+      ch_g[idx] = static_cast<float>(row[x][1]) / 255.0f;
+      ch_r[idx] = static_cast<float>(row[x][2]) / 255.0f;
+    }
+  }
+
+  return tensor;
 }
 
 }  // namespace w10
