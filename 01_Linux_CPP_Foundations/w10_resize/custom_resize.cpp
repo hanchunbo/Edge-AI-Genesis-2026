@@ -15,8 +15,8 @@
 
 #include <algorithm>
 #include <cmath>
-#include <stdexcept>
 #include <opencv2/imgproc.hpp>
+#include <stdexcept>
 
 namespace w10 {
 
@@ -30,9 +30,8 @@ inline void ValidateSrc(const cv::Mat& src) {
     throw std::invalid_argument("Resize: src Mat 为空");
   }
   if (src.type() != CV_8UC3) {
-    throw std::invalid_argument(
-        "Resize: 仅支持 CV_8UC3 输入，实际类型 = " +
-        std::to_string(src.type()));
+    throw std::invalid_argument("Resize: 仅支持 CV_8UC3 输入，实际类型 = " +
+                                std::to_string(src.type()));
   }
 }
 

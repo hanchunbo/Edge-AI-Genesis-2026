@@ -8,10 +8,9 @@
 #ifndef LINUX_CPP_FOUNDATIONS_W10_RESIZE_CUSTOM_RESIZE_HPP_
 #define LINUX_CPP_FOUNDATIONS_W10_RESIZE_CUSTOM_RESIZE_HPP_
 
+#include <opencv2/core.hpp>
 #include <stdexcept>
 #include <vector>
-
-#include <opencv2/core.hpp>
 
 namespace w10 {
 

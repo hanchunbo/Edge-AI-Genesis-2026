@@ -213,7 +213,8 @@ TEST(InputValidation, EmptyInputThrows) {
   w10::LetterboxInfo info{};
   EXPECT_THROW((void)w10::ResizeNearest(empty, 64, 64), std::invalid_argument);
   EXPECT_THROW((void)w10::ResizeBilinear(empty, 64, 64), std::invalid_argument);
-  EXPECT_THROW((void)w10::Letterbox(empty, 64, 64, info), std::invalid_argument);
+  EXPECT_THROW((void)w10::Letterbox(empty, 64, 64, info),
+               std::invalid_argument);
 }
 
 TEST(InputValidation, WrongTypeThrows) {
