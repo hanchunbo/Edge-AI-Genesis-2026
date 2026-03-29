@@ -77,6 +77,8 @@ void ThreadB() {
 void TransferData() {
   std::cout << std::format(
       "[ BUG 2 ] 启动两个加锁顺序相反的线程（将死锁，Ctrl+C 中断）...\n");
+  // NOTE: 此处使用 std::thread 同时违反项目规范（应改用 std::jthread）。
+  //       请参考 fixed_lab.cpp TransferData 了解正确的 C++20 并发实践。
   std::thread ta(ThreadA);
   std::thread tb(ThreadB);
   ta.join();

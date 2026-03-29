@@ -22,7 +22,7 @@
 |-----|------|------|---------|
 | Bug 1 | 内存泄漏 | `new[]` 后丢弃指针 | `std::vector<uint8_t>` RAII 自动释放 |
 | Bug 2 | 死锁 | 两线程逆序加锁 | `std::scoped_lock(a, b)` 同时锁，消除顺序依赖 |
-| Bug 3 | O(n²) 慢搜索 | 朴素双重循环 | `std::sort` + `std::lower_bound`，O(n log n) |
+| Bug 3 | O(n²) 慢搜索 | 朴素双重循环 | `std::sort` + `std::binary_search`，O(n log n) |
 
 ---
 

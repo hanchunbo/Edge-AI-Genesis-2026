@@ -59,10 +59,9 @@ void ThreadB() {
 }
 
 void TransferData() {
-  std::thread ta(ThreadA);
-  std::thread tb(ThreadB);
-  ta.join();
-  tb.join();
+  // [FIXED] std::jthread RAII 自动 join，析构时无需手动调用，防止异常路径线程泄漏
+  std::jthread ta(ThreadA);
+  std::jthread tb(ThreadB);
 }
 
 // ============================================================================
