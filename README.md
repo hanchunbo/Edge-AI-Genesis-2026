@@ -40,8 +40,9 @@
 | W6 | 高性能I/O (mmap) | std::span | ✅ 完成（实现+测试+benchmark） |
 | W7 | CMake工程化 (I) | INTERFACE/PUBLIC/PRIVATE, Generator Expressions | ✅ 完成 |
 | W8 | CMake工程化 (II) & 自动化单元测试 | FetchContent（本地 zip）, lcov/genhtml 覆盖率 | ✅ 完成 |
-| W9-W11 | OpenCV底层实战 | std::mdspan (C++23) | 🔄 W9 进行中 |
-| W12-W13 | 阶段项目 | 全栈整合 | ⬜ 待开始 |
+| W9-W11 | OpenCV底层实战 + 性能调优工具链 | std::mdspan (C++23) | ✅ W9-W11 全部完成 |
+| W12 | Q1 知识闭环与技术复盘 | C++20/23 对照总结，FAQ 库，Trade-offs | ✅ 完成 |
+| W13 | 阶段项目 | 全栈整合 | ⬜ 待开始 |
 
 ---
 

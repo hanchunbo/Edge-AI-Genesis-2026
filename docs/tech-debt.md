@@ -231,3 +231,40 @@ W2、W3、W4 的 `CMakeLists.txt` 已补充：
 set_target_properties(<target> PROPERTIES CXX_STANDARD 20)
 ```
 （若将来引入 `std::expected` 则按目标需要升级到 23，与 W1/W6 局部设置保持一致）
+
+### [FIXED] AI 部署内存初识化冗余及算法语义优化
+**详情**：在 W11 `fixed_lab.cpp` 中发现 AI 部署的反模式：使用 `std::vector` 作为张量预分配缓冲区时自带强制清零动作，浪费显存带宽。已重构为 `std::make_unique_for_overwrite`；并将组合式查找更新为语义精确的 `std::binary_search`。
+**日期**：2026-03-22
+
+---
+
+## [FIXED] W11 规范违反与文档不一致修复
+
+**发现**：2026-03-29（W11/W12 完成情况评审）
+**修复**：2026-03-29
+
+### [FIXED] P0 — `fixed_lab.cpp` TransferData 使用 `std::thread`
+
+`fixed_lab.cpp` 是规范参考版本，TransferData 仍用 `std::thread` 违反项目强制规范。
+已替换为 `std::jthread` + 移除手动 join（RAII 自动析构）：
+
+```cpp
+// 修复后
+void TransferData() {
+  // [FIXED] std::jthread RAII 自动 join，析构时无需手动调用，防止异常路径线程泄漏
+  std::jthread ta(ThreadA);
+  std::jthread tb(ThreadB);
+}
+```
+
+### [FIXED] P1 — `notes.md` Bug 3 修复说明与代码实现不一致
+
+`notes.md` Bug 一览表中写的是 `std::lower_bound`，但实现已改为 `std::binary_search`（上次技术债修复）。
+已同步更新文档，与实现保持一致。
+
+### [FIXED] P1 — `buggy_lab.cpp` Bug 2 注释缺少规范说明
+
+在 `buggy_lab.cpp` Bug 2 的 TransferData 中补充注释，明确说明 `std::thread` 同时违反项目规范，
+引导读者参考 `fixed_lab.cpp` 了解正确的 C++20 并发实践。
+
+**验证结果**：`ctest -R W11` 5/5 用例通过，编译零警告。

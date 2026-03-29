@@ -107,3 +107,5 @@ add_subdirectory(01_Linux_CPP_Foundations/w8_testing)
 add_subdirectory(01_Linux_CPP_Foundations/w9_opencv_optimized)
 
 add_subdirectory(01_Linux_CPP_Foundations/w10_resize)
+
+add_subdirectory(01_Linux_CPP_Foundations/w11_debugging)
