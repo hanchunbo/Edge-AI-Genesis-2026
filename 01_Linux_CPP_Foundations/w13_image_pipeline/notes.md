@@ -5,6 +5,74 @@
 
 ---
 
+## 时序图：SubmitBatch 完整调用流程
+
+```
+调用方线程                   ThreadPool               Worker 线程 i
+──────────────────────────   ─────────────────────    ─────────────────────────────
+SubmitBatch(frames)
+  │
+  ├─ for i in frames:
+  │    Submit(lambda_i) ──►  lock queue_mutex_
+  │    ← future_i            push packaged_task_i
+  │                          unlock
+  │                          notify_one() ──────────► 唤醒
+  │                                                   lock queue_mutex_
+  │                                                   pop packaged_task_i
+  │                                                   unlock
+  │                                                   active_tasks_++
+  │                                                   (*packaged_task_i)()
+  │                                                     │
+  │                                                     ├─[kGray]  w9::BgrToGrayV4(frame)
+  │                                                     ├─[kTensor] w10::LetterboxToTensor(frame)
+  │                                                     │
+  │                                                     RecordTiming(elapsed):
+  │                                                       total_frames_.fetch_add(1)
+  │                                                       total_us_.fetch_add(us)
+  │                                                       CAS loop → min_us_
+  │                                                       CAS loop → max_us_
+  │                                                       DCLP → wall_start_ (首帧)
+  │                                                     │
+  │                                                     set_value(FrameResult) ──► future_i 就绪
+  │                                                   active_tasks_--
+  │                                                   done_condition_.notify_all()
+  │
+  ├─ [可选] WaitForAll() ──► wait(queue empty
+  │                               && active==0)
+  │
+  ├─ future_i.get() ◄────────────────────────────── FrameResult
+  │
+  └─ GetTimingReport()
+       total_frames_.load(acquire)  ← 一次 acquire 屏障，看到所有 relaxed 写入
+       now() - wall_start_ → fps
+       → TimingReport{min, avg, max, fps}
+```
+
+## 生命周期图：ImagePipeline 对象状态
+
+```
+构造
+  ImagePipeline(config)
+  ├─ pool_(num_threads)      → workers_ 启动，进入 WorkerLoop 等待
+  └─ thread_count_cache_ = N
+         │
+         │  [运行中]
+         ▼
+  SubmitBatch / Submit       → 任务入队，worker 消费
+  WaitForAll                 → 阻塞到队列空 + active==0
+  ResetStats                 → 清零统计计数器（不停线程）
+         │
+         │  [关闭]
+         ▼
+  Shutdown()
+  ├─ stop_source_.request_stop()  → stop_token 触发
+  ├─ condition_.notify_all()      → 唤醒所有阻塞 worker
+  └─ workers_.clear()             → jthread 析构 → 自动 join
+         │
+         ▼
+  析构（幂等，Shutdown 已完成则无操作）
+```
+
 ## 架构速查
 
 ```
@@ -21,7 +89,7 @@
     │             │
     └──────┬──────┘
            ▼
-     RecordTiming（无锁原子统计）
+     RecordTiming（mutable 原子统计，const 方法）
            │
            ▼
     FrameResult → future.get() 回调用方
@@ -91,10 +159,11 @@ DCLP → wall_start_             now() - wall_start_ → fps
 ### 4. `alignas(64)` 消除伪共享
 
 ```cpp
-alignas(64) std::atomic<uint64_t> total_frames_{0};
-alignas(64) std::atomic<uint64_t> total_us_{0};
-alignas(64) std::atomic<uint64_t> min_us_{UINT64_MAX};
-alignas(64) std::atomic<uint64_t> max_us_{0};
+// alignas 在前，mutable 在后（C++ 属性语法规则）
+alignas(64) mutable std::atomic<uint64_t> total_frames_{0};
+alignas(64) mutable std::atomic<uint64_t> total_us_{0};
+alignas(64) mutable std::atomic<uint64_t> min_us_{UINT64_MAX};
+alignas(64) mutable std::atomic<uint64_t> max_us_{0};
 ```
 
 四个原子变量并发写入频率相同。若挤在同一缓存行（64 字节），

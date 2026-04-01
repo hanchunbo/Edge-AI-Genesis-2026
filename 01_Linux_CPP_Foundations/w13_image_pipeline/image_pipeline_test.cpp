@@ -8,6 +8,7 @@
 
 #include "image_pipeline.hpp"
 
+#include <algorithm>
 #include <chrono>
 #include <future>
 #include <gtest/gtest.h>
@@ -83,11 +84,10 @@ TEST(ImagePipelineTest, TensorModeOutputFormat) {
   const auto& tensor = result.GetTensor();
   EXPECT_EQ(tensor.size(), static_cast<size_t>(3 * 640 * 640));
 
-  // 所有值必须在 [0, 1]（归一化后）
-  for (float v : tensor) {
-    EXPECT_GE(v, 0.0f);
-    EXPECT_LE(v, 1.0f);
-  }
+  // 用 min/max 替代逐元素 EXPECT：避免 1.2M 次 GTest 调用带来的测试开销
+  auto [it_min, it_max] = std::minmax_element(tensor.begin(), tensor.end());
+  EXPECT_GE(*it_min, 0.0f);
+  EXPECT_LE(*it_max, 1.0f);
 }
 
 // ============================================================================

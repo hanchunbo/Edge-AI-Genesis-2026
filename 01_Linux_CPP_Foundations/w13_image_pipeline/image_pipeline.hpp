@@ -221,7 +221,8 @@ class ImagePipeline {
                                           size_t frame_index) const;
 
   // 将单帧耗时写入原子统计计数器（无锁，worker 线程调用）
-  void RecordTiming(std::chrono::microseconds elapsed_us) noexcept;
+  // const：修改的是 mutable 统计成员，不改变帧处理语义（逻辑 const）
+  void RecordTiming(std::chrono::microseconds elapsed_us) const noexcept;
 
   // --------------------------------------------------------------------------
   // 成员变量（按访问热度分组，热点变量独占缓存行）
@@ -242,17 +243,21 @@ class ImagePipeline {
   // 字节缓存行，消除 false sharing。 四个计数器分开对齐，即使 worker
   // 线程并发写入也不会互相干扰。
 
-  alignas(64) std::atomic<uint64_t> total_frames_{0};
-  alignas(64) std::atomic<uint64_t> total_us_{0};
+  // mutable：统计数据属于"逻辑 const"不破坏的可观测状态，
+  // 允许在 const 方法（ProcessGray/ProcessTensor/RecordTiming）中写入，
+  // 避免对 const this 使用 const_cast（UB 隐患）。
+  // alignas 必须在 mutable 之前（C++ 属性语法规则）
+  alignas(64) mutable std::atomic<uint64_t> total_frames_{0};
+  alignas(64) mutable std::atomic<uint64_t> total_us_{0};
   // min 初始化为最大值，第一帧写入后才有意义（CAS 循环更新）
-  alignas(64) std::atomic<uint64_t> min_us_{UINT64_MAX};
-  alignas(64) std::atomic<uint64_t> max_us_{0};
+  alignas(64) mutable std::atomic<uint64_t> min_us_{UINT64_MAX};
+  alignas(64) mutable std::atomic<uint64_t> max_us_{0};
 
   // ── 墙钟起始时间（用于吞吐量计算，仅第一帧处理时写入一次）────────────────
   // wall_started_ 用双重检查锁定（DCLP）保护 wall_start_ 的首次写入。
   // acquire/release 配对确保写入对其他线程可见。
-  alignas(64) std::atomic<bool> wall_started_{false};
-  std::chrono::steady_clock::time_point wall_start_;
+  alignas(64) mutable std::atomic<bool> wall_started_{false};
+  mutable std::chrono::steady_clock::time_point wall_start_;
   mutable std::mutex wall_mutex_;  // 仅用于 wall_start_ 初始化的互斥
 };
 

@@ -125,8 +125,9 @@ FrameResult ImagePipeline::ProcessGray(const cv::Mat& frame,
   auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(
       std::chrono::steady_clock::now() - t0);
 
-  // RecordTiming 是无锁的，可以安全地在 worker 线程中调用
-  const_cast<ImagePipeline*>(this)->RecordTiming(elapsed);
+  // RecordTiming 是无锁的 const 方法（写 mutable 原子成员），可安全地在 worker
+  // 线程调用
+  RecordTiming(elapsed);
 
   return FrameResult{
       .frame_index = frame_index,
@@ -152,7 +153,7 @@ FrameResult ImagePipeline::ProcessTensor(const cv::Mat& frame,
   auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(
       std::chrono::steady_clock::now() - t0);
 
-  const_cast<ImagePipeline*>(this)->RecordTiming(elapsed);
+  RecordTiming(elapsed);
 
   return FrameResult{
       .frame_index = frame_index,
@@ -166,7 +167,7 @@ FrameResult ImagePipeline::ProcessTensor(const cv::Mat& frame,
 // RecordTiming — 无锁统计写入（worker 线程调用）
 // ============================================================================
 void ImagePipeline::RecordTiming(
-    std::chrono::microseconds elapsed_us) noexcept {
+    std::chrono::microseconds elapsed_us) const noexcept {
   auto us = static_cast<uint64_t>(elapsed_us.count());
 
   // relaxed 足够：这几个计数器之间无顺序依赖，汇总时在 GetTimingReport() 用
@@ -208,7 +209,9 @@ TimingReport ImagePipeline::GetTimingReport() const {
   // acquire 确保能看到所有 relaxed 写入的最新值
   uint64_t n = total_frames_.load(std::memory_order_acquire);
   if (n == 0) {
-    return TimingReport{.thread_count = pool_.GetThreadCount()};
+    // thread_count_cache_ 而非 pool_.GetThreadCount()：
+    // Shutdown() 后 workers_.clear() 会让后者返回 0
+    return TimingReport{.thread_count = thread_count_cache_};
   }
 
   uint64_t sum = total_us_.load(std::memory_order_relaxed);
