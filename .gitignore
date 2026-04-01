@@ -48,6 +48,9 @@ build/
 .vscode/
 .idea/
 
+# Daily test / scratch photos (local only, not committed)
+dailyTest/
+
 # CMake
 CMakeCache.txt
 CMakeFiles/

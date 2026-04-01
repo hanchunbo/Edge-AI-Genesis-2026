@@ -41,3 +41,33 @@ tmux attach -t telegram
 
 ### 环境变更
 - 安装 tmux 3.6a（`sudo apt-get install -y tmux`）
+
+---
+
+### 操作摘要（续）
+- 在 BotFather 新建 bot `@ChunClaudebot`，替换旧 token
+- 更新 `~/.claude/channels/telegram/.env` 为新 token（`8636641025:...`）
+- 终止遗留的旧 token 进程（PID 16817），避免双进程冲突
+- 将 dmPolicy 临时切换为 `pairing`，完成新 Telegram 账号（`8627270441`）配对
+- 锁回 `allowlist` 模式，allowlist 现有两个账号：`8200284523`（旧）、`8627270441`（新）
+
+### 问题与排查
+- **现象**：更换 bot token 后发消息无回复
+- **根因 1**：旧进程仍在运行并持有旧 token，与新进程并存导致 getUpdates 争抢
+- **根因 2**：新 Telegram 账号 ID 不在 allowlist，消息被静默丢弃
+- **解法**：kill 旧进程 → 切 pairing 模式 → 配对新账号 → 锁回 allowlist
+
+### 命令备忘
+```bash
+# 检查并清理重复的 telegram 进程
+ps aux | grep telegram | grep -v grep
+kill <旧PID>
+
+# 配对新账号
+# 1. 切换为 pairing 模式（Claude Code 内执行）
+# /telegram:access policy pairing
+# 2. 新账号 DM bot，获得 6 位码后执行
+# /telegram:access pair <code>
+# 3. 锁回 allowlist
+# /telegram:access policy allowlist
+```

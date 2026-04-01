@@ -23,7 +23,7 @@ flowchart TD
     Gray --> Timing
     Tensor --> Timing
     Timing --> Result
-    Result -->|future.get()| Caller
+    Result -->|"future.get()"| Caller
     Timing --> Report
 ```
 
