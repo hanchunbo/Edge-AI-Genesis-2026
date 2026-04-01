@@ -5,95 +5,70 @@
 
 ---
 
+## 架构总览
+
+```mermaid
+flowchart TD
+    Caller["调用方\nSubmitBatch(span&lt;const cv::Mat&gt;)"]
+    Pool["w5::ThreadPool\njthread + stop_token"]
+    Gray["ProcessGray\nw9::BgrToGrayV4"]
+    Tensor["ProcessTensor\nw10::LetterboxToTensor"]
+    Timing["RecordTiming\n原子统计 mutable"]
+    Result["FrameResult\nvariant&lt;Mat, vector&lt;float&gt;&gt;"]
+    Report["GetTimingReport\nmin / avg / max / fps"]
+
+    Caller --> Pool
+    Pool --> Gray
+    Pool --> Tensor
+    Gray --> Timing
+    Tensor --> Timing
+    Timing --> Result
+    Result -->|future.get()| Caller
+    Timing --> Report
+```
+
+---
+
 ## 时序图：SubmitBatch 完整调用流程
 
+```mermaid
+sequenceDiagram
+    participant Caller as 调用方线程
+    participant Pool as ThreadPool
+    participant Worker as Worker 线程 i
+
+    Caller->>Pool: Submit(lambda_i)
+    Pool-->>Caller: future_i
+    Pool->>Worker: notify_one()
+    Worker->>Worker: pop packaged_task_i
+    Worker->>Worker: active_tasks_++
+    Worker->>Worker: (*packaged_task_i)()
+    note over Worker: [kGray]  BgrToGrayV4(frame)<br/>[kTensor] LetterboxToTensor(frame)
+    Worker->>Worker: RecordTiming(elapsed)
+    note over Worker: fetch_add total_frames/us<br/>CAS loop → min/max_us<br/>DCLP → wall_start (首帧)
+    Worker-->>Caller: set_value(FrameResult)
+    Worker->>Worker: active_tasks_--
+    Worker->>Pool: done_condition_.notify_all()
+    Caller->>Pool: WaitForAll() [可选]
+    Caller->>Caller: future_i.get() → FrameResult
+    Caller->>Caller: GetTimingReport()
 ```
-调用方线程                   ThreadPool               Worker 线程 i
-──────────────────────────   ─────────────────────    ─────────────────────────────
-SubmitBatch(frames)
-  │
-  ├─ for i in frames:
-  │    Submit(lambda_i) ──►  lock queue_mutex_
-  │    ← future_i            push packaged_task_i
-  │                          unlock
-  │                          notify_one() ──────────► 唤醒
-  │                                                   lock queue_mutex_
-  │                                                   pop packaged_task_i
-  │                                                   unlock
-  │                                                   active_tasks_++
-  │                                                   (*packaged_task_i)()
-  │                                                     │
-  │                                                     ├─[kGray]  w9::BgrToGrayV4(frame)
-  │                                                     ├─[kTensor] w10::LetterboxToTensor(frame)
-  │                                                     │
-  │                                                     RecordTiming(elapsed):
-  │                                                       total_frames_.fetch_add(1)
-  │                                                       total_us_.fetch_add(us)
-  │                                                       CAS loop → min_us_
-  │                                                       CAS loop → max_us_
-  │                                                       DCLP → wall_start_ (首帧)
-  │                                                     │
-  │                                                     set_value(FrameResult) ──► future_i 就绪
-  │                                                   active_tasks_--
-  │                                                   done_condition_.notify_all()
-  │
-  ├─ [可选] WaitForAll() ──► wait(queue empty
-  │                               && active==0)
-  │
-  ├─ future_i.get() ◄────────────────────────────── FrameResult
-  │
-  └─ GetTimingReport()
-       total_frames_.load(acquire)  ← 一次 acquire 屏障，看到所有 relaxed 写入
-       now() - wall_start_ → fps
-       → TimingReport{min, avg, max, fps}
-```
+
+---
 
 ## 生命周期图：ImagePipeline 对象状态
 
-```
-构造
-  ImagePipeline(config)
-  ├─ pool_(num_threads)      → workers_ 启动，进入 WorkerLoop 等待
-  └─ thread_count_cache_ = N
-         │
-         │  [运行中]
-         ▼
-  SubmitBatch / Submit       → 任务入队，worker 消费
-  WaitForAll                 → 阻塞到队列空 + active==0
-  ResetStats                 → 清零统计计数器（不停线程）
-         │
-         │  [关闭]
-         ▼
-  Shutdown()
-  ├─ stop_source_.request_stop()  → stop_token 触发
-  ├─ condition_.notify_all()      → 唤醒所有阻塞 worker
-  └─ workers_.clear()             → jthread 析构 → 自动 join
-         │
-         ▼
-  析构（幂等，Shutdown 已完成则无操作）
+```mermaid
+stateDiagram-v2
+    [*] --> 构造
+    构造 --> 运行中 : pool_(num_threads) 启动\nthread_count_cache_ = N
+    运行中 --> 运行中 : SubmitBatch / Submit\nWaitForAll / ResetStats
+    运行中 --> 关闭中 : Shutdown()
+    关闭中 --> 已关闭 : stop_source_.request_stop()\ncondition_.notify_all()\nworkers_.clear() → jthread join
+    已关闭 --> [*] : 析构（幂等）
 ```
 
-## 架构速查
-
-```
-调用方
-  └── SubmitBatch(span<const cv::Mat>)
-           │
-           ▼
-     w5::ThreadPool（jthread + stop_token）
-           │
-    ┌──────┴──────┐
-    ▼             ▼
- ProcessGray   ProcessTensor
- w9::BgrToGrayV4  w10::LetterboxToTensor
-    │             │
-    └──────┬──────┘
-           ▼
-     RecordTiming（mutable 原子统计，const 方法）
-           │
-           ▼
-    FrameResult → future.get() 回调用方
-```
+---
 
 ## 关键类型
 
@@ -104,6 +79,8 @@ SubmitBatch(frames)
 | `FrameResult` | frame_index + variant<Mat, vector<float>> + LetterboxInfo + 耗时 |
 | `TimingReport` | min/avg/max/fps，`ToString()` 输出可重定向至 benchmarks |
 | `ImagePipeline` | 主类，持有线程池，对外暴露 SubmitBatch / WaitForAll / GetTimingReport |
+
+---
 
 ## 构建与测试
 
@@ -143,14 +120,21 @@ pool_.Submit([this, &frame, i]() -> FrameResult { ... });
 
 ### 3. 无锁 TimingReport 设计
 
-```
-worker 线程                    GetTimingReport()（调用方线程）
-─────────────────────────────  ─────────────────────────────
-total_frames_.fetch_add(1)     load(memory_order_acquire)  ← 一次 acquire 屏障
-total_us_.fetch_add(us)        sum / n → avg
-CAS loop → min_us_             直接读 min/max
-CAS loop → max_us_
-DCLP → wall_start_             now() - wall_start_ → fps
+```mermaid
+flowchart LR
+    subgraph Worker["Worker 线程（并发写）"]
+        W1["fetch_add total_frames (relaxed)"]
+        W2["fetch_add total_us (relaxed)"]
+        W3["CAS loop → min_us"]
+        W4["CAS loop → max_us"]
+        W5["DCLP → wall_start (首帧)"]
+    end
+    subgraph Caller["调用方（GetTimingReport）"]
+        C1["load total_frames (acquire)\n一次屏障，看到所有 relaxed 写入"]
+        C2["sum / n → avg\nread min / max"]
+        C3["now() - wall_start → fps"]
+    end
+    Worker --> Caller
 ```
 
 `memory_order_relaxed` 写入 + 汇总时一次 `memory_order_acquire` 读取，
