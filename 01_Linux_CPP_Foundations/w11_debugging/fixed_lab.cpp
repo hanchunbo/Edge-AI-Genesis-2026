@@ -15,11 +15,11 @@
 #include "fixed_lab.hpp"
 
 #include <algorithm>
-#include <memory>
 #include <chrono>
 #include <cstring>
 #include <format>
 #include <iostream>
+#include <memory>
 #include <mutex>
 #include <thread>
 #include <vector>
@@ -31,7 +31,7 @@ namespace fixed {
 // ============================================================================
 void SimulateFrameProcessing(int frame_count) {
   for (int i = 0; i < frame_count; ++i) {
-    // [FIXED] RAII 自动释放，使用 make_unique_for_overwrite 消除了 std::vector 
+    // [FIXED] RAII 自动释放，使用 make_unique_for_overwrite 消除了 std::vector
     //         默认的大面积清零开销，在大张量预分配时节省大量内存带宽。
     auto buf = std::make_unique_for_overwrite<uint8_t[]>(1024 * 1024);
     std::memset(buf.get(), static_cast<int>(i % 256), 1024 * 1024);
@@ -59,7 +59,8 @@ void ThreadB() {
 }
 
 void TransferData() {
-  // [FIXED] std::jthread RAII 自动 join，析构时无需手动调用，防止异常路径线程泄漏
+  // [FIXED] std::jthread RAII 自动 join，析构时无需手动调用，
+  //         防止异常路径线程泄漏
   std::jthread ta(ThreadA);
   std::jthread tb(ThreadB);
 }
