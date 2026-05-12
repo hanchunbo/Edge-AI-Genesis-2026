@@ -34,7 +34,7 @@ find . -maxdepth 3 -regex '.*0[1-4]_.*' \( -name "*.cpp" -o -name "*.hpp" \) | x
 ## C++ Standards and Conventions（C++ 规范）
 
 - **默认标准**：C++20。部分目标需要 C++23（如 W1 用到 `std::expected`，需在 CMakeLists 单独指定）。
-- **编译器**：只用 GCC 15+，通过 `CMAKE_CXX_COMPILER=g++-15` 指定，不支持 clang 或旧版 GCC。
+- **编译器**：首选 GCC 15+（`CMAKE_CXX_COMPILER=g++-15`），CI/生产构建必须使用。本地开发若装不上 g++-15，根 CMakeLists 会自动回退到 g++-14（仅作为开发兜底，C++23 的 `std::expected` / `import std` / `std::mdspan` 等特性受限）。不支持 clang 或更旧版 GCC。
 - **构建工具**：必须用 Ninja（`-G Ninja`），C++20 具名模块不支持 Unix Makefiles 生成器。
 - **风格**：Google C++ Style Guide（2026 增强版），由 `.clang-format` 和 `.clang-tidy` 自动检查。
 

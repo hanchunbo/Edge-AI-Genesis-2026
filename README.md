@@ -148,6 +148,9 @@ gcov-15 --version   # 期望：15.2.0+（lcov 覆盖率需要与编译器版本�
 ninja --version     # 期望：1.10+
 cmake --version     # 期望：3.28+（3.30+ 可启用 import std; 模块演示）
 
+# 兜底：若本地装不上 g++-15，可仅安装 g++-14。根 CMakeLists 会自动回退，
+# 但 C++23 的 std::expected / import std / std::mdspan 等特性受限，CI/生产仍以 g++-15 为准。
+
 # 4. 克隆仓库
 git clone https://github.com/hanchunbo/Edge-AI-Genesis-2026.git
 cd Edge-AI-Genesis-2026

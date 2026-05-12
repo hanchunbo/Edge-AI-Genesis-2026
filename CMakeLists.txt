@@ -4,7 +4,25 @@
 cmake_minimum_required(VERSION 3.16)
 
 # 编译器设置（必须在 project() 之前）
-set(CMAKE_CXX_COMPILER "g++-15" CACHE STRING "C++ compiler")
+# 优选 g++-15（项目标准），找不到时回退 g++-14 以兼容部分本地开发环境。
+# 通过 `-DCMAKE_CXX_COMPILER=...` 在命令行显式指定时跳过自动探测。
+if(NOT CMAKE_CXX_COMPILER)
+  find_program(_EDGE_AI_GPP15 g++-15)
+  find_program(_EDGE_AI_GPP14 g++-14)
+  if(_EDGE_AI_GPP15)
+    set(CMAKE_CXX_COMPILER "${_EDGE_AI_GPP15}" CACHE STRING "C++ compiler")
+  elseif(_EDGE_AI_GPP14)
+    set(CMAKE_CXX_COMPILER "${_EDGE_AI_GPP14}" CACHE STRING "C++ compiler")
+    message(WARNING
+      "[Compiler] 未找到 g++-15，回退到 g++-14。"
+      " C++23 部分特性（如 std::expected、import std、std::mdspan）"
+      " 在 g++-14 上可能受限或不可用，CI/生产构建请坚持使用 g++-15。")
+  else()
+    message(FATAL_ERROR
+      "[Compiler] 未找到 g++-15 或 g++-14。请安装 g++-15（首选）或 g++-14，"
+      "或通过 -DCMAKE_CXX_COMPILER=<path> 显式指定。")
+  endif()
+endif()
 
 # import std; 实验性支持（必须在 project() 之前，即 CXX 语言启用之前）
 # UUID 是 CMake 内部令牌，用于确认开发者知道这是实验性 API（版本变化时 UUID 会变）
