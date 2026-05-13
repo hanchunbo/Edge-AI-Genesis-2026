@@ -16,7 +16,7 @@
 cmake -B build -S . -DCMAKE_CXX_COMPILER=g++-15 -G Ninja  # 首次配置（Ninja 必须，C++20 模块不支持 Unix Makefiles）
 cmake --build build --target <目标名> -j$(nproc)            # 编译当前周目标
 ctest --test-dir build -R "W9_" --output-on-failure        # 当前周测试
-find . -maxdepth 3 -regex '.*0[1-4]_.*' \( -name "*.cpp" -o -name "*.hpp" \) | xargs clang-format --dry-run --Werror  # 格式检查（CI 强制）
+find . -maxdepth 3 -regex '.*0[1-4]_.*' \( -name "*.cpp" -o -name "*.hpp" \) | xargs clang-format-21 --dry-run --Werror  # 格式检查（CI 强制，必须用 v21）
 ```
 
 > 查目标名：`cmake --build build --target help 2>/dev/null | grep "w[0-9]"`
@@ -114,9 +114,9 @@ find . -maxdepth 3 -regex '.*0[1-4]_.*' \( -name "*.cpp" -o -name "*.hpp" \) | x
 
 每次 commit 前，按顺序执行以下检查：
 
-1. **clang-format**：确保格式检查通过（CI 强制）
+1. **clang-format**：确保格式检查通过（CI 强制，**必须用 clang-format-21**，与 CI 版本严格对齐——v18/v19/v20 在中文列宽、include 排序等细节上输出会与 v21 不一致，本地通过不代表 CI 通过）
    ```bash
-   find . -maxdepth 3 -regex '.*0[1-4]_.*' \( -name "*.cpp" -o -name "*.hpp" \) | xargs clang-format --dry-run --Werror
+   find . -maxdepth 3 -regex '.*0[1-4]_.*' \( -name "*.cpp" -o -name "*.hpp" \) | xargs clang-format-21 --dry-run --Werror
    ```
 
 2. **文档进度同步**：确认 `README.md`、`docs/Q1.md`、`docs/tech-debt.md`、模块 `notes.md` 进度与代码一致，**不符则先更新再 commit**。
@@ -129,4 +129,4 @@ find . -maxdepth 3 -regex '.*0[1-4]_.*' \( -name "*.cpp" -o -name "*.hpp" \) | x
 
 GitHub Actions（`.github/workflows/ci.yml`）在向 `main` 推送或发起 PR 时自动触发，包含两个检查：
 1. **build-and-test**：cmake 配置 → 编译 → ctest 跑所有测试
-2. **format-check**：对所有 `.cpp`/`.hpp` 文件执行 `clang-format --dry-run --Werror`，格式不对则失败
+2. **format-check**：对所有 `.cpp`/`.hpp` 文件执行 `clang-format-21 --dry-run --Werror`（版本与本地必须严格一致），格式不对则失败

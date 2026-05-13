@@ -142,16 +142,22 @@ sudo apt-get update -q
 # 2. 安装编译器、覆盖率工具、构建工具
 sudo apt-get install -y g++-15 gcc-15 lcov ninja-build cmake
 
-# 3. 验证
-g++-15 --version    # 期望：15.2.0+
-gcov-15 --version   # 期望：15.2.0+（lcov 覆盖率需要与编译器版本一致）
-ninja --version     # 期望：1.10+
-cmake --version     # 期望：3.28+（3.30+ 可启用 import std; 模块演示）
+# 3. 安装 clang-format-21（CI 使用版本，本地必须严格对齐，不可用 apt 默认的 v18/v19）
+curl -fsSL https://apt.llvm.org/llvm.sh | sudo bash -s -- 21
+sudo apt-get install -y clang-format-21
+
+# 4. 验证
+g++-15 --version            # 期望：15.2.0+
+gcov-15 --version           # 期望：15.2.0+（lcov 覆盖率需要与编译器版本一致）
+clang-format-21 --version   # 期望：21.x（与 CI 严格一致，v18/v19/v20 输出会有差异）
+ninja --version             # 期望：1.10+
+cmake --version             # 期望：3.28+（3.30+ 可启用 import std; 模块演示）
 
 # 兜底：若本地装不上 g++-15，可仅安装 g++-14。根 CMakeLists 会自动回退，
 # 但 C++23 的 std::expected / import std / std::mdspan 等特性受限，CI/生产仍以 g++-15 为准。
+# 注意：clang-format-21 没有同等兜底，本地必须装 v21，否则格式检查易与 CI 不一致。
 
-# 4. 克隆仓库
+# 5. 克隆仓库
 git clone https://github.com/hanchunbo/Edge-AI-Genesis-2026.git
 cd Edge-AI-Genesis-2026
 ```
