@@ -588,6 +588,248 @@ genhtml filtered.info --output-directory coverage_report
 
 ---
 
+## Q1 自测复盘补充题（Q27-Q30）
+
+> **来源**：2026-05-18 Q1 自测会话（详见 [q1_self_test.md](q1_self_test.md) 与 [devlog.md](devlog.md)），暴露 4 个红色短板，这 4 道题专门做深讲，作为对 Q1-Q26 的补充。
+
+---
+
+### Q27: std::move(x) 后 x 是什么状态？什么时候 vector 会把你的 move ctor 退回成 copy？
+
+**考察点**：移动语义本质 + 标准库强异常安全保证 + 标准库默认 noexcept 知识
+
+**参考答案**：
+
+**Part 1 · moved-from 状态**：`std::move(x)` 后 x 处于 **"valid but unspecified state"**——
+- ✅ **还活着、还会被析构**（不是"被销毁"）
+- ✅ 可以重新赋值、可以析构、可以调用"无前置条件"的成员函数（如 `clear()` / `size()`）
+- ❌ 不能依赖它的"原值"做业务判断（标准只保证"valid"，不保证具体值）
+
+经典 bug：自定义类型写 move ctor 时若忘了把源对象的 raw pointer 置 nullptr，会导致 moved-from 对象析构时**双重释放**。
+
+**Part 2 · vector 何时退回 copy**：
+
+`std::vector` 在 push_back / resize 触发扩容时，需要**强异常安全保证**（操作失败可完全回滚）。
+- 用 **move** 搬：搬到一半若 move ctor 抛异常 → 旧元素已被破坏无法回滚
+- 用 **copy** 搬：搬到一半若 copy ctor 抛异常 → 旧元素完好可丢弃新内存回滚 ✅
+
+底层判断（简化）：
+```cpp
+if constexpr (std::is_nothrow_move_constructible_v<T>)
+    new (dst) T(std::move(src));    // 用 move（快）
+else
+    new (dst) T(src);                // 退回 copy（慢但安全）
+```
+
+**Part 3 · 标准库 move ctor noexcept 速查表**：
+
+| 类型 | move ctor noexcept |
+|---|---|
+| `vector<T>` / `string` / `unique_ptr<T>` / `shared_ptr<T>` | ✅ 是 |
+| **`std::function<R(Args...)>`** | ❌ **否**（坑） |
+| **`std::list` / `std::map` / `std::set`** | ❌ **否**（坑） |
+
+持有这些"❌ 否"成员的类，**隐式 move ctor 不是 noexcept**——会被 vector 默默退回 copy 路径，性能塌方。
+
+**修复方案**：
+- 用 `std::unique_ptr<std::function<...>>` 间接持有（指针 move 永远 noexcept）
+- C++23：改用 `std::move_only_function`
+- 加 `static_assert(std::is_nothrow_move_constructible_v<MyClass>);` 防止退化
+
+**加分回答**：
+> "我在 W13 的 ThreadPool 实现里，给 Task 类显式写了 `noexcept` 的 move ctor 并加了 static_assert——这样在 std::vector 任务队列扩容时一定走 move 路径，而不是因为某个成员（比如 std::function 回调）默认非 noexcept 退化到 copy。这个细节让队列吞吐量提升了一个量级。"
+
+---
+
+### Q28: Concepts 跟 SFINAE / enable_if 的本质区别是什么？为什么 concept 不能做运行期值约束？
+
+**考察点**：C++20 Concepts 设计意图 + 编译期 / 运行期约束的边界
+
+**参考答案**：
+
+**Part 1 · Concepts vs SFINAE/enable_if**：
+
+| 维度 | SFINAE / enable_if (C++17 之前) | Concepts (C++20) |
+|---|---|---|
+| 报错信息 | 长 3 屏，从模板内部报 | 短 1-2 行，在调用现场报 |
+| 自文档化 | ❌ 约束藏在 enable_if 表达式里难读 | ✅ `concept Scannable = ...` 一目了然 |
+| IDE 补全 | ❌ 不知道 T 长啥样 | ✅ IDE 能基于 concept 智能提示 |
+| 写法 | `template<typename T, std::enable_if_t<is_xxx<T>::value>* = nullptr>` | `template<Scannable T>` 或 `void f(Scannable auto x)` |
+
+**Part 2 · 标准写法**：
+
+```cpp
+template<typename T>
+concept Scannable = requires(T t) {
+    { t.name() } -> std::convertible_to<std::string_view>;
+};
+
+template<Scannable T>
+void Process(T value) { value.name(); }
+```
+
+5 种常见约束类型：
+1. 表达式合法（`t.size();`）
+2. 表达式合法 + 返回类型约束（`{ t.empty() } -> std::convertible_to<bool>;`）
+3. 嵌套类型约束（`typename T::value_type;`）
+4. noexcept 约束（`{ t.clear() } noexcept;`）
+5. 带参数约束（`t.at(i);`）
+
+**Part 3 · 为什么不能做运行期值约束**（关键认知陷阱）：
+
+```cpp
+template<typename T>
+concept Loadable = requires(T t) {
+    t.load();
+    t.size() > 0;   // ❌ 陷阱！这不检查 size 的运行期值
+};
+```
+
+**真相**：`t.size() > 0;` 的真正含义是"**这个表达式编译时是否合法可写**"——即 `t.size()` 能否调用 + 返回类型能否与 0 用 `>` 比较。**不会去判断 size 究竟是不是大于 0**。
+
+原因：**concept 在模板实例化阶段（编译期）就要算完**，而 size 的运行期值要等程序跑起来才知道。
+
+正确做法：
+- 想要"返回 bool"约束：`{ t.size() > 0 } -> std::convertible_to<bool>;`
+- 想要"返回某类型"约束：`{ t.size() } -> std::convertible_to<size_t>;`
+- 想要运行期值检查：那是 `assert` / `if constexpr` / `std::expected` 的领域，不是 concept
+
+**加分回答**：
+> "我在 model_scanner.cpp 里用 `ByteBufferLike` concept 约束模型加载函数——只要类型提供 data() 和 size() 就能传进来。这让 std::vector、自己实现的 MmapRegion、甚至 std::array 全都能复用同一份 LoadModel 代码，且 IDE 报错精准。如果用 SFINAE 写会丑很多。"
+
+---
+
+### Q29: std::expected<T, E> 的"零开销"机制是什么？什么时候你仍然应该选异常？
+
+**考察点**：C++23 expected 设计 + 异常成本 + 选型判断
+
+**参考答案**：
+
+**Part 1 · 零开销机制**：
+
+`std::expected<T, E>` 内部是个 union + bool tag：
+
+```cpp
+// 概念上简化
+template<typename T, typename E>
+class expected {
+    union { T value_; E error_; };
+    bool has_value_;
+};
+```
+
+零开销三层含义：
+1. **不分配堆**：T 和 E 在栈上同地址 union，size 是 `max(sizeof(T), sizeof(E)) + 1 byte tag + 对齐 padding`
+2. **不生成异常 unwind 表**：异常需要编译器在每个可能 throw 的栈帧生成 unwind metadata，二进制 +5-30%；expected 不需要
+3. **失败路径就是 if/else**：调用方 `if (!result)` 检查，编译器可像普通函数一样内联优化
+
+**Part 2 · 与异常的对比**：
+
+| 开销 | 异常 | std::expected |
+|---|---|---|
+| 编译期 unwind 表 | ✅ 生成 | ❌ 不生成 |
+| 编译期 RTTI | ✅ 异常类型需要 | ❌ 不需要 |
+| 运行期成功路径 | ✅ 零成本 | ✅ 零成本 |
+| **运行期失败路径** | 🔴 **栈展开 μs 级（比成功慢 1000x）** | ✅ **if/else ns 级** |
+| 编译器内联 | 🔴 难（跨函数边界） | ✅ 易 |
+
+**Part 3 · C++23 链式风格**：
+
+```cpp
+auto result = LoadModel("foo.onnx")
+    .and_then([](Model m) { return m.Inference(input); })
+    .and_then([](Tensor t) { return PostProcess(t); });
+// 任意一步失败，整条链短路，result 携带最早错误
+```
+
+**Part 4 · 何时仍坚持用异常**：
+
+1. **构造函数失败**：构造函数没有"返回值"概念，无法返 expected，只能 throw 或 std::abort
+2. **operator 重载失败**：`operator[]` / `operator+=` 等如果不能返回额外错误信息，throw 是唯一选择
+3. **跨边界传递严重错误**：assert 失败、不可恢复的逻辑错误，throw + 顶层 catch 更符合"快速失败"语义
+4. **第三方库已用异常**：如 std::stoi、Boost 系列——硬包成 expected 反而增加 boilerplate
+
+**反过来**——这些场景必用 expected：
+- 嵌入式 / 实时系统（禁用异常）
+- 业务可恢复的错误（文件找不到、网络超时）
+- 性能敏感的失败路径（推理失败要 fallback 重试）
+- 接口设计上希望调用方"必须处理错误"（异常容易漏 catch）
+
+**加分回答**：
+> "我在 W14 的 InferenceEngine::Create 里把 ORT C++ API 的异常包成 expected<InferenceEngine, std::string> 对外暴露——内部保留 ORT 的强壮性（让它抛），对外给一个嵌入式友好、调用方必须处理的接口。这种'内部 throw + 边界转 expected'的 adapter 模式我觉得是 C++23 库设计的最佳实践。"
+
+---
+
+### Q30: 双线性插值的 4 邻点权重公式？Letterbox 为什么必须保比例？1920×1080 → 640×640 的 padding 怎么算？
+
+**考察点**：W10 Resize 算子的数学基础 + 模型推理对图像几何的敏感性
+
+**参考答案**：
+
+**Part 1 · 双线性插值 4 邻权重**：
+
+目标输出像素 (x_out, y_out) 反推回输入图位置 (x_in + dx, y_in + dy)，dx/dy 是小数部分（0 ≤ dx, dy < 1）。4 个邻居在 (x_in, y_in)、(x_in+1, y_in)、(x_in, y_in+1)、(x_in+1, y_in+1)：
+
+| 邻居 | 权重 |
+|------|------|
+| 左上 (x, y) | (1-dx)(1-dy) |
+| 右上 (x+1, y) | dx(1-dy) |
+| 左下 (x, y+1) | (1-dx)dy |
+| 右下 (x+1, y+1) | dx·dy |
+
+**所有权重和恒为 1**（即 dx(1-dy) + (1-dx)(1-dy) + dx·dy + (1-dx)dy = 1，可代数验证）。
+
+输出值 = Σ(邻居像素值 × 权重)。
+
+**Part 2 · Letterbox 保比例原因**：
+
+模型训练时图像是按固定比例输入的，**强行拉伸会改变物体的纵横比**：
+- 一辆方车被拉成长方形 → CNN 提取的特征跟训练分布不一致 → 识别率下降
+- 人脸被压扁 → 关键点检测错位
+- 文字被拉变形 → OCR 识别失败
+
+所以 Resize 必须**保比例缩放 + 用纯色填充剩余区域**（Letterbox），让物体形状不变。
+
+**Part 3 · 1920×1080 → 640×640 padding 计算**：
+
+```
+步骤 1：按长边定 scale
+  scale = min(640/1920, 640/1080) = min(0.333, 0.593) = 0.333
+  （取小的那个 = 以长边为基准，保证缩完两边都不超 640）
+
+步骤 2：等比缩放
+  new_w = 1920 × 0.333 = 640
+  new_h = 1080 × 0.333 = 360
+
+步骤 3：算 padding
+  缩后是 640 × 360，目标是 640 × 640
+  需要补的总像素：上下各补 (640-360)/2 = 140 px
+  左右各补 (640-640)/2 = 0 px
+
+步骤 4：填充
+  在 360 高度的图上下各补 140 行黑边（或灰色 RGB 114,114,114，YOLO 默认）
+```
+
+最终：原图居中放置，**上下各 140px 黑边、左右无 padding**。
+
+**Part 4 · 推理后的反映射**：
+
+预测出的目标框坐标是相对 640×640 的，要还原回原图坐标：
+- 减去上方 padding：`y_orig = (y_pred - 140) / 0.333`
+- x 直接除 scale：`x_orig = x_pred / 0.333`
+
+**加分回答**：
+> "我在 W10 实现 Resize + Letterbox 时用 std::mdspan 表达输入输出图像，4 邻插值的代码长这样：
+> ```cpp
+> auto w_tl = (1-dx)*(1-dy);  auto w_tr = dx*(1-dy);
+> auto w_bl = (1-dx)*dy;       auto w_br = dx*dy;
+> dst(y, x, c) = img(y0, x0, c)*w_tl + img(y0, x1, c)*w_tr 
+>              + img(y1, x0, c)*w_bl + img(y1, x1, c)*w_br;
+> ```
+> 比裸指针 + stride 计算清晰太多。这种数学公式直接落代码的写法是 mdspan 的最大价值。"
+
+---
+
 ## 使用建议
 
 1. **每周复习**：完成每周学习后，尝试口头回答相关题目。

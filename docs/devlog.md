@@ -12,6 +12,40 @@
 
 ---
 
+## 2026-05-18
+
+### 操作摘要
+- Q1 W1-W13 知识自测复盘（W14 ONNX Runtime 集成启动前的最后体检）
+- 完成 13 题自测 + 评分 + 4 红色短板诊断 + Session 1（W2 noexcept move + W3 Concepts/expected）深讲
+- 沉淀产物：`docs/q1_self_test.md`（quiz 自测，答案折叠）+ `docs/interview_faq.md` Q27-Q30（深讲补充题）
+
+### 自测结果
+- **整体成绩**：GPA ≈ C+（65-70 分）
+- **扎实周次**：W1 / W6 / W7 / W8
+- **半懂周次**：W4 / W5 / W9
+- **红色短板（必补）**：
+  - **W2**：误以为 "move 后 x 已销毁"（实际为 valid but unspecified state）
+  - **W3**：Concepts + std::expected 概念忘了
+  - **W10**：Resize 双线性 4 邻权重 + Letterbox padding 计算不会
+  - **W11**：Valgrind 三种 leak + 火焰图横纵轴释义不会
+
+### 待办（Session 2 + 3 排期）
+- **Session 2**（~45min，待安排）：W5 stop_token 与 atomic<bool> 本质区别 + W11 调试三件套（Valgrind + Perf + 火焰图）
+- **Session 3**（~30min，待安排）：W10 Resize 数学（双线性 + Letterbox）+ W9 mdspan 复活
+- 完成全部 3 个 Session 后再进 W14
+
+### 命令备忘
+```bash
+# 自测复盘文档位置
+docs/q1_self_test.md          # quiz 格式自测
+docs/interview_faq.md         # Q27-Q30 深讲
+```
+
+### 关联
+- 副产出：Obsidian inbox/2026-05-18-edge-ai-q1-cpp20-self-test.md（已存档）
+
+---
+
 ## 2026-04-03
 
 ### 操作摘要
