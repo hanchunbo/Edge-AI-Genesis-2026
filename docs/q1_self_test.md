@@ -2,7 +2,7 @@
 
 > **用途**：W14（ONNX Runtime 集成）启动前的最后知识体检；季度复盘时的"快速自检"工具。
 > **格式**：13 道开放题。**先盖住答案自答**，再翻到下方对比补正。
-> **配套深讲**：见 [interview_faq.md](interview_faq.md) Q27-Q30（针对本次自测暴露的 4 个红色短板做的扩展题）。
+> **配套深讲**：见 [interview_faq.md](interview_faq.md) Q27-Q32（针对自测暴露的红色短板 + Session 2 W5/expected 深化的扩展题）。
 > **历史成绩单**：见 [devlog.md](devlog.md) 2026-05-18 条目。
 
 ---
@@ -133,7 +133,8 @@
 
 | 日期 | 评分 | 红色短板 | 后续行动 |
 |------|------|----------|----------|
-| 2026-05-18 | C+ (~65-70 分) | W2 noexcept move、W3 Concepts/expected、W10 Resize 数学、W11 调试三件套 | Session 1 完成 W2 + W3 深讲；Session 2 (W5 + W11) + Session 3 (W10 + W9) 待补 |
+| 2026-05-18 | C+ (~65-70 分) | W2 noexcept move、W3 Concepts/expected、W10 Resize 数学、W11 调试三件套 | Session 1 完成 W2 + W3 深讲；Session 2 完成 W5（W11 待补）；Session 3 (W10 + W9) 待补 |
+| 2026-05-20 | —（深讲会话） | —— | Session 2 上半场：W5 深讲 + expected 概念再深化 → 沉淀 interview_faq.md Q31-Q32 |
 
 ---
 

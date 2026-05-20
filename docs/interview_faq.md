@@ -588,9 +588,9 @@ genhtml filtered.info --output-directory coverage_report
 
 ---
 
-## Q1 自测复盘补充题（Q27-Q30）
+## Q1 自测复盘补充题（Q27-Q32）
 
-> **来源**：2026-05-18 Q1 自测会话（详见 [q1_self_test.md](q1_self_test.md) 与 [devlog.md](devlog.md)），暴露 4 个红色短板，这 4 道题专门做深讲，作为对 Q1-Q26 的补充。
+> **来源**：2026-05-18 Q1 自测会话暴露 4 个红色短板（Q27-Q30）；2026-05-20 Session 2 续讲 W5 与 `std::expected` 深化（Q31-Q32）。详见 [q1_self_test.md](q1_self_test.md) 与 [devlog.md](devlog.md)，作为对 Q1-Q26 的补充。
 
 ---
 
@@ -827,6 +827,159 @@ auto result = LoadModel("foo.onnx")
 >              + img(y1, x0, c)*w_bl + img(y1, x1, c)*w_br;
 > ```
 > 比裸指针 + stride 计算清晰太多。这种数学公式直接落代码的写法是 mdspan 的最大价值。"
+
+---
+
+### Q31: 错误码方案为什么逼调用方先构造一个"空对象"？std::expected 和 variant / pair / optional 到底差在哪？
+
+**考察点**：错误处理 API 设计 + sum type 选型 + RAII "对象存在即有效" 原则
+
+**参考答案**：
+
+**Part 1 · 错误码的"输出参数"陷阱**：
+
+C 风格错误码签名：
+```cpp
+int LoadModel(const std::string& path, Model* out);  // 返回值 = 错误码
+Model m;                              // ← 被逼先构造一个"空 Model"
+if (LoadModel("foo.onnx", &m) != 0) { /* 处理错误 */ }
+```
+
+返回值这个"位置"被错误码 `int` 占了，真正的结果 `Model` 没处放，只能改成输出参数 `Model* out`。而要传 `Model*`，调用方必须**先有一个 `Model` 对象**——于是被逼写 `Model m;`，调默认构造函数造一个没有权重、没有 ONNX session 的空壳。
+
+这个"空壳"烂在 4 点：
+1. **造了两次**：先默认构造空壳，再被 LoadModel 灌入真实内容覆盖——第一次初始化纯属白做
+2. **逼 Model 必须有默认构造函数**：可"空模型"业务上没意义，被迫为它编造默认状态（指针填 nullptr、加 `bool valid_` 标志位），类设计被带歪
+3. **存在"已构造但无效"的危险窗口**：`Model m;` 之后、LoadModel 成功之前，m 是合法 C++ 对象但内容是垃圾；忘了查错误码直接用 → 运行期炸
+4. **违反 RAII**："对象存在 == 对象有效"被打破，多了"合法但是空"的中间态
+
+**Part 2 · std::expected ≠ "返回多类型工具"**：
+
+常见误解："expected 是为了解决一个函数只能返回一个类型"。错——"返回多个值 / 多种类型"老早就有工具了：
+
+| 你想要 | 该用 | 语义 |
+|--------|------|------|
+| 同时返回多个值 | `pair` / `tuple` / `struct` | 几样东西**同时**都在 |
+| 返回 A 或 B 二选一（无方向） | `variant<A, B>` | 二选一，但没有"谁正常谁错误" |
+| 返回"有个 T，或啥都没有" | `optional<T>` | 二选一，但失败侧只有"空"，丢了原因 |
+| 返回"成功的 T 或失败原因 E" | **`expected<T, E>`** | 二选一 + **有方向** + 错误处理 API |
+
+expected 三个不可缺的特征：
+1. **互斥**：任意时刻只装一个，成功就没 E、失败就没 T（`pair` 做不到，它俩同时在）
+2. **有方向性**：T 是 happy path、E 是 error path（`variant` 没这概念，且 T==E 时还歧义）
+3. **围绕错误的 API**：`operator bool` / `.value()` / `.error()` / `.value_or()` / `and_then`-`or_else` 单子链
+
+一句话：`optional` 是"没有原因的 expected"，`expected` 是"带失败原因的 optional"。
+
+**Part 3 · expected 的真正坐标系**：
+
+expected 的对手**不是 pair，是异常和错误码**——它们仨是处理"函数可能失败"的三条并列路线：
+
+| 路线 | 失败怎么传 | 主要问题 |
+|------|-----------|---------|
+| 异常 `throw` | 抛出 + 栈展开 | 运行时开销、二进制膨胀、控制流不可见 |
+| 错误码 `int` | 返回值被占，结果挤进 out 参数 | 见 Part 1 的 4 点 |
+| **`std::expected`** | 成功值与失败原因都走返回值 | —— |
+
+所以 expected 解决的不是"只能返回一个类型"，而是"**把成功结果和失败原因，类型安全、零开销、且强迫调用方正视错误地，统一从返回值带出来**"。"能装两种类型"只是它为当好这个武器必须跨过的技术门槛。
+
+**加分回答**：
+> "我在 W14 设计 InferenceEngine 的工厂函数时，特意不用 `bool Create(Engine* out)` 这种错误码签名——那会逼 Engine 提供默认构造函数，而一个没有 ORT session 的 Engine 是无意义的。改成 `expected<Engine, Error> Create(...)` 后，Engine 可以坚持'只要构造出来就一定带着有效 session'，彻底消灭了'合法但是空'的中间态。这就是 RAII 里'对象存在即有效'原则在 API 设计层面的落地。"
+
+---
+
+### Q32: jthread 比 thread 安全在哪？stop_token 和 atomic<bool> 的本质区别？alignas(64) 解决的伪共享是什么物理现象？
+
+**考察点**：C++20 并发——RAII 线程管理 + 协同取消机制 + CPU 缓存一致性
+
+**参考答案**：
+
+**Part 1 · jthread vs thread**：
+
+`std::thread` 析构时如果**既没 join 也没 detach**，直接 `std::terminate()`——异常路径极易踩：
+```cpp
+void f() {
+    std::thread t(work);
+    may_throw();   // ← 抛异常
+    t.join();      // ← 到不了 → t 析构 → std::terminate()
+}
+```
+
+`std::jthread`（C++20）修两点：
+1. **析构时自动 `request_stop()` + `join()`**——RAII，异常路径也安全
+2. **内置 `std::stop_source`**，能把 `stop_token` 传给线程函数
+
+即 `jthread = thread + RAII 自动 join + 自带停止机制`。
+
+**Part 2 · stop_token vs atomic<bool> 的本质区别**（关键认知）：
+
+对**纯忙等循环**，两者几乎等价——都是"一个标志，worker 循环里查它"。本质区别在 worker **阻塞睡着**时才暴露。
+
+看一个线程池 worker 睡在条件变量上：
+```cpp
+// atomic<bool> 版
+while (!stop.load()) {
+    std::unique_lock lk(m);
+    cv.wait(lk, [&]{ return !q.empty(); });  // ← worker 睡在这
+    ...
+}
+```
+此时 `stop.store(true)` **根本唤不醒它**——它在睡觉，没人 poll 这个 flag。要干净停掉，必须做**三件事**，缺一即关闭时死锁：
+```cpp
+stop.store(true);                                       // ① 设标志
+cv.notify_all();                                        // ② 唤醒
+cv.wait(lk, [&]{ return !q.empty() || stop.load(); });  // ③ 把 stop 织进 predicate
+```
+漏掉 ③ 是关闭流程最经典的 bug：线程被唤醒 → 查 predicate 仍 false → 又睡回去 → 退出时死锁。
+
+`stop_token` + `condition_variable_any` 原生解决：
+```cpp
+while (!st.stop_requested()) {
+    std::unique_lock lk(m);
+    cv.wait(lk, st, [&]{ return !q.empty(); });  // 多传一个 stop_token
+    // request_stop 一来，wait() 自动返回，不用手动 notify、不用织 predicate
+}
+```
+
+本质区别表：
+
+| 维度 | `atomic<bool>` | `stop_token` |
+|------|---------------|-------------|
+| 本质 | 一块**被动**数据，等别人来 poll | 标志位 **+ 回调注册机制**（观察者） |
+| 唤醒阻塞中的线程 | ❌ 不能（线程睡着读不到它） | ✅ 能（`condition_variable_any` 已接入） |
+| 停止瞬间触发动作 | ❌ 无 | ✅ `std::stop_callback`，请求一到立即执行 |
+| 所有权 / 生命周期 | 自管引用 / 指针，易悬空 | 共享所有权（类 shared_ptr），拷贝安全 |
+| 标准约定 | 各项目自定义，五花八门 | 标准"取消"契约，库函数可统一接受 |
+
+一句话：**atomic<bool> 只是数据，要靠别人主动来看；stop_token 是通知框架，能主动把消息推给睡着的线程。**
+
+**Part 3 · alignas(64) 与伪共享的物理现象**：
+
+两个事实打底：
+- CPU 读内存按 **cache line**（缓存行），x86 一行 **64 字节**——访问一个 int，周围一整条 64 字节都被拉进 cache
+- 多核缓存一致性协议（MESI）：核 A 一旦写它 cache 里某条 line，这条 line 在其他核 cache 的副本立刻被标记 **invalid**
+
+**伪共享（False Sharing）**：两个**逻辑上毫不相干**的变量，被恰好排在同一条 64 字节 cache line 上。线程 1 在核 A 猛写 `a`，线程 2 在核 B 猛写 `b`，逻辑上井水不犯河水、不需任何同步，物理上：
+```
+核 A 写 a → 整条 line 在核 B 失效
+核 B 写 b → line 失效了，重新拉，写完 → 整条 line 在核 A 失效
+核 A 写 a → 又失效，重新拉 …… 无限乒乓
+```
+这条 line 在两核间 **ping-pong 反复传递**，没有任何共享数据，性能却烂得像加了锁——"伪"就伪在共享的是 cache line，不是数据本身。
+
+典型踩坑（直对 W13 线程池）：每个 worker 一个统计计数器挨着排——
+```cpp
+struct WorkerStats { uint64_t processed; };  // 8 字节
+WorkerStats stats[8];   // 8×8=64 → 整个数组挤进一条 line，8 个核为它打架
+```
+修复——强制每个变量按 64 字节对齐，各自独占一条 line：
+```cpp
+struct alignas(64) WorkerStats { uint64_t processed; };
+```
+代价是内存浪费（8 字节 → 64 字节），空间换时间。更可移植的写法用 C++17 常量 `std::hardware_destructive_interference_size`（通常 = 64）替代硬编码 `64`。
+
+**加分回答**：
+> "我在 W13 ThreadPool 里给每个 worker 的统计结构体加了 `alignas(64)`——之前 8 个 worker 的计数器挤在一条 cache line 上，压测时吞吐上不去，perf 看 cache-misses 高得离谱，加对齐后伪共享消失。线程停止我也没用 atomic<bool>，而是 jthread + stop_token：worker 平时睡在 condition_variable_any 上，stop_token 能让正在 wait 的线程被直接唤醒，关闭时不用'设标志 + notify + 改 predicate'那套三步走，少一个死锁隐患。"
 
 ---
 

@@ -12,6 +12,33 @@
 
 ---
 
+## 2026-05-20
+
+### 操作摘要
+- Session 2 上半场（W5 深讲）+ `std::expected` 概念再深化 —— 接续 2026-05-18 Q1 自测复盘
+- 沉淀产物：`docs/interview_faq.md` 新增 Q31（expected / 错误码 / sum type 选型）、Q32（W5 jthread / stop_token / 伪共享）
+
+### 今日深讲内容
+- **std::expected 再深化**：
+  - 错误码"输出参数"陷阱 —— 返回值被错误码占用，结果挤进 `out` 参数，逼调用方先 `Model m;` 构造一个"空对象"（造两次 / 逼出默认构造函数 / "已构造但无效"危险窗口 / 违反 RAII）
+  - expected ≠ "返回多类型工具" —— 返回多值/多类型早有 pair/tuple/variant/optional；expected 的不可缺特征是「互斥 + 有方向 + 错误处理 API」
+  - expected 的真正对手是异常与错误码，不是 pair
+- **W5（Session 2 上半场）**：
+  - jthread = thread + RAII 自动 join + 自带停止机制
+  - stop_token vs atomic<bool> 本质区别 —— atomic 是被动数据，唤不醒睡在 `cv.wait` 里的线程；stop_token 是通知框架（`condition_variable_any` 已接入 + `stop_callback`）
+  - alignas(64) 伪共享 —— 两个无关变量同处一条 64B cache line，多核写各自变量却引发 cache line 乒乓；`std::hardware_destructive_interference_size`
+
+### 待办
+- **Session 2 下半场**（W11 调试三件套：Valgrind 三种 leak + Perf + 火焰图横纵轴）—— 今日未完成，待补
+- **Session 3**（W10 Resize 数学 + W9 mdspan）—— 待补
+- 完成 W11 + Session 3 后进 W14（ONNX Runtime 集成）
+
+### 关联
+- 自测题库：docs/q1_self_test.md（历史成绩表已加 2026-05-20 行）
+- 深讲补充题：docs/interview_faq.md Q27-Q32
+
+---
+
 ## 2026-05-18
 
 ### 操作摘要
