@@ -1048,7 +1048,7 @@ gdb -p <PID> -batch -ex "info threads" -ex "thread apply all bt"
 **死锁实锤**：两个线程栈顶都是 `futex_wait`，且 GDB 把锁的变量名都解析出来——线程 A 等 `<mutex_b>`、线程 B 等 `<mutex_a>`，而 a/b 恰在对方手里 → 循环等待闭环。
 
 **加分回答**：
-> "W11 调试实验我复现过：两线程逆序加锁，attach 上去 `thread apply all bt`，看到 ThreadA 卡在 `futex_wait <mutex_b>`、ThreadB 卡在 `futex_wait <mutex_a>`，循环等待一目了然。修复用 `std::scoped_lock(a, b)` 一次锁两把——内部走 `std::lock()` 的死锁避免算法，按地址统一加锁顺序，从根上打破'循环等待'这个死锁必要条件。"
+> "W11 调试实验我复现过：两线程逆序加锁，attach 上去 `thread apply all bt`，看到 ThreadA 卡在 `futex_wait <mutex_b>`、ThreadB 卡在 `futex_wait <mutex_a>`，循环等待一目了然。修复用 `std::scoped_lock(a, b)` 一次锁两把——内部走 `std::lock()` 的死锁避免算法，不再让调用方手写逆序加锁流程，从根上打破'循环等待'这个死锁必要条件。"
 
 ---
 

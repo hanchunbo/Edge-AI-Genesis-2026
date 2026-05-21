@@ -40,7 +40,7 @@
 **Q10**：双线性插值的 4 个邻点权重怎么算？Letterbox 为什么必须保持比例不变？输出 640×640 但原图 1920×1080，padding 应该填多少、填在哪边？
 
 ### W11 · 调试三件套
-**Q11**：Valgrind 报告中的 `definitely lost`、`possibly lost`、`still reachable` 三种泄漏的区别？火焰图的横轴和纵轴分别代表什么？
+**Q11**：Valgrind 报告中的 `definitely lost`、`indirectly lost`、`possibly lost`、`still reachable` 四种泄漏的区别？火焰图的横轴和纵轴分别代表什么？
 
 ### W12 / W13 · 综合
 **Q12**：Q1 你写过最得意的一段代码是哪个？最坑你的一个 bug 是什么？
