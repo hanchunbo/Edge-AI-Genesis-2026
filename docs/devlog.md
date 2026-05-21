@@ -12,6 +12,46 @@
 
 ---
 
+## 2026-05-21
+
+### 操作摘要
+- Session 2 下半场（W11 调试三件套深讲 + 三项实操）—— Session 2 收口
+- 新建 `study-log` skill（`.claude/skills/study-log/`）：每日学习总结入库工作流，本条目即其第一次试跑产出
+- 沉淀产物：`interview_faq.md` 新增 Q33-Q35，`q1_self_test.md` / `README.md` 同步更新
+
+### 今日深讲内容
+- **Valgrind 四种泄漏**：按"退出时还能否 reach"判定 —— definitely（必修）/ indirectly（被连累，修根即消）/ possibly（指针指中间，人工查）/ still reachable（长命服务 RSS 涨时才是真凶）；长服务该用 massif 而非 memcheck
+- **GDB attach 抓死锁**：`CPU 0%` = 死锁或 IO；`gdb -p PID -batch -ex "info threads" -ex "thread apply all bt"`；栈顶 `__lll_lock_wait`/`futex_wait` = 等锁，`read`/`recv` = IO
+- **perf + 火焰图**：stat 答"快不快"、record 答"慢在哪"；火焰图横轴 = 采样占比（**不是时间**）、纵轴 = 栈深，找又宽又平的方块 = 热点
+
+### 实操记录
+- **GDB attach**：`w11_buggy_lab 2` 死锁后 attach，`thread apply all bt` 拍到 ThreadA 等 `<mutex_b>`、ThreadB 等 `<mutex_a>`，循环等待闭环
+- **perf stat**：buggy O(n²) vs fixed O(n log n)，task-clock 10.05s vs 0.037s（≈370×）；GCP VM 无硬件 PMU → `cycles <not supported>`
+- **火焰图**：`perf record --call-graph dwarf` + FlameGraph，`FindTarget` 铺满 100% 宽度 = 热点；`fp` 收栈在 `-O0` 内层循环走飞，换 `dwarf` 解决
+- 踩到三个真实环境坑：`ptrace_scope=1`（attach 提权）、`perf_event_paranoid=4`（采样被拦，临时降到 1）、云主机虚拟掉 PMU
+
+### 命令备忘
+```bash
+# GDB attach 抓死锁
+sudo gdb -p <PID> -batch -ex "info threads" -ex "thread apply all bt"
+
+# perf 采样 + 火焰图（需先 git clone brendangregg/FlameGraph）
+sudo sysctl kernel.perf_event_paranoid=1          # 放开采样权限（临时，重启复原）
+perf record -e task-clock -F 250 --call-graph dwarf -o perf.data ./prog
+perf script -i perf.data | ~/FlameGraph/stackcollapse-perf.pl > out.folded
+~/FlameGraph/flamegraph.pl out.folded > flame.svg
+```
+
+### 待办
+- **Session 3**（W10 Resize 数学 + W9 mdspan）—— 待补
+- Session 3 完成后进 W14（ONNX Runtime 集成）
+
+### 关联
+- 深讲补充题：interview_faq.md Q33-Q35
+- 自测题库：q1_self_test.md A11
+
+---
+
 ## 2026-05-20
 
 ### 操作摘要

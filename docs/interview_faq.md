@@ -983,6 +983,105 @@ struct alignas(64) WorkerStats { uint64_t processed; };
 
 ---
 
+### Q33: Valgrind 报告里 definitely / indirectly / possibly / still reachable 四种泄漏有什么区别？一个服务连跑 8 小时 RSS 一路涨，重点查哪种？
+
+**考察点**：W11 内存泄漏诊断 + 长生命周期服务的"逻辑泄漏" + 工具选型
+
+**参考答案**：
+
+**Part 1 · 四种泄漏的判定标准**
+
+Valgrind 只问一句：**程序退出时，还有没有指针能找到这块内存？**
+
+| 类型 | 含义 | 处理 |
+|------|------|------|
+| **definitely lost** | 真泄漏，一个指针都不剩（`new[]` 后局部指针被覆盖就是这种） | 🔴 必修 |
+| **indirectly lost** | 被 definitely 连累——泄漏链表头结点后，后续结点全是 indirectly | 🟡 修好头结点即跟着消失 |
+| **possibly lost** | 还有指针，但指向内存块中间而非开头，Valgrind 拿不准 | 🟡 人工确认 |
+| **still reachable** | 退出时仍有指针（通常全局/静态）指着，没 free 但不算"丢" | ⚠️ 看场景 |
+
+**Part 2 · RSS 一路涨该查哪种**
+
+RSS（Resident Set Size）= 进程实际占用的物理内存。
+
+- **短命程序**（跑完即退）：只盯 **definitely lost**，still reachable 无所谓（OS 回收）。
+- **长命服务 RSS 持续涨**：definitely lost + **still reachable 都要查**。长服务里"还能 reach 到、但只增不减"的内存（典型如 `static std::map` 缓存只加不清）就是逻辑泄漏——Valgrind 归到 still reachable，但它才是 RSS 上涨的真凶。
+
+**Part 3 · 工具选型**
+
+`valgrind --leak-check=full` 要等程序退出才报告，不适合"跑 8 小时"的服务。长服务用 **massif**（heap profiler，画内存随时间的增长曲线）或 **DHAT** 更对路。
+
+**加分回答**：
+> "definitely 和 indirectly 是因果关系——修好 definitely 的根，indirectly 自动消失，所以我只盯 definitely。但线上服务 RSS 慢涨时我会特别警惕 still reachable：它不是 Valgrind 意义上的'泄漏'，却是工程意义上的泄漏——一个只进不出的缓存。这种我用 massif 抓内存增长曲线，而不是 memcheck。"
+
+---
+
+### Q34: 线上一个服务卡死、无响应、CPU 占用 0%，你只有它的 PID。怎么用 GDB 确认是死锁而不是 IO 等待？
+
+**考察点**：W11 GDB attach 实战 + 死锁现场特征 + 调用栈符号判读
+
+**参考答案**：
+
+**Part 1 · 先定性：看 CPU 占用**
+
+- 卡死 + **CPU ≈ 0%** → 死锁 或 IO 等待（线程都在睡，不耗 CPU）
+- 卡死 + **CPU ≈ 100%** → 死循环（完全不同的病）
+
+**Part 2 · attach 上去看每个线程的栈**
+
+```bash
+gdb -p <PID> -batch -ex "info threads" -ex "thread apply all bt"
+```
+
+`attach` = 把 GDB 接到一个已在运行的进程上，它会暂停进程供检查（查完 `detach` 放它继续跑）。`info threads` 列出所有线程，`thread apply all bt` 一次打出每个线程的调用栈。
+
+> 若报权限错误：现代 Linux `ptrace_scope=1`，attach 非子进程要 `sudo`。
+
+**Part 3 · 看栈顶符号区分死锁 / IO**
+
+| 栈顶符号 | 结论 |
+|----------|------|
+| `__lll_lock_wait` / `pthread_mutex_lock` / `futex_wait` | 卡在等锁 |
+| `read` / `recv` / `epoll_wait` | 卡在 IO |
+| `__pthread_clockjoin_ex` | 卡在等线程结束（join） |
+
+**死锁实锤**：两个线程栈顶都是 `futex_wait`，且 GDB 把锁的变量名都解析出来——线程 A 等 `<mutex_b>`、线程 B 等 `<mutex_a>`，而 a/b 恰在对方手里 → 循环等待闭环。
+
+**加分回答**：
+> "W11 调试实验我复现过：两线程逆序加锁，attach 上去 `thread apply all bt`，看到 ThreadA 卡在 `futex_wait <mutex_b>`、ThreadB 卡在 `futex_wait <mutex_a>`，循环等待一目了然。修复用 `std::scoped_lock(a, b)` 一次锁两把——内部走 `std::lock()` 的死锁避免算法，按地址统一加锁顺序，从根上打破'循环等待'这个死锁必要条件。"
+
+---
+
+### Q35: perf stat 和 perf record 有什么区别？火焰图的横轴、纵轴各代表什么？
+
+**考察点**：W11 性能剖析 + 火焰图判读（横轴陷阱）+ 云环境 perf 限制
+
+**参考答案**：
+
+**Part 1 · perf stat vs perf record**
+
+| 命令 | 给什么 | 回答的问题 |
+|------|--------|-----------|
+| `perf stat` | 总账单：耗时、cycles、instructions、IPC、cache-misses | "**快不快**" |
+| `perf record` | 定时采样调用栈，存 `perf.data`，配 `perf report` / 火焰图 | "**慢在哪**" |
+
+定位 O(n²) 热点的流程：`stat` 看"绝对耗时离谱 + 随 n 超线性增长" → `record` 看"具体哪个函数"。
+
+**Part 2 · 火焰图横轴 / 纵轴（高频陷阱）**
+
+- **横轴 X**：**不是时间！** 是把所有采样栈按函数名字典序合并排列；方块**宽度 = 该函数在采样里的占比 = CPU 时间占比**。从左到右无时间先后含义。（按时间排的那种叫 *flame chart*，是另一种图。）
+- **纵轴 Y**：调用栈深度——下面是调用者，上面是被调用者。
+- **找热点**：扫最宽 + 平顶的方块；又宽又平 = CPU 真耗在它自己身上（self time）。
+
+**Part 3 · 云主机的坑**
+
+云 VM 常把硬件 PMU 虚拟掉，`perf stat` 里 `cycles` / `instructions` 显示 `<not supported>`。此时退而用软件事件（`task-clock`）+ 耗时趋势判断；`perf_event_paranoid` 设得过高会拦截采样，需调低或加 `sudo`。
+
+**加分回答**：
+> "W11 我拿一个 O(n²) 双重循环做过实测：`perf stat` 看到它的 task-clock 比 O(n log n) 版高约 370 倍；`perf record --call-graph dwarf` + FlameGraph 生成火焰图，`FindTarget` 是一条铺满 100% 宽度的平台——一眼就是热点。顺带发现 GCP VM 没透传 PMU，`cycles` 是 `<not supported>`，只能靠 task-clock；收栈用 `dwarf` 而非 `fp`，是因为 `-O0` 下帧指针链会走飞、冒出一堆 `[unknown]`。"
+
+---
+
 ## 使用建议
 
 1. **每周复习**：完成每周学习后，尝试口头回答相关题目。

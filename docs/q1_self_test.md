@@ -2,7 +2,7 @@
 
 > **用途**：W14（ONNX Runtime 集成）启动前的最后知识体检；季度复盘时的"快速自检"工具。
 > **格式**：13 道开放题。**先盖住答案自答**，再翻到下方对比补正。
-> **配套深讲**：见 [interview_faq.md](interview_faq.md) Q27-Q32（针对自测暴露的红色短板 + Session 2 W5/expected 深化的扩展题）。
+> **配套深讲**：见 [interview_faq.md](interview_faq.md) Q27-Q35（针对自测暴露的红色短板 + Session 2 W5/expected、W11 调试三件套深化的扩展题）。
 > **历史成绩单**：见 [devlog.md](devlog.md) 2026-05-18 条目。
 
 ---
@@ -112,15 +112,18 @@
 - 详见 interview_faq.md Q30
 
 ### A11（W11 调试三件套）
-- **Valgrind 三种泄漏**：
+- **Valgrind 四种泄漏**（按"退出时还能否 reach 到"判定）：
   - **definitely lost** = 真泄漏，完全无指针指向分配的内存
+  - **indirectly lost** = 被 definitely 连累的泄漏（如泄漏链表头结点后续的所有结点），修好根即跟着消失
   - **possibly lost** = 内部指针还在（指 malloc 块的中间位置），可能真泄漏也可能误判
-  - **still reachable** = 程序退出时还有指针指着，没 free 但不算真泄漏（如全局变量持有），不严重但不推荐
+  - **still reachable** = 程序退出时还有指针指着，没 free；短命程序无所谓，长命服务 RSS 持续涨时它才是真凶
 - **火焰图**：
   - **X 轴 = 字典序排列的采样栈**（**不是时间！** 常见误解）
   - **Y 轴 = 调用栈深度**（越上越深，被调用者在调用者上方）
   - **方块宽度 = 该函数占总采样的百分比 = CPU 时间占比**
   - 看图诀窍：**找最宽方块 = 找性能热点**
+
+> 深讲实操详见 interview_faq.md Q33-Q35（GDB attach 抓死锁 / perf / 火焰图实测）。
 
 ### A12 / A13
 开放题，无标准答案。建议自己录音回放，**能在 60 秒内讲清"三件事 + 数据 + 难点"**即合格。
@@ -135,13 +138,14 @@
 |------|------|----------|----------|
 | 2026-05-18 | C+ (~65-70 分) | W2 noexcept move、W3 Concepts/expected、W10 Resize 数学、W11 调试三件套 | Session 1 完成 W2 + W3 深讲；Session 2 完成 W5（W11 待补）；Session 3 (W10 + W9) 待补 |
 | 2026-05-20 | —（深讲会话） | —— | Session 2 上半场：W5 深讲 + expected 概念再深化 → 沉淀 interview_faq.md Q31-Q32 |
+| 2026-05-21 | —（深讲+实操会话） | —— | Session 2 下半场：W11 调试三件套深讲 + GDB/perf/火焰图实操 → 沉淀 interview_faq.md Q33-Q35；新建 study-log skill |
 
 ---
 
 ## 关联文档
 
 - 学习计划：[Q1.md](Q1.md)
-- 深度参考答案与加分回答：[interview_faq.md](interview_faq.md) Q27-Q30
+- 深度参考答案与加分回答：[interview_faq.md](interview_faq.md) Q27-Q35
 - 技术决策 trade-offs：[Q1_decisions.md](Q1_decisions.md)
 - C++20/23 新旧写法：[cpp20_23_cheatsheet.md](cpp20_23_cheatsheet.md)
 - 历史会话记录：[devlog.md](devlog.md)
