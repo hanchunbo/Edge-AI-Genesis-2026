@@ -15,6 +15,36 @@
 | 单测 | 5 个全绿（LoadsModel / QueriesIoMetadata / RunsZeroCopyInference / FailsOnMissingModel / EnvIsSingleton） |
 | 单次推理耗时 | ~30ms（CPU，含 RunsZeroCopyInference 测试时序） |
 
+## 概念澄清：ONNX / ORT / 图像处理 / 图像识别
+
+W14 最容易混淆的是四个词：ONNX、ORT、图像处理、图像识别。它们不是一回事，
+而是处在同一条推理链路的不同位置：
+
+```text
+原始图片
+  -> 图像处理 / 前处理（Resize、HWC2CHW、Normalize）
+  -> 输入 tensor（float buffer）
+  -> ORT 加载并执行 ONNX 模型
+  -> 输出 tensor
+  -> 后处理（Top-K / NMS / label 映射）
+  -> 图像识别结果
+```
+
+- **ONNX 是模型文件格式**：`.onnx` 文件里保存模型结构、权重、输入输出
+  名称、shape 和数据类型。它不是图像处理库，也不是推理引擎。
+- **ORT 是 ONNX Runtime**：负责加载 `.onnx` 文件，执行里面的 Conv / Relu /
+  Pool / MatMul 等算子，并把输入 tensor 变成输出 tensor。
+- **图像处理是模型前后的数据整理**：例如把 `jpg/png` 解码后 resize 到
+  `224x224`，做 RGB / BGR 转换、HWC 到 CHW 转换、Normalize，再把结果装成
+  float buffer。W15 会重点做这一段。
+- **图像识别是模型任务结果**：MobileNetV2 的任务是图像分类，所以输出
+  `[1,1000]` 后可以做 Top-1 / Top-5 解码。但 ORT 本身并不只服务图像识别；
+  YOLO 是目标检测，UNet 是分割，Whisper 是语音，BERT 是文本。
+
+因此，W14 的真正目标不是做完整图像识别 App，而是先完成中间的 C++ 推理
+基础闭环：`float buffer -> ORT -> output tensor`。等 W15 补上前处理和后处理后，
+才会形成完整的 `图片 -> 识别结果` 链路。
+
 ## 架构与时序
 
 ### 端到端数据流（demo 视角）
