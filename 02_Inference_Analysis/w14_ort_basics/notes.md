@@ -23,10 +23,10 @@
 flowchart LR
   A["mobilenetv2.onnx<br/>14 MB"] -->|model_path| B["InferenceEngine ctor<br/>(RAII)"]
   B -->|加载 + 元数据缓存| C["Ort::Session<br/>+ inputs_ / outputs_"]
-  C -.->|Inputs() / Outputs()| D["demo: 打印 I/O 元数据"]
-  E["std::vector&lt;float&gt;<br/>1 × 3 × 224 × 224<br/>= 150528 个 float"] -->|std::span 零拷贝| F["Run(span, shape)"]
+  C -.->|"Inputs() / Outputs()"| D["demo: 打印 I/O 元数据"]
+  E["std::vector⟨float⟩<br/>1 × 3 × 224 × 224<br/>= 150528 个 float"] -->|"std::span 零拷贝"| F["Run(span, shape)"]
   C --> F
-  F -->|std::vector&lt;Ort::Value&gt;| G["Top-1 解码<br/>std::max_element"]
+  F -->|"std::vector⟨Ort::Value⟩"| G["Top-1 解码<br/>std::max_element"]
   G --> H["输出: 索引 892<br/>logit 5.24"]
 ```
 
@@ -46,25 +46,25 @@ sequenceDiagram
     E->>E: filesystem::exists(path)?
     E->>G: GlobalEnv() —— 取引用
     Note over G: 函数内 static<br/>首次调用初始化<br/>后续返回同地址
-    G-->>E: Ort::Env&
+    G-->>E: Ort::Env 引用
     E->>S: new Ort::Session(env, path, options)
     E->>S: GetInputCount / GetInputNameAllocated / GetInputTypeInfo
     E->>S: GetOutputCount / GetOutputNameAllocated / GetOutputTypeInfo
     S-->>E: I/O 元数据
-    E->>E: 缓存到 inputs_ / outputs_（vector&lt;IoInfo&gt;）
+    E->>E: 缓存到 inputs_ / outputs_（vector⟨IoInfo⟩）
     E-->>U: 构造完成（失败抛 std::runtime_error）
   end
 
   rect rgb(245, 255, 245)
     Note over U,S: Run 热路径（每次推理）
-    U->>E: Run(span&lt;const float&gt;, span&lt;const int64_t&gt;)
+    U->>E: Run(span⟨const float⟩, span⟨const int64_t⟩)
     E->>E: MemoryInfo::CreateCpu(...)
-    E->>E: CreateTensor&lt;float&gt;(mem_info, span.data(), ...)
+    E->>E: CreateTensor⟨float⟩(mem_info, span.data(), ...)
     Note over E: 零拷贝<br/>借用 span 指向的外部 buffer<br/>不 memcpy
     E->>E: 从缓存现搭 input/output names 数组
-    E->>S: Run(opts, names, &input_tensor, 1, names, n)
+    E->>S: Run(opts, names, input_tensor, 1, names, n)
     Note over U: span 必须在<br/>Run 返回前持续存活
-    S-->>E: vector&lt;Ort::Value&gt;
+    S-->>E: vector⟨Ort::Value⟩
     E-->>U: outputs
   end
 ```
