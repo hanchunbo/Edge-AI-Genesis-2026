@@ -99,6 +99,7 @@
 ### A9（W9 mdspan）
 - **isContinuous() 不恒 true 原因**：行间 padding 对齐（让每行 stride 是 SIMD 友好的 16/32/64 字节倍数）+ 子矩阵 / ROI 视图也不连续
 - **mdspan 可读性收益**：写 `img(y, x, c)` 代替 `*(data + y*stride + x*3 + c)`；W10 双线性插值访问 4 邻居，没 mdspan 是一堆指针算式，有 mdspan 像数学公式
+- 详见 interview_faq.md Q38（cv::Mat 内存模型 + ROI 不连续根因）+ Q39（mdspan 零开销 + Debug 退化 1000× 真坑）
 
 ### A10（W10 Resize）
 - **双线性 4 邻权重**：目标点 (x+dx, y+dy)，dx/dy 是小数部分
@@ -109,7 +110,8 @@
   - **所有权重和恒为 1**
 - **Letterbox 保比例原因**：模型推理对图像比例敏感，**变形会扭曲特征**（方车被拉成长方形识别失败）
 - **1920×1080 → 640×640 padding**：scale = 640/1920 = 0.333（按长边定），缩完 640×360；竖直补 280px = 上 140 + 下 140
-- 详见 interview_faq.md Q30
+- **bbox 反推口诀**：先减"单边" pad、后除 scale。99% 翻车在符号反 或 用了总 pad 而非单边
+- 详见 interview_faq.md Q30 + Q36（bbox 反推）+ Q37（Asymmetric vs HalfPixel）
 
 ### A11（W11 调试三件套）
 - **Valgrind 四种泄漏**（按"退出时还能否 reach 到"判定）：
@@ -139,13 +141,14 @@
 | 2026-05-18 | C+ (~65-70 分) | W2 noexcept move、W3 Concepts/expected、W10 Resize 数学、W11 调试三件套 | Session 1 完成 W2 + W3 深讲；Session 2 完成 W5（W11 待补）；Session 3 (W10 + W9) 待补 |
 | 2026-05-20 | —（深讲会话） | —— | Session 2 上半场：W5 深讲 + expected 概念再深化 → 沉淀 interview_faq.md Q31-Q32 |
 | 2026-05-21 | —（深讲+实操会话） | —— | Session 2 下半场：W11 调试三件套深讲 + GDB/perf/火焰图实操 → 沉淀 interview_faq.md Q33-Q35；新建 study-log skill |
+| 2026-05-25 | —（深讲+自测会话） | bbox 反推符号 / mdspan shift 边界处理 | Session 3：W10 双线性 + Letterbox + Asymmetric vs HalfPixel + W9 cv::Mat 内存模型 + mdspan → 沉淀 interview_faq.md Q36-Q39；Q1 review 收尾，下一步进 W14 |
 
 ---
 
 ## 关联文档
 
 - 学习计划：[Q1.md](Q1.md)
-- 深度参考答案与加分回答：[interview_faq.md](interview_faq.md) Q27-Q35
+- 深度参考答案与加分回答：[interview_faq.md](interview_faq.md) Q27-Q39
 - 技术决策 trade-offs：[Q1_decisions.md](Q1_decisions.md)
 - C++20/23 新旧写法：[cpp20_23_cheatsheet.md](cpp20_23_cheatsheet.md)
 - 历史会话记录：[devlog.md](devlog.md)

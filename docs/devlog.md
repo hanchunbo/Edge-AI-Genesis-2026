@@ -12,6 +12,41 @@
 
 ---
 
+## 2026-05-25
+
+### 操作摘要
+- Session 3（W10 Resize 数学 + W9 mdspan / cv::Mat 内存模型）—— Q1 review 收尾
+- 沉淀产物：`docs/interview_faq.md` 新增 Q36-Q39，`docs/q1_self_test.md` 历史成绩 / A9 / A10 同步，`docs/README.md` FAQ 计数同步至 39 道
+
+### 今日深讲内容
+- **W10 双线性 4 邻权重**：两步线性插值（先水平合并、后垂直合并）等价于 4 邻加权和、权重和恒为 1；记忆诀窍"对角点权重 = 自己到对方两方向距离的乘积"
+- **Letterbox + bbox 反推**：长边定 scale → 短边补 pad → 推理 → 反推时"先减单边 pad、再除 scale"；99% 翻车在符号反 或 单边 pad 写成总 pad
+- **Asymmetric vs HalfPixel 坐标对齐**：两套世界观（像素 = 网格交点 vs 像素 = 带中心方格），1920→640 差 1 列像素（src[1917] vs src[1918]）；PyTorch / OpenCV / TRT / 新 ONNX 默认 HalfPixel；导出 ONNX 显式设 `coordinate_transformation_mode` 防默认值漂
+- **cv::Mat 内存模型**：`step[0]` 行字节宽（含 padding），不恒等于 `cols * elemSize()`；isContinuous() 不恒 true 来自两条——行对齐 padding 和 ROI（事实 padding = 有效内容 < stride）；铁律"永远用 `step[0]` 和 `ptr<T>(row)`"
+- **std::mdspan**：多维非拥有 view，零开销抽象；HWC ↔ CHW 转换；**Debug 模式 mdspan 退化 >1000×**（V3 0.5ms → 560ms），零开销的前提是必须开优化
+
+### 自测结果
+6 题：
+- W10 Q1 邻权重 ✅ 数值对（用了 (row,col) 命名约定，和 (x,y) 不同但等价）
+- W10 Q2 Letterbox 参数 ✅ 总 pad 算对（416 − 416/800·600 = 104）
+- W10 Q3 bbox 反推 ❌ y 方向写成 `(200 + 104)/scale`——符号反 + 用总 pad 而非单边 pad（应为 `(200 − 52)/scale = 284.6`）
+- W9 Q1 step[0] ✅ 思路对（"不确定，看是否对齐"），具体到 1920 是 5760 / continuous
+- W9 Q2 roi 不连续 ✅ 抓到根因（roi 继承父 step[0]，事实上的 padding）
+- W9 Q3 mdspan shift ⚠️ 语法对、4 bugs：(a) typo `x = dx` 应为 `x + dx`，(b) if/else 分支完全一致，**漏 0-fill**——题目核心要求，(c) 边界检查方向反（应判 src 是否越界，不是 dst），(d) 原地读写会污染源像素，应用独立 dst buffer
+- **短板暴露**：边界处理意识（bbox 漏 pad、shift 漏 0-fill），mdspan 语法 OK 但工程细节差一截
+
+### 待办
+- 进 W14（ONNX Runtime 集成）—— Q1 review 收尾完成
+- 短板补强：W14 接 ONNX preprocess 时主动复测 bbox 反推 + 边界 0-fill + Resize 模式对齐
+- 后续若有空：W10 自定义 Resize 同时实现 Asymmetric 和 HalfPixel，与 ONNX 算子做精确对齐验证
+
+### 关联
+- 深讲补充题：interview_faq.md Q36-Q39
+- 自测题库：q1_self_test.md A9 / A10
+- 上一次 study-log：devlog.md 2026-05-21
+
+---
+
 ## 2026-05-21
 
 ### 操作摘要

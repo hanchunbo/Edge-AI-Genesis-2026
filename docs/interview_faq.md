@@ -1082,6 +1082,183 @@ gdb -p <PID> -batch -ex "info threads" -ex "thread apply all bt"
 
 ---
 
+### Q36: 模型推理输出的 bbox 在 640×640 坐标系，怎么映射回 1920×1080 原图？这一步常见的两种错是什么？
+
+**考察点**：W10 Letterbox 推理后处理 + 坐标变换 + 边界细节意识
+
+**参考答案**：
+
+**Part 1 · 正向 Letterbox 做了两件事**
+
+1. **按长边定 scale**：1920×1080 → 640×640 时，`scale = 640/1920 = 0.333`
+2. **短边补 padding** 让画面留在 640×640 中间：竖直方向 `pad_top = pad_bot = (640 − 1080×0.333) / 2 = 140`，水平 0
+
+**Part 2 · 反推就是逆向两步**
+
+```
+原图 x = (推理 x − pad_left) / scale
+原图 y = (推理 y − pad_top)  / scale
+```
+
+**严格按相反顺序**：先减"单边"pad，再除 scale。
+
+**Part 3 · 99% 翻车的两种错**
+
+| 错 | 现象 |
+|---|---|
+| **符号反了**（把"减 pad"写成"加 pad"） | bbox 整体反方向偏（"汽车被检测到了车顶上方"） |
+| **pad 用错值**（用总 padding 而不是单边） | bbox 落点错位约 pad 那么多像素 |
+
+**Part 4 · 不容易记错的口诀**
+
+> 正向：**先 scale、后 pad**。反推：**先减单边 pad、后除 scale**。「单边」「减」「除」三个字都不能错。
+
+**加分回答**：
+> "调这种 bbox 错位最快的方法是先打印 (scale, pad_left, pad_top)，再画两次 bbox：一次在 640×640 输入上、一次在原图上，肉眼对比定位错在哪一步。只要原图侧偏了 pad_top 那么多像素，符号错或单边/总边混淆基本是元凶。这种 bug 单元测试很难抓——肉眼+几个具体坐标做断言更稳。"
+
+---
+
+### Q37: ONNX Resize 算子的 `coordinate_transformation_mode` 有几种？Asymmetric 和 HalfPixel 的区别？为什么这是 ONNX 推理预处理的高发坑？
+
+**考察点**：W10 Resize 坐标对齐模式 + 各引擎默认值 + 训练/推理对齐意识
+
+**参考答案**：
+
+**Part 1 · 两套世界观**
+
+- **Asymmetric**：像素 = **网格交点**。`src_x = dst_x × (src_w / dst_w)`，dst (0,0) 严格对齐 src (0,0)。简单但右下边会"短一点"。
+- **HalfPixel**：像素 = **带中心的方格**。`src_x = (dst_x + 0.5) × (src_w / dst_w) − 0.5`，像素中心对齐，左右误差对称。现代默认。
+
+**Part 2 · 1920 → 640 实测差异**
+
+dst 最后一像素 `dst_x = 639` 映射回 src：
+
+| 模式 | 计算 | 结果 |
+|------|------|------|
+| Asymmetric | 639 × 3.0 | src[1917] |
+| HalfPixel | 639.5 × 3.0 − 0.5 | src[1918] |
+
+差 1 列。视觉无感，但**检测模型在边缘的 bbox 会系统性偏 1 像素**，mAP 隐性掉 0.5~1 个点。
+
+**Part 3 · 为什么是高发坑**
+
+模型**训练时**用某种 Resize 模式，**推理时预处理必须用同样的**。否则：
+- 输入分布与训练时轻微错位
+- 检测框右下永远偏 1 像素
+- 整体指标轻微下滑但定位不到原因——这种 bug 很难复现也很难调
+
+**Part 4 · 各框架默认值速查**
+
+| 框架/引擎 | 默认 |
+|---|---|
+| PyTorch `F.interpolate(mode='bilinear', align_corners=False)` | HalfPixel |
+| PyTorch `align_corners=True` | corner-align（**避免用**，老 TF 1.x 风格） |
+| OpenCV `cv::resize` | HalfPixel |
+| TensorRT ResizeLinear / ResizeNearest | HalfPixel |
+| ONNX Runtime opset ≥ 11 `Resize` | `coordinate_transformation_mode` 属性决定，默认 `half_pixel` |
+| ONNX Runtime opset < 11 | Asymmetric（老 opset） |
+
+**加分回答**：
+> "导出 ONNX 时我会**显式设置** `coordinate_transformation_mode='half_pixel'`，不让默认值在不同 opset 间漂。如果是接 TensorRT，更要确认两边对齐——这是 W14 接 ONNX Runtime 必须做的一项对齐验证。W10 的自定义 Resize 我同时实现了 Asymmetric 和 HalfPixel 两种模式，就是为了能跟 ONNX/TRT 算子做精确比对，发现差异直接二分定位。"
+
+---
+
+### Q38: `cv::Mat::isContinuous()` 为什么不是恒为 true？为什么读一行像素必须用 `mat.ptr<T>(row)` 而不是 `data + row * cols * elemSize()`？
+
+**考察点**：W9 cv::Mat 内存模型 + step / padding / ROI + 工业铁律
+
+**参考答案**：
+
+**Part 1 · cv::Mat 内存模型（必须刻进脑里）**
+
+```
+data       ── 首字节指针
+step[0]    ── 行字节宽（含 padding），≥ cols * elemSize()
+step[1]    ── 每元素字节数 = elemSize()
+isContinuous() ⟺ (step[0] == cols * elemSize())
+```
+
+**Part 2 · isContinuous() 不恒 true 的两个原因**
+
+1. **行对齐 padding**：为让每行 stride 是 SIMD 对齐的 16/32/64 字节倍数，OpenCV 可能在每行尾补 padding。例如 1921×3=5763 字节会被补到 5764 或 5768。
+2. **ROI / 子矩阵视图**：`cv::Mat roi = full(cv::Rect(...))` 共享 full 的内存，roi 自己的 `step[0]` 继承自父，但 `cols * elemSize()` 比 `step[0]` 小很多——中间那段不属于 roi 的字节构成**事实上的 padding**。这是 ROI 不连续的根因。
+
+**Part 3 · 为什么必须用 .ptr<T>(row)**
+
+```cpp
+// ❌ 错（假设 step[0] == cols * elemSize()）：
+uint8_t* row_ptr = data + row * cols * 3;
+
+// ✅ 对（用真实 stride）：
+uint8_t* row_ptr = mat.ptr<uint8_t>(row);   // 等价于 data + row * step[0]
+```
+
+**踩坑表现**：在带 padding 的 Mat 或 ROI 上每隔几行错位 1 像素，越往下越歪。
+
+**Part 4 · 工业铁律**
+
+> 永远调 `step[0]` 和 `ptr<T>(row)`，永不假设连续。
+
+**加分回答**：
+> "padding 不一定是物理插入字节——**有效内容 < stride** 就构成事实上的 padding，ROI 是典型例子。所以 `isContinuous()` 不是看 OpenCV 有没有插字节，而是看 `step[0]` 和 `cols * elemSize()` 是否相等。这个视角能帮你看穿很多看似连续其实不是的情况。也是为什么 W9 我没写 `data + row*cols*3` 这种代码——一旦上 ROI 立刻翻车。"
+
+---
+
+### Q39: `std::mdspan` 是什么？相对裸指针 + stride 收益在哪？为什么跑 mdspan 的 benchmark 必须用 Release？
+
+**考察点**：W9 C++23 mdspan + 零开销抽象的前提 + 工程实测
+
+**参考答案**：
+
+**Part 1 · mdspan 一句话**
+
+**mdspan = 多维非拥有 view**。把"一段连续内存 + 维度信息"包装成可多下标访问的对象，**零运行期开销**（全部模板内联）。
+
+**Part 2 · 价值（对比 W10 双线性 4 邻访问）**
+
+```cpp
+// 没 mdspan：心算 stride，bug 高发地段
+auto P00 = *(data + y*s + x*3 + c);
+auto P10 = *(data + y*s + (x+1)*3 + c);
+auto P01 = *(data + (y+1)*s + x*3 + c);
+auto P11 = *(data + (y+1)*s + (x+1)*3 + c);
+
+// 有 mdspan：像数学公式
+auto P00 = img[y,   x,   c];
+auto P10 = img[y,   x+1, c];
+auto P01 = img[y+1, x,   c];
+auto P11 = img[y+1, x+1, c];
+```
+
+**Part 3 · HWC vs CHW**
+
+```cpp
+std::mdspan<u8, extents<size_t, dyn, dyn, dyn>> hwc(data, H, W, 3);   // OpenCV 默认
+std::mdspan<u8, extents<size_t, dyn, dyn, dyn>> chw(data, 3, H, W);   // PyTorch/ONNX/TRT 输入
+```
+
+同一段内存，不同 view，访问语义不同。HWC → CHW 转换是给推理引擎喂输入的常规操作（W10 `LetterboxToTensor` 用的就是这套）。
+
+**Part 4 · Debug vs Release benchmark 真坑**
+
+W9 实测 1080P，V3 mdspan：
+
+| 模式 | ms/frame |
+|---|---|
+| Release -O3 | ~0.50 ms |
+| Debug | ~560 ms 💀 |
+
+差距 **>1000×**。
+
+**根因**：mdspan 内部一堆模板调用；不内联时每次访问 = 一次函数调用 + 算 stride。Debug 不内联 → "零开销"消失。
+
+**修复**：根 `CMakeLists.txt` 加 `if(NOT CMAKE_BUILD_TYPE) set(CMAKE_BUILD_TYPE Release)` 兜底，防止误判。
+
+**加分回答**：
+> "零开销抽象是有前提的——必须开优化才兑现。Debug 跑 benchmark 是在量编译器优化前后的差距，结论会南辕北辙。W9 我把 Release 作为 benchmark target 的默认就是这个教训的产物。另一个反直觉点：V2 span / V3 mdspan / cvtColor 在 Release 下都被 -O3 自动 AVX2 向量化到几乎同一水平——'加了抽象一定慢'的直觉也是错的。手写 SIMD 只在用更强的指令（V4 `vpmaddubsw` 把 6×mullo+4×add 压成 2×maddubs+1×add）才追上 cvtColor。"
+
+---
+
 ## 使用建议
 
 1. **每周复习**：完成每周学习后，尝试口头回答相关题目。
