@@ -12,6 +12,62 @@
 
 ---
 
+## 2026-05-25（Session 4 — W14 ONNX Runtime 闭环）
+
+### 操作摘要
+- W14 启动，Q2 第一周：在 `02_Inference_Analysis/w14_ort_basics/` 落地 `InferenceEngine` 类 + demo + 5 个 GTest 单测
+- 走 **B 路径（本地 CPU 单环境）**：暂跳 CUDA 全栈安装，先把代码闭环跑通；CUDA EP 推至 W14.5 / W15
+- 模型范围裁剪：只跑 MobileNetV2，ResNet18 留到装 torch 时一并补
+- 沉淀产物：`02_Inference_Analysis/w14_ort_basics/{inference_engine.hpp,.cpp,ort_basics_demo.cpp,inference_engine_test.cpp,CMakeLists.txt,notes.md,models/README.md}`、根 `CMakeLists.txt` 追加 Q2 子目录、`.gitignore` 加 ORT / 模型排除、`README.md` 补 ORT 依赖与 Q2 进度表、`CLAUDE.md` 当前进度更新
+
+### 实操记录
+- ORT 1.26.0 CPU 预编译包（8.2MB tar → 22MB so）解到 `third_party/onnxruntime/`，CMake 用手工 IMPORTED 目标接入（绕过上游 packaging bug，见下）
+- demo 跑通：MobileNetV2 输入 `[-1,3,224,224] float32` → 解析动态 batch 为 1 → 150528 元素随机输入 → 输出 `[1,1000]` → Top-1 索引 892 (logit=5.2391，随机输入下无 ImageNet 语义)
+- 5 个单测全绿（ctest 0.13s 完成）：LoadsModel / QueriesIoMetadata / RunsZeroCopyInference / FailsOnMissingModel / EnvIsSingleton
+- 错误路径手测：`--model /tmp/不存在.onnx` 退出码 1，错误消息 `[W14] 模型文件不存在: ...`，符合 RAII + `std::runtime_error` 设计
+
+### 今日深讲内容
+- **`Ort::Env` 全局唯一的工程根因**：Env 持有进程级日志器 + 内部线程池资源，多份会重复分配数百 KB 且日志交错；函数内 `static Ort::Env env(...)` 拿到 C++11+ 线程安全初始化 + 程序退出有序析构，比全局变量稳、比手工单例精简；测试用 `&GlobalEnv() == &GlobalEnv()` 地址相等做反证
+- **零拷贝输入的 C ABI 边界**：`CreateTensorWithDataAsOrtValue` 借用外部 buffer 不复制；`std::span<const float>` 对调用方承诺只读，内部 `const_cast<float*>(span.data())` 是 C ABI 兼容（ORT 推理路径事实只读）；调用方必须保证 buffer 存活到 `Run` 返回（测试里显式控制 `std::vector<float>` 生命周期来验证这个约束）
+- **I/O 元数据热路径外缓存**：`GetInputNameAllocated` / `GetInputTypeInfo` 都走 ORT 内部分配，构造期一次性查完缓存到 `std::vector<IoInfo>`；`Run` 仍要现搭一次 `std::vector<const char*>`，相对毫秒推理可忽略，换 API 简洁度值得
+
+### 踩坑
+- **ORT 1.26 `onnxruntimeConfig.cmake` packaging bug**：导出文件硬编码 `lib64/`，实际 tarball 是 `lib/`，`find_package(... CONFIG REQUIRED)` 直接报"installation package was faulty"。绕开 find_package，改用手工 `add_library(... SHARED IMPORTED)` + `set_target_properties(... IMPORTED_LOCATION ... INTERFACE_INCLUDE_DIRECTORIES ...)`，既显式也不受上游修复节奏影响
+- **版本查询 API 名误记**：最初写 `Ort::GetApi().GetVersionString()` —— `OrtApi` 没这个成员；正确是顶层 `Ort::GetVersionString()` 返回 `std::string`。教训：1.26 头里 `grep -nE "Signature"` 直接确认签名再写，比靠记忆稳
+- **RPATH 缺失会强制 `LD_LIBRARY_PATH`**：ORT 在 `third_party/` 不在系统库路径，`set_target_properties(... BUILD_RPATH "${ONNXRUNTIME_ROOT}/lib")` 让二进制直接知道库位置，免去跑 demo / test 都要 export
+
+### 命令备忘
+
+```bash
+# ORT CPU 包一次性下载（步骤 2）
+mkdir -p third_party/onnxruntime && cd third_party/onnxruntime
+curl -L -O https://github.com/microsoft/onnxruntime/releases/download/v1.26.0/onnxruntime-linux-x64-1.26.0.tgz
+tar xzf onnxruntime-linux-x64-1.26.0.tgz && rm onnxruntime-linux-x64-1.26.0.tgz
+
+# MobileNetV2 ONNX 直链下载（步骤 4，14MB）
+curl -fLo 02_Inference_Analysis/w14_ort_basics/models/mobilenetv2.onnx \
+  https://github.com/onnx/models/raw/main/validated/vision/classification/mobilenet/model/mobilenetv2-12.onnx
+
+# 跑 demo / test
+cmake --build build --target w14_ort_basics_demo w14_inference_engine_test -j$(nproc)
+./build/02_Inference_Analysis/w14_ort_basics/w14_ort_basics_demo
+ctest --test-dir build -R "W14_" --output-on-failure
+```
+
+### 待办
+- **W14.5 / W15 起手补 CUDA**：装 CUDA Toolkit 12.x for WSL（`wsl-ubuntu` 仓库，非普通 Linux 仓库）+ cuDNN 9 + 下 `onnxruntime-linux-x64-gpu-1.26.0.tgz`；加 `LoadsModelWithCudaEp` 单测
+- **ResNet18 对比**：装 torch（~800MB）后 `torchvision.models.resnet18().eval()` → `torch.onnx.export(... opset=17)`；InferenceEngine 已经支持任意 ONNX，加测试用例即可
+- **VPS CPU EP 环境**：W15 起手做，与本地 CPU 路径配置对比沉淀到 README 双环境节
+- **W15 主线**：前后处理流水线（HWC2CHW + Normalize + Top-K），复用 W9/W10 的 BGR2Gray / Resize / Letterbox 模块
+
+### 关联
+- W14 模块代码：`02_Inference_Analysis/w14_ort_basics/`
+- W14 技术笔记：`02_Inference_Analysis/w14_ort_basics/notes.md`
+- Q2 路线规格：`docs/Q2.md` 行 84-116
+- 上一次 study-log：devlog.md 2026-05-25 Session 3（同日 W10/W9 Q1 review）
+
+---
+
 ## 2026-05-25
 
 ### 操作摘要

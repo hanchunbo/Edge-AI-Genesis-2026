@@ -129,3 +129,8 @@ add_subdirectory(01_Linux_CPP_Foundations/w10_resize)
 add_subdirectory(01_Linux_CPP_Foundations/w11_debugging)
 
 add_subdirectory(01_Linux_CPP_Foundations/w13_image_pipeline)
+
+# =============================================================================
+# Q2 推理引擎集成（W14-W17）
+# =============================================================================
+add_subdirectory(02_Inference_Analysis/w14_ort_basics)

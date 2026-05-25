@@ -42,7 +42,16 @@
 | W8 | CMake工程化 (II) & 自动化单元测试 | FetchContent（本地 zip）, lcov/genhtml 覆盖率 | ✅ 完成 |
 | W9-W11 | OpenCV底层实战 + 性能调优工具链 | std::mdspan (C++23) | ✅ W9-W11 全部完成 |
 | W12 | Q1 知识闭环与技术复盘 | C++20/23 对照总结，FAQ 库，Trade-offs | ✅ 完成 |
-| W13 | 阶段项目：高性能多线程图像预处理引擎 | 全栈整合 | 🔄 基本完成，收尾中 |
+| W13 | 阶段项目：高性能多线程图像预处理引擎 | 全栈整合 | ✅ 完成 |
+
+### Q2 进度 (2026.04 - 2026.06) `← 当前阶段`
+
+| 周次 | 主题 | 关键技术 | 状态 |
+|------|------|----------|------|
+| W14 | ONNX Runtime C++ 基础闭环 | RAII Session、`std::span` 零拷贝输入、`Ort::Value::CreateTensor` | ✅ B 路径：本地 CPU + MobileNetV2 闭环（CUDA EP 推至 W14.5 / W15）|
+| W15 | 前后处理流水线（HWC2CHW + Normalize + Top-K / NMS） | std::ranges、SIMD | ⏳ 待启动 |
+| W16-W17 | YOLO 多输出头 + 库重构 + TRT EP 对比 | onnxruntime + tensorrt | ⏳ 计划中 |
+| W18 | Profiling 报告（Roofline + 火焰图） | perf + ORT profile | ⏳ 计划中 |
 
 ---
 
@@ -164,6 +173,25 @@ cd Edge-AI-Genesis-2026
 
 > GTest 源码已随仓库内置于 `third_party/v1.15.2.zip`，FetchContent 直接读取本地 zip，
 > configure / build / ctest **全程无需网络**，内网环境开箱即用。
+
+#### W14+ 额外依赖：ONNX Runtime（CPU 包，Q2 起需要）
+
+包体 ~8MB（CPU），不入库。一次性下载到 `third_party/onnxruntime/`：
+
+```bash
+mkdir -p third_party/onnxruntime
+cd third_party/onnxruntime
+curl -L -O https://github.com/microsoft/onnxruntime/releases/download/v1.26.0/onnxruntime-linux-x64-1.26.0.tgz
+tar xzf onnxruntime-linux-x64-1.26.0.tgz
+rm onnxruntime-linux-x64-1.26.0.tgz
+```
+
+CMake 自动从 `third_party/onnxruntime/onnxruntime-linux-x64-1.26.0/` 接入，
+可用 `-DONNXRUNTIME_ROOT=<path>` 指向其他路径（如系统安装、其他版本）。
+
+> **CUDA EP（W14 末/W15 启用）**：下载 `onnxruntime-linux-x64-gpu-1.26.0.tgz`
+> 并安装 CUDA Toolkit 12.x + cuDNN 9 后再切换；本节示例的 CPU 包足以满足
+> W14 全部成功标准（除 CUDA EP 实测一条）。
 
 ### 场景一：标准构建（含单元测试）
 
