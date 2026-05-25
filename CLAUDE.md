@@ -29,7 +29,7 @@ find . -maxdepth 3 -regex '.*0[1-4]_.*' \( -name "*.cpp" -o -name "*.hpp" \) | x
 **周次模块**（如 `w9_opencv_optimized/`）各自有独立 `CMakeLists.txt`，
 从根目录通过 `add_subdirectory` 引入，使用独立命名空间（`w1`、`w2`… `w9`）。
 
-**分支命名**：`dev-W{N}-{Feature}-chunbo`，完成后合入 `main`。
+**分支命名**：`dev-W{N}-{Feature}-chunbo`（周次工作）或 `dev-{topic}-chunbo`（非周次的工程 / 规范 / 修复）。合入流程见下方 「Branch & Merge Policy」 节。
 
 ## C++ Standards and Conventions（C++ 规范）
 
@@ -124,6 +124,38 @@ find . -maxdepth 3 -regex '.*0[1-4]_.*' \( -name "*.cpp" -o -name "*.hpp" \) | x
 3. **环境依赖同步**：若本次开发安装了新工具（编译器、调试器、覆盖率工具等），必须同步更新 `README.md` 的「前提条件」安装命令。目的：VPS 上积累的隐式环境依赖若不记录，换机器（如 WSL、CI）时会批量复现已解决的问题。
 
 4. **commit author**：格式为 `Hanchunbo <hanchunbo@users.noreply.github.com>`，并附 `Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>`
+
+## Branch & Merge Policy（分支与合入流程）
+
+**铁律：Claude 不能未经用户明确许可就把任何分支合入 `main`。**
+
+每次代码 / 文档变更必须按下面三段流程走：
+
+1. **Feature 分支** — `dev-W{N}-{Feature}-chunbo` 或 `dev-{topic}-chunbo`
+   - 在这里 commit / push 不需要询问
+   - 推到 origin 的同名远端分支即可
+
+2. **合入 `dev`** — Claude 可以**自动**做（无需询问）
+   - 切到 `dev` → `git pull --ff-only origin dev`（防止远端有用户直推的新提交）
+   - `git merge --ff-only <feature-branch>`
+   - `git push origin dev`
+
+3. **合入 `main`** — **必须先停下来问用户**
+   - 询问形式：「W14 这批改动已合到 dev（commit `xxxxx`），要现在合入 main 吗？」
+   - **用户明确说"合"/"可以"/"go" 之后才执行**
+   - 用户说"先不合"/"等等"/"留在 dev" → 停在 dev，**绝对不要自作主张**
+
+### 为什么这么规定
+
+- `main` 是产出快照，用于求职简历挂链接与外部展示；合入意味着 "这版可以对外讲"，需要用户自己评估
+- 此前 W14 三次合并都没问就直推 `main`（commit 2b493b1、98cf25b、75820c6），用户事后才发现并要求加规则
+- 远端 `main` 有 "Changes must be made through a pull request" 保护规则，直推会留 `Bypassed rule violations` 警告，长期不利于审计
+
+### 实践提示
+
+- 同步远端：每次切到 `dev` 后先 `git fetch origin` 看一眼远端是否有用户直推的提交，避免 FF 失败或漏改基线
+- 不绕过钩子：不加 `--no-verify` / `--no-gpg-sign` 等参数；规则触发时 stop & fix
+- 历史已合入 `main` 的部分不回滚 —— 仅约束未来行为
 
 ## CI（持续集成）
 
