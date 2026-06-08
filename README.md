@@ -1,13 +1,13 @@
 # 2026 AI Edge-Inference Breakthrough Plan
 
-### —— 从业务开发到高级 AI 部署专家的职业跃迁
+### —— 边缘端 AI 推理的 C++20/23 高性能工程实践
 
 [![C++](https://img.shields.io/badge/C++-20/23-blue.svg?logo=c%2B%2B)](https://isocpp.org/)
 [![TensorRT](https://img.shields.io/badge/TensorRT-8.x-green.svg?logo=nvidia)](https://developer.nvidia.com/tensorrt)
 [![ONNX](https://img.shields.io/badge/ONNX-Runtime-purple.svg)](https://onnxruntime.ai/)
 [![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-> **项目定位**：利用 2026 全年完成从"业务开发"到"高级 AI 部署"的系统性转型。本项目已全面进入 **C++20/23 时代**，深度结合现代 C++ 工程能力、数据分析洞察力与 MEM 项目管理思维，旨在攻克边缘端推理性能瓶颈，冲击 30K+ 高级岗位。
+> **项目定位**：一套面向边缘端 AI 推理的 **C++20/23** 高性能工程实践。围绕现代 C++ 工程能力与系统级性能优化，逐周攻克端侧推理的性能瓶颈，沉淀可复现、可演示的工程化作品集。
 
 ---
 
@@ -55,34 +55,12 @@
 
 ---
 
-## 2026 上半年求职导向里程碑（成功率优先）
-
-| 时间窗口 | 必达产出 (P0) | 求职动作 |
-|------|------|------|
-| 2026-04-08 ~ 2026-04-24 | W13 收尾合入 main + W14 双环境搭通 + InferenceEngine 零拷贝跑通 | 准备第一版简历、项目讲解稿 |
-| **2026-04-25（第一批触发）** | W14 闭环：能加载模型、打印 I/O、解释 Env 全局唯一 | 第一批投递（C++ 工程优化/推理基础部署岗） |
-| 2026-05-05 ~ 2026-05-18 | W16 YOLO Demo + W18 Profiling 报告产出 | 持续投递，积累面试反馈 |
-| **2026-06-01（第二批触发）** | W18 Profiling 报告 + W20 量化结果（可分步） | 第二批投递（端侧推理/量化优化岗） |
-
-> 执行原则：先拿到面试与 offer，再补齐 Qt 上位机与完整产品化能力。
-
----
-
-## 团队背景
-
-| 成员 | 背景 | 专长领域 |
-|------|------|----------|
-| **Member A** (Tech Lead) | 某高校 MEM 在读，5年经验 | 系统调优、性能建模、量化算法 |
-| **Member B** (Partner) | 某高校，3年 C++ Qt 经验 | 跨平台 UI、AI 上位机集成 |
-
----
-
 ## 开发环境
 
 | 环境 | 配置详情 | 用途 |
 |------|----------|------|
 | **VPS** | x86 64 Bit, 2GB RAM, **GCC 15.2.0** | 远程开发、CI/CD |
-| **本地笔记本** | 笔记本, i5-12500H, 16GB RAM, RTX 3060, 512GB SSD | 本地开发、GPU 推理测试 |
+| **本地笔记本** | i5-12500H, 16GB RAM, RTX 3060, 512GB SSD | 本地开发、GPU 推理测试 |
 
 ---
 
@@ -93,7 +71,7 @@
 | **Q1** | 工程基石与高性能体系 | **C++20/23**、Linux I/O、CMake、OpenCV 底层 | ✅ W1-W12 完成，W13 收尾 |
 | **Q2** | 推理引擎落地与数据驱动优化 | ONNX Runtime C++ API、量化、Profiling、Qt6 | 🔄 进行中 (W14 起) |
 | **Q3** | TensorRT 深度优化与生产级部署 | TRT C++ API、NCNN、ARM EP、Docker、gRPC | ⬜ 待开始 |
-| **Q4** | 端侧 LLM 推理与求职冲刺 | llama.cpp、MLC-LLM、Kernel Fusion、作品集 | ⬜ 待开始 |
+| **Q4** | 端侧 LLM 推理与作品集沉淀 | llama.cpp、MLC-LLM、Kernel Fusion、作品集 | ⬜ 待开始 |
 
 详细执行手册见 [docs/Q1.md](./docs/Q1.md) | [docs/Q2.md](./docs/Q2.md) | [docs/Q3.md](./docs/Q3.md) | [docs/Q4.md](./docs/Q4.md)
 

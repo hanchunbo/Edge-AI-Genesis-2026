@@ -123,7 +123,7 @@ find . -maxdepth 3 -regex '.*0[1-4]_.*' \( -name "*.cpp" -o -name "*.hpp" \) | x
 
 3. **环境依赖同步**：若本次开发安装了新工具（编译器、调试器、覆盖率工具等），必须同步更新 `README.md` 的「前提条件」安装命令。目的：VPS 上积累的隐式环境依赖若不记录，换机器（如 WSL、CI）时会批量复现已解决的问题。
 
-4. **commit author**：格式为 `Hanchunbo <hanchunbo@users.noreply.github.com>`，并附 `Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>`
+4. **commit author**：格式为 `hanchunbo <hanchunbo@users.noreply.github.com>`，并附 `Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>`
 
 ## Branch & Merge Policy（分支与合入流程）
 
