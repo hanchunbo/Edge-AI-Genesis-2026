@@ -147,7 +147,7 @@ find . -maxdepth 3 -regex '.*0[1-4]_.*' \( -name "*.cpp" -o -name "*.hpp" \) | x
 
 ### 为什么这么规定
 
-- `main` 是产出快照，用于求职简历挂链接与外部展示；合入意味着 "这版可以对外讲"，需要用户自己评估
+- `main` 是产出快照，用于对外展示；合入意味着 "这版可以对外讲"，需要用户自己评估
 - 此前 W14 三次合并都没问就直推 `main`（commit 2b493b1、98cf25b、75820c6），用户事后才发现并要求加规则
 - 远端 `main` 有 "Changes must be made through a pull request" 保护规则，直推会留 `Bypassed rule violations` 警告，长期不利于审计
 

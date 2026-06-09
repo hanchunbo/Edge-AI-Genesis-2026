@@ -24,7 +24,7 @@ description: Use when the user finishes a day's study, review, deep-dive, self-t
 1. **提炼今天的复习 / 实操要点** —— 回顾本次对话:今天学了 / 做了什么、暴露哪些短板、有哪些实操证据、留下什么待办。**只写有信息量的结论,不复述工具原始输出。**
 2. **追加 dated devlog 条目** —— 按下方模板,把新条目插在「草稿区」分隔线之后、最近一条 `## 日期` 之前(日期倒序,新的在最上)。
 3. **联动更新学习资料** —— 每次都检查 `docs/interview_faq.md` 与 `docs/q1_self_test.md`:
-   - `interview_faq.md`:有可复用的面试复盘点就追加题目,Q 编号接现有最大值;没有就不要写填充题,回报时明确说明未新增 FAQ。
+   - `interview_faq.md`:有可复用的自测复盘点就追加题目,Q 编号接现有最大值;没有就不要写填充题,回报时明确说明未新增 FAQ。
    - `q1_self_test.md`:更新历史成绩单,并在暴露答案缺口时同步答案区 / 深讲指向。
    - FAQ 题数变化时同步 `docs/README.md` 计数。
 4. **commit 到 `dev`** —— 提交全部入库改动,**不改 git config、不 commit 到 main**。提交 author 与 trailer 服从仓库 `CLAUDE.md` 的 Commit Checklist;需要覆盖 author 时用 inline `git -c`。
