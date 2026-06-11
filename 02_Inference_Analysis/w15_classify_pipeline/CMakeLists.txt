@@ -33,6 +33,18 @@ target_link_libraries(w15_classify_lib PUBLIC
 )
 target_compile_features(w15_classify_lib PUBLIC cxx_std_20)
 
+# -----------------------------------------------------------------------------
+# Demo 可执行：w15_classify_demo
+# -----------------------------------------------------------------------------
+add_executable(w15_classify_demo classify_demo.cpp)
+target_link_libraries(w15_classify_demo PRIVATE w15_classify_lib)
+target_compile_definitions(w15_classify_demo PRIVATE
+  W15_MODEL_PATH="${CMAKE_SOURCE_DIR}/02_Inference_Analysis/w14_ort_basics/models/mobilenetv2.onnx"
+  W15_LABELS_PATH="${CMAKE_CURRENT_SOURCE_DIR}/models/imagenet_classes.txt"
+)
+set_target_properties(w15_classify_demo PROPERTIES
+  BUILD_RPATH "${ONNXRUNTIME_ROOT}/lib")
+
 if(BUILD_TESTING)
   add_executable(w15_preprocess_test preprocess_test.cpp)
   target_link_libraries(w15_preprocess_test
