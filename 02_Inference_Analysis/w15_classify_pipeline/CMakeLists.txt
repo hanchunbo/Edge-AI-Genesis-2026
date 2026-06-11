@@ -20,6 +20,7 @@ find_package(Threads REQUIRED)
 add_library(w15_classify_lib STATIC
   preprocess.cpp
   postprocess.cpp
+  classifier.cpp
 )
 target_include_directories(w15_classify_lib PUBLIC
   ${CMAKE_CURRENT_SOURCE_DIR}
@@ -42,4 +43,16 @@ if(BUILD_TESTING)
   target_link_libraries(w15_postprocess_test
     PRIVATE w15_classify_lib GTest::gtest_main Threads::Threads)
   add_test(NAME W15_PostprocessTest COMMAND w15_postprocess_test)
+
+  add_executable(w15_classifier_test classifier_test.cpp)
+  target_link_libraries(w15_classifier_test
+    PRIVATE w15_classify_lib GTest::gtest_main Threads::Threads)
+  target_compile_definitions(w15_classifier_test PRIVATE
+    W15_MODEL_PATH="${CMAKE_SOURCE_DIR}/02_Inference_Analysis/w14_ort_basics/models/mobilenetv2.onnx"
+    W15_LABELS_PATH="${CMAKE_CURRENT_SOURCE_DIR}/models/imagenet_classes.txt"
+    W15_IMAGE_PATH="${CMAKE_CURRENT_SOURCE_DIR}/models/test_cat.jpg"
+  )
+  set_target_properties(w15_classifier_test PROPERTIES
+    BUILD_RPATH "${ONNXRUNTIME_ROOT}/lib")
+  add_test(NAME W15_ClassifierTest COMMAND w15_classifier_test)
 endif()
