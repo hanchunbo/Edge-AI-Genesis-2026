@@ -5,7 +5,7 @@
 
 ## 当前进度
 
-**当前处于 Q2 W14（ONNX Runtime C++ 基础闭环）阶段，W1-W13 已全部完成。W14 走 B 路径：本地 CPU 单环境闭环（CUDA EP 推至 W14.5 / W15 起手补），仅 MobileNetV2 验证。**
+**当前处于 Q2 W15（分类推理端到端闭环）已完成，W1-W14 全部完成。W15 新建 `02_Inference_Analysis/w15_classify_pipeline/`（命名空间 w15）：分类预处理（resize/centercrop/ImageNet 归一化/CHW）+ 后处理（softmax/Top-K/标签）+ Classifier 编排类复用 W14 InferenceEngine，真实图端到端验证通过（Samoyed 0.65）。CUDA EP（W14.5）仍待补。**
 每开始新的 week，必须更新此处的进度描述。
 
 ## Build（构建速查）

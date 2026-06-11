@@ -49,7 +49,7 @@
 | 周次 | 主题 | 关键技术 | 状态 |
 |------|------|----------|------|
 | W14 | ONNX Runtime C++ 基础闭环 | RAII Session、`std::span` 零拷贝输入、`Ort::Value::CreateTensor` | ✅ B 路径：本地 CPU + MobileNetV2 闭环（CUDA EP 推至 W14.5 / W15）|
-| W15 | 前后处理流水线（HWC2CHW + Normalize + Top-K / NMS） | std::ranges、SIMD | ⏳ 待启动 |
+| W15 | 分类推理端到端闭环（预处理 + Top-K 后处理 + Classifier 编排） | ImageNet 归一化、softmax/Top-K、复用 W14 推理 | ✅ 完成（真图→Top-5，Samoyed 0.65）|
 | W16-W17 | YOLO 多输出头 + 库重构 + TRT EP 对比 | onnxruntime + tensorrt | ⏳ 计划中 |
 | W18 | Profiling 报告（Roofline + 火焰图） | perf + ORT profile | ⏳ 计划中 |
 

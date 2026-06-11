@@ -54,10 +54,18 @@ Qt 机制学习 + Worker Thread + 60FPS 渲染 + 双平台打包，
 
 ---
 
-## [OPEN] W13 kTensor 缺少 ImageNet mean/std 归一化（高优）
+## [FIXED] W13 kTensor 缺少 ImageNet mean/std 归一化（高优）
 
 **发现**：2026-04-02（W13 AI 部署专家评估）
+**修复**：2026-06-11（W15 分类闭环）
 **严重度**：🔴 高（Q2 W15 接分类模型时直接暴露，影响推理精度）
+
+**修复说明**：W15 没有改动 W13 的检测路径（`LetterboxToTensor` 保持 `/255`，对 YOLO 正确），
+而是新建分类专用预处理 `w15::Preprocess` + `w15::PreprocConfig`，显式定义 ImageNet
+`mean=[0.485,0.456,0.406]` / `std=[0.229,0.224,0.225]`（RGB 序），端到端验证通过：
+pytorch 示例图（Samoyed）经完整链路得 Top-1 `Samoyed` 0.65，证明归一化与 BGR→RGB 均正确。
+检测与分类两套预处理路径分离，边界清晰。
+
 
 **现状**：`LetterboxToTensor` 输出只做 `÷255` 缩放到 `[0,1]`，没有 ImageNet 标准归一化。
 YOLO v8 只需 `/255` 没有问题，但 ResNet / MobileNet 等分类模型的预训练期望输入为：
