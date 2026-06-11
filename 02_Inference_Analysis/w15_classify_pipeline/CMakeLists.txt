@@ -19,6 +19,7 @@ find_package(Threads REQUIRED)
 # 库目标：w15_classify_lib（后续任务逐步加入 postprocess.cpp / classifier.cpp）
 add_library(w15_classify_lib STATIC
   preprocess.cpp
+  postprocess.cpp
 )
 target_include_directories(w15_classify_lib PUBLIC
   ${CMAKE_CURRENT_SOURCE_DIR}
@@ -36,4 +37,9 @@ if(BUILD_TESTING)
   target_link_libraries(w15_preprocess_test
     PRIVATE w15_classify_lib GTest::gtest_main Threads::Threads)
   add_test(NAME W15_PreprocessTest COMMAND w15_preprocess_test)
+
+  add_executable(w15_postprocess_test postprocess_test.cpp)
+  target_link_libraries(w15_postprocess_test
+    PRIVATE w15_classify_lib GTest::gtest_main Threads::Threads)
+  add_test(NAME W15_PostprocessTest COMMAND w15_postprocess_test)
 endif()
