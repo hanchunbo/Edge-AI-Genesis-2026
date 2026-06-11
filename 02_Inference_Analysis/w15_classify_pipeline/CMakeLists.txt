@@ -30,3 +30,10 @@ target_link_libraries(w15_classify_lib PUBLIC
   Threads::Threads
 )
 target_compile_features(w15_classify_lib PUBLIC cxx_std_20)
+
+if(BUILD_TESTING)
+  add_executable(w15_preprocess_test preprocess_test.cpp)
+  target_link_libraries(w15_preprocess_test
+    PRIVATE w15_classify_lib GTest::gtest_main Threads::Threads)
+  add_test(NAME W15_PreprocessTest COMMAND w15_preprocess_test)
+endif()
