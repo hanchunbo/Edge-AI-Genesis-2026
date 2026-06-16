@@ -80,13 +80,16 @@ size_t ElementCount(std::span<const int64_t> shape) {
 int main(int argc, char** argv) {
   std::string model_path =
       "02_Inference_Analysis/w14_ort_basics/models/mobilenetv2.onnx";
+  w14::Ep ep = w14::Ep::kCpu;
 
   for (int i = 1; i < argc; ++i) {
     std::string_view arg = argv[i];
     if (arg == "--model" && i + 1 < argc) {
       model_path = argv[++i];
+    } else if (arg == "--cuda") {
+      ep = w14::Ep::kCuda;
     } else if (arg == "-h" || arg == "--help") {
-      std::cout << "用法: w14_ort_basics_demo [--model <path>]\n";
+      std::cout << "用法: w14_ort_basics_demo [--model <path>] [--cuda]\n";
       return 0;
     } else {
       std::cerr << std::format("[W14] 未知参数: {}\n", arg);
@@ -99,7 +102,14 @@ int main(int argc, char** argv) {
   std::cout << std::format("[W14] 加载模型: {}\n", model_path);
 
   try {
-    w14::InferenceEngine engine(model_path);
+    w14::InferenceEngine engine(model_path, ep);
+
+    const char* ep_name = engine.ActiveEp() == w14::Ep::kCuda ? "CUDA" : "CPU";
+    std::cout << std::format("[W14] 实际 EP: {}\n", ep_name);
+    if (!engine.EpFallbackReason().empty()) {
+      std::cout << std::format("[W14] CUDA 回退原因: {}\n",
+                               engine.EpFallbackReason());
+    }
 
     std::cout << "[W14] === I/O 元数据 ===\n";
     for (const auto& info : engine.Inputs()) {
