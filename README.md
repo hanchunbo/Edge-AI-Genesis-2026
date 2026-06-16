@@ -165,9 +165,65 @@ rm onnxruntime-linux-x64-1.26.0.tgz
 CMake 自动从 `third_party/onnxruntime/onnxruntime-linux-x64-1.26.0/` 接入，
 可用 `-DONNXRUNTIME_ROOT=<path>` 指向其他路径（如系统安装、其他版本）。
 
-> **CUDA EP（W14 末/W15 启用）**：下载 `onnxruntime-linux-x64-gpu-1.26.0.tgz`
-> 并安装 CUDA Toolkit 12.x + cuDNN 9 后再切换；本节示例的 CPU 包足以满足
-> W14 全部成功标准（除 CUDA EP 实测一条）。
+CPU 包足以满足 W14/W15 全部成功标准（CUDA EP 实测见下）。
+
+#### W14.5 可选：CUDA EP（GPU 推理，WSL2 + RTX 30 系实测）
+
+在本地 GPU 机上启用 ONNX Runtime CUDA ExecutionProvider。**pin 版本：CUDA 12.3
++ cuDNN 9 + ORT GPU 1.26.0**（CUDA 12.3 对齐 host 驱动 546.30 的能力上限；
+cuDNN 8/9 ABI 不可混用）。纯 CPU 环境（VPS/CI）不装这些也能编译运行，CUDA 用例
+会优雅跳过。
+
+**1. 加 CUDA apt 源（WSL：driver 归 Windows host，Linux 侧绝不装 driver）**
+
+```bash
+cd /tmp && wget -q https://developer.download.nvidia.com/compute/cuda/repos/wsl-ubuntu/x86_64/cuda-keyring_1.1-1_all.deb
+sudo dpkg -i cuda-keyring_1.1-1_all.deb
+# cuDNN 9 不在 wsl-ubuntu 源里，需额外加 ubuntu2404 源（复用同一 keyring）
+echo "deb [signed-by=/usr/share/keyrings/cuda-archive-keyring.gpg] https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2404/x86_64/ /" | sudo tee /etc/apt/sources.list.d/cuda-ubuntu2404.list
+sudo apt-get update
+```
+
+**2. 装精简工具链 + cuDNN 9（绕开 nsight → libtinfo5 坑）**
+
+```bash
+# 不要装 cuda-toolkit-12-3：它依赖旧版 nsight-systems → libtinfo5，
+# 而 Ubuntu 24.04 已废弃 libtinfo5，会报 "held broken packages"。
+# 精简 meta 含 nvcc + 全部 runtime/dev 库，profiler 留到 W16 用新版单装。
+sudo apt-get install -y cuda-compiler-12-3 cuda-libraries-12-3 \
+                        cuda-libraries-dev-12-3 cudnn9-cuda-12
+```
+
+**3. 下 ORT GPU 包（与 CPU 包并排）**
+
+```bash
+cd third_party/onnxruntime
+wget https://github.com/microsoft/onnxruntime/releases/download/v1.26.0/onnxruntime-linux-x64-gpu-1.26.0.tgz
+tar xzf onnxruntime-linux-x64-gpu-1.26.0.tgz && rm onnxruntime-linux-x64-gpu-1.26.0.tgz
+```
+
+**4. 用 GPU 包配置并验证**
+
+```bash
+cmake -B build-gpu -S . -DCMAKE_CXX_COMPILER=g++-15 -G Ninja \
+  -DONNXRUNTIME_ROOT="$(pwd)/third_party/onnxruntime/onnxruntime-linux-x64-gpu-1.26.0"
+cmake --build build-gpu --target w14_inference_engine_test -j$(nproc)
+ctest --test-dir build-gpu -R "W14_" --output-on-failure   # LoadsModelWithCudaEp 不再跳过
+./build-gpu/02_Inference_Analysis/w14_ort_basics/w14_ort_basics_demo --cuda  # 应打印「实际 EP: CUDA」
+```
+
+**排障三件套**
+
+```bash
+nvidia-smi                                  # 确认 GPU + 驱动可见
+/usr/local/cuda/bin/nvcc --version          # 确认 CUDA 12.3
+ldconfig -p | grep -E 'cudnn|cudart|cublas' # 确认运行时库在链接器路径（NVIDIA 包自动加 ld.so.conf.d）
+```
+
+> 注：ORT 的 `libonnxruntime_providers_cuda.so` 由运行时 dlopen，与 `libonnxruntime.so`
+> 同目录，现有 `BUILD_RPATH` 已覆盖；CUDA/cuDNN runtime 库经 ldconfig 可达，无需手设
+> `LD_LIBRARY_PATH`。若 CUDA 不可用，引擎会优雅回退 CPU（`InferenceEngine::ActiveEp()`
+> 查实际 EP，`EpFallbackReason()` 查回退原因）。
 
 ### 场景一：标准构建（含单元测试）
 

@@ -179,7 +179,21 @@ ORT 在 `third_party/` 下，不在系统 lib 路径里。
 
 ## 待补（W14.5 / W15）
 
-- CUDA EP（需先装 CUDA Toolkit 12.x for WSL + cuDNN 9 + 下 `onnxruntime-linux-x64-gpu` 包）
-- ResNet18 对比（需 torch 导出，本周裁剪掉）
-- `LoadsModelWithCudaEp` 单测（依赖上面 CUDA 接入）
-- VPS CPU EP 环境搭建（W15 起手做）
+- ✅ **CUDA EP（W14.5 完成）** — `InferenceEngine` 加可选 `Ep` 参数（默认 kCpu），
+  CUDA 不可用时整段 Session 优雅回退 CPU，`ActiveEp()` / `EpFallbackReason()` 查状态。
+  本地 RTX 3060 + CUDA 12.3 + cuDNN 9 + ORT GPU 1.26 实测 `ActiveEp()==kCuda`。
+- ✅ **`LoadsModelWithCudaEp` 单测（W14.5 完成）** — GPU 可用则真跑，纯 CPU 环境优雅跳过。
+- ResNet18 对比（需 torch 导出，本周裁剪掉）— 仍待，与 EP 接入正交。
+- VPS CPU EP 环境搭建 — 仍待（用户暂定待定）。
+
+### W14.5 两个值得记的坑
+
+1. **CUDA toolkit 在 Ubuntu 24.04 装不上 `cuda-toolkit-12-3`**：它依赖旧版
+   nsight-systems → `libtinfo5`，而 24.04 已废弃 libtinfo5（"held broken packages"）。
+   解法：装精简 meta `cuda-compiler-12-3 + cuda-libraries{,-dev}-12-3 + cudnn9-cuda-12`，
+   含 nvcc + 全库，跳过 profiler。W16 要 profiling 时单装支持 24.04 的新版 nsight
+   （依赖 libtinfo6），与现有 CUDA 12.3 runtime 并存，零代价。
+2. **CUDA EP 误回退的顺序依赖假绿**：`AppendExecutionProvider_CUDA` 内部用 ORT 默认
+   日志器，必须在 append 前先创建 `Ort::Env`（GlobalEnv）注册日志器。否则进程内首次
+   构造 CUDA 引擎会抛 "DefaultLogger but none registered" → CUDA 可用却误回退 CPU。
+   单测因前序用例已建 Env 而侥幸通过，是 demo 单次构造暴露的真相（commit 319d4ae 修）。

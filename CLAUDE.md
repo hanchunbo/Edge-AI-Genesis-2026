@@ -5,7 +5,7 @@
 
 ## 当前进度
 
-**当前处于 Q2 W15（分类推理端到端闭环）已完成，W1-W14 全部完成。W15 新建 `02_Inference_Analysis/w15_classify_pipeline/`（命名空间 w15）：分类预处理（resize/centercrop/ImageNet 归一化/CHW）+ 后处理（softmax/Top-K/标签）+ Classifier 编排类复用 W14 InferenceEngine，真实图端到端验证通过（Samoyed 0.65）。CUDA EP（W14.5）仍待补。**
+**当前处于 Q2 W15（分类推理端到端闭环）已完成，W1-W14 全部完成，W14.5（CUDA EP）已完成。W15 新建 `02_Inference_Analysis/w15_classify_pipeline/`（命名空间 w15）：分类预处理（resize/centercrop/ImageNet 归一化/CHW）+ 后处理（softmax/Top-K/标签）+ Classifier 编排类复用 W14 InferenceEngine，真实图端到端验证通过（Samoyed 0.65）。W14.5：InferenceEngine 加可选 CUDA EP（默认 CPU，不可用时整段 Session 优雅回退，ActiveEp()/EpFallbackReason() 查状态），本地 RTX 3060 + CUDA 12.3 + cuDNN 9 + ORT GPU 1.26 实测 ActiveEp()==kCuda，CPU 环境用例优雅跳过；安装与排障见 README「W14.5 可选：CUDA EP」节。遗留：ResNet18 对比、VPS CPU EP 环境（均待定）。**
 每开始新的 week，必须更新此处的进度描述。
 
 ## Build（构建速查）
