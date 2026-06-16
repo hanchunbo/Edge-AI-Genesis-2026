@@ -33,21 +33,47 @@ InferenceEngine::IoInfo MakeIoInfo(Ort::AllocatedStringPtr name,
 
 }  // namespace
 
-InferenceEngine::InferenceEngine(const std::string& model_path) {
+InferenceEngine::InferenceEngine(const std::string& model_path, Ep ep) {
   // 提前给出友好错误，避免 ORT 抛 ORTCHAR 路径相关的晦涩异常。
   if (!std::filesystem::exists(model_path)) {
     throw std::runtime_error("[W14] 模型文件不存在: " + model_path);
   }
 
+  // CUDA 路径：try 必须包住「append + Session 创建」整体——失败既可能发生在
+  // AppendExecutionProvider_CUDA，也可能发生在 Session 创建阶段（provider .so
+  // 找到了，但 libcudnn.so.9 / libcublas* dlopen 失败）。任意 Ort::Exception
+  // 都记录原因后落到下面的 CPU 重建路径，不向上抛。
+  if (ep == Ep::kCuda) {
+    try {
+      Ort::SessionOptions cuda_options;
+      cuda_options.SetGraphOptimizationLevel(
+          GraphOptimizationLevel::ORT_ENABLE_ALL);
+      OrtCUDAProviderOptions cuda_opts{};  // device_id 默认 0
+      cuda_options.AppendExecutionProvider_CUDA(cuda_opts);
+      session_ = std::make_unique<Ort::Session>(GlobalEnv(), model_path.c_str(),
+                                                cuda_options);
+      active_ep_ = Ep::kCuda;
+    } catch (const Ort::Exception& e) {
+      ep_fallback_reason_ = e.what();  // 记录原因，回退 CPU
+    }
+  }
+
+  // CPU 路径：默认请求 或 CUDA 失败回退。CPU 路径本身失败才真正抛错。
+  if (!session_) {
+    try {
+      Ort::SessionOptions cpu_options;
+      cpu_options.SetGraphOptimizationLevel(
+          GraphOptimizationLevel::ORT_ENABLE_ALL);
+      session_ = std::make_unique<Ort::Session>(GlobalEnv(), model_path.c_str(),
+                                                cpu_options);
+      active_ep_ = Ep::kCpu;
+    } catch (const Ort::Exception& e) {
+      throw std::runtime_error(std::string("[W14] ORT 加载失败: ") + e.what());
+    }
+  }
+
+  // 构造期一次性查出 I/O 元数据缓存，Run 热路径不再触发 ORT 内部分配。
   try {
-    Ort::SessionOptions options;
-    // 图优化拉满；边缘部署默认就要全开（融合 / 常量折叠等）。
-    options.SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_ENABLE_ALL);
-
-    session_ = std::make_unique<Ort::Session>(GlobalEnv(), model_path.c_str(),
-                                              options);
-
-    // 构造期一次性查出 I/O 元数据缓存，Run 热路径不再触发 ORT 内部分配。
     Ort::AllocatorWithDefaultOptions allocator;
 
     const size_t input_count = session_->GetInputCount();
@@ -66,9 +92,8 @@ InferenceEngine::InferenceEngine(const std::string& model_path) {
                      session_->GetOutputTypeInfo(i)));
     }
   } catch (const Ort::Exception& e) {
-    // Ort::Exception 继承自 std::exception，不是 std::runtime_error。
-    // 转一层让上层 catch(std::runtime_error&) 也能捕获，并补加上下文。
-    throw std::runtime_error(std::string("[W14] ORT 加载失败: ") + e.what());
+    throw std::runtime_error(std::string("[W14] ORT 元数据查询失败: ") +
+                             e.what());
   }
 }
 

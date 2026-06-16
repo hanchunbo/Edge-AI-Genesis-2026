@@ -16,6 +16,9 @@
 
 namespace w14 {
 
+// ExecutionProvider 选择。kCuda 不可用时构造函数优雅回退 kCpu（见 .cpp）。
+enum class Ep { kCpu, kCuda };
+
 // InferenceEngine 封装一个 ONNX 模型推理会话。
 //
 // 设计要点：
@@ -34,7 +37,10 @@ class InferenceEngine {
     ONNXTensorElementDataType dtype;
   };
 
-  explicit InferenceEngine(const std::string& model_path);
+  // ep 默认 kCpu，保持既有调用方（W15 Classifier / demo / 旧测试）零改动。
+  // 请求 kCuda 但环境不可用时不抛异常，回退 CPU；用 ActiveEp() 查实际生效的
+  // EP。
+  explicit InferenceEngine(const std::string& model_path, Ep ep = Ep::kCpu);
   ~InferenceEngine();
 
   InferenceEngine(const InferenceEngine&) = delete;
@@ -44,6 +50,14 @@ class InferenceEngine {
 
   [[nodiscard]] const std::vector<IoInfo>& Inputs() const { return inputs_; }
   [[nodiscard]] const std::vector<IoInfo>& Outputs() const { return outputs_; }
+
+  // 实际生效的 EP。注意：仅表示 Session 成功请求/注册了该 EP，
+  // 不证明每个算子都落到该设备——kernel placement 严格确认留 W16/W18 profiling。
+  [[nodiscard]] Ep ActiveEp() const { return active_ep_; }
+  // CUDA 回退到 CPU 的原因（Ort::Exception 文本）；未回退时为空串。
+  [[nodiscard]] const std::string& EpFallbackReason() const {
+    return ep_fallback_reason_;
+  }
 
   // 单输入模型用：零拷贝构造输入 Tensor，跑一次推理，返回所有输出 Value。
   // 多输入模型在 W15 接前后处理时再扩展。
@@ -59,6 +73,8 @@ class InferenceEngine {
   std::unique_ptr<Ort::Session> session_;
   std::vector<IoInfo> inputs_;
   std::vector<IoInfo> outputs_;
+  Ep active_ep_ = Ep::kCpu;
+  std::string ep_fallback_reason_;
 };
 
 }  // namespace w14

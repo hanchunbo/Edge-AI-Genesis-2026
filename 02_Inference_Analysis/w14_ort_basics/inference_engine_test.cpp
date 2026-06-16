@@ -15,6 +15,7 @@
 #include <cstdint>
 #include <filesystem>
 #include <gtest/gtest.h>
+#include <memory>
 #include <onnxruntime_cxx_api.h>
 #include <stdexcept>
 #include <vector>
@@ -112,4 +113,48 @@ TEST(InferenceEngineEnvTest, EnvIsSingleton) {
   Ort::Env& a = w14::InferenceEngine::GlobalEnv();
   Ort::Env& b = w14::InferenceEngine::GlobalEnv();
   EXPECT_EQ(&a, &b);
+}
+
+// ---- W14.5：CUDA EP 接入 ----
+
+// 默认构造行为不变：不传 ep 即 CPU EP、无回退原因。护住 W15 / 旧码零改动。
+TEST_F(InferenceEngineModelTest, DefaultConstructionUsesCpu) {
+  w14::InferenceEngine engine(kModelPath);
+  EXPECT_EQ(engine.ActiveEp(), w14::Ep::kCpu);
+  EXPECT_TRUE(engine.EpFallbackReason().empty());
+}
+
+// 请求 CUDA 永不抛异常：要么生效（ActiveEp==kCuda 且无原因），
+// 要么回退 CPU（ActiveEp==kCpu 且有原因）。两环境下都成立。
+// CPU 包运行时此处会触发真实回退，验证 fallback 路径。
+TEST_F(InferenceEngineModelTest, CudaRequestFallsBackGracefully) {
+  std::unique_ptr<w14::InferenceEngine> engine;
+  ASSERT_NO_THROW(engine = std::make_unique<w14::InferenceEngine>(
+                      kModelPath, w14::Ep::kCuda));
+  if (engine->ActiveEp() == w14::Ep::kCpu) {
+    EXPECT_FALSE(engine->EpFallbackReason().empty());
+  } else {
+    EXPECT_EQ(engine->ActiveEp(), w14::Ep::kCuda);
+    EXPECT_TRUE(engine->EpFallbackReason().empty());
+  }
+}
+
+// GPU 真跑：CUDA 可用时断言 EP 生效并跑通一次推理；不可用则优雅跳过。
+TEST_F(InferenceEngineModelTest, LoadsModelWithCudaEp) {
+  w14::InferenceEngine engine(kModelPath, w14::Ep::kCuda);
+  if (engine.ActiveEp() != w14::Ep::kCuda) {
+    GTEST_SKIP() << "CUDA EP 不可用，已回退 CPU：" << engine.EpFallbackReason();
+  }
+  std::vector<float> input(1 * 3 * 224 * 224, 0.5f);
+  std::vector<int64_t> shape = {1, 3, 224, 224};
+  auto outputs = engine.Run(input, shape);
+  ASSERT_EQ(outputs.size(), 1u);
+  auto out_info = outputs[0].GetTensorTypeAndShapeInfo();
+  ASSERT_EQ(out_info.GetElementCount(), 1000u);
+
+  // CUDA 路径同样要 sanity：元素全为有限数，否则 GPU 算子产出垃圾也会"通过"。
+  const float* data = outputs[0].GetTensorData<float>();
+  for (size_t i = 0; i < out_info.GetElementCount(); ++i) {
+    ASSERT_TRUE(std::isfinite(data[i])) << "logit[" << i << "] 非有限";
+  }
 }
