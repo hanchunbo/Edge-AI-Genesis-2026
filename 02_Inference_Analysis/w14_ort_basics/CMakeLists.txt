@@ -82,6 +82,15 @@ set_target_properties(w14_ort_basics_demo PROPERTIES
 )
 
 # -----------------------------------------------------------------------------
+# 基准可执行：w14_inference_benchmark（W14.5 推理延迟，预热+多次平均，CPU/CUDA）
+# -----------------------------------------------------------------------------
+add_executable(w14_inference_benchmark inference_benchmark.cpp)
+target_link_libraries(w14_inference_benchmark PRIVATE w14_inference_engine)
+set_target_properties(w14_inference_benchmark PROPERTIES
+  BUILD_RPATH "${ONNXRUNTIME_ROOT}/lib"
+)
+
+# -----------------------------------------------------------------------------
 # 单元测试：w14_inference_engine_test
 # -----------------------------------------------------------------------------
 # 步骤 5 实装；BUILD_TESTING 关闭或测试源文件仍为骨架时跳过。
