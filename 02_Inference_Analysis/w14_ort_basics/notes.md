@@ -1,19 +1,21 @@
 # W14 — ONNX Runtime C++ 基础闭环
 
-> Q2 起点。完成本地 CPU 单环境 + MobileNetV2 端到端闭环。
-> CUDA EP / ResNet18 / 完整 5 个单测的 CUDA 变体推至 W14.5 或 W15 启动时补。
+> Q2 起点。本周走 B 路径：本地 CPU 单环境 + MobileNetV2 端到端闭环。
+> CUDA EP 已在 W14.5 补齐（见下方「待补」与 W14.5 节）；ResNet18 对比仍待。
 
 ## 闭环结果
 
 | 项 | 实际值 |
 |---|---|
-| ORT 版本 | 1.26.0（预编译包 onnxruntime-linux-x64） |
-| ExecutionProvider | CPU（默认） |
+| ORT 版本 | 1.26.0（CPU 包 onnxruntime-linux-x64；GPU 包 onnxruntime-linux-x64-gpu） |
+| ExecutionProvider | CPU（默认）/ CUDA（可选，W14.5 加入）；`ActiveEp()` 查实际生效 |
 | 模型 | MobileNetV2（ONNX Model Zoo，14MB） |
 | 输入 | `[1,3,224,224] float32`（动态 batch 解析为 1） |
 | 输出 | `[1,1000] float32`，Top-1 索引 892（随机输入下无语义） |
-| 单测 | 5 个全绿（LoadsModel / QueriesIoMetadata / RunsZeroCopyInference / FailsOnMissingModel / EnvIsSingleton） |
-| 单次推理耗时 | ~30ms（CPU，含 RunsZeroCopyInference 测试时序） |
+| 单测 | 8 个全绿（基础 5 + W14.5：DefaultConstructionUsesCpu / CudaRequestFallsBackGracefully / LoadsModelWithCudaEp） |
+| 单次推理耗时 | **CPU avg 2.74ms / min 2.16ms**；**CUDA avg 2.02ms / min 1.57ms**（i5-12500H + RTX 3060 Laptop，预热 20 + 计时 100，`w14_inference_benchmark`） |
+
+> **GPU 只快 ~1.3×？正常**：MobileNetV2 太小 + batch=1，kernel 启动与 Host→Device 拷贝开销占比大，GPU 算力喂不饱；ORT 还会把部分 shape 算子留在 CPU（host-device 同步）。GPU 优势要在**大 batch / 大模型 / 高吞吐**场景才显现。旧 notes 记的「~30ms CPU」是测试墙钟时间、非纯推理延迟，已用 benchmark 实测值更正。
 
 ## 概念澄清：ONNX / ORT / 图像处理 / 图像识别
 
