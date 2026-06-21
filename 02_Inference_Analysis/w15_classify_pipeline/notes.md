@@ -31,7 +31,7 @@ flowchart LR
   E --> F["logits[1000]"]
   F --> G["Softmax<br/>→概率"]
   G --> H["partial_sort<br/>Top-K"]
-  H -->|labels[id]| I["Top-5<br/>标签+概率"]
+  H -->|"labels[id]"| I["Top-5<br/>标签+概率"]
 ```
 
 ## 本模块设计决策
