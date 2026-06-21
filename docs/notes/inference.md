@@ -13,6 +13,8 @@
 - [MemoryInfo 与 CPU 内存 / GPU 显存 / Host→Device](#memoryinfo-与-cpu-内存--gpu-显存--hostdevice)
 - [I/O 元数据构造期一次性缓存](#io-元数据构造期一次性缓存)
 - [Execution Provider 与优雅回退](#execution-provider-与优雅回退)
+- [Softmax（数值稳定版）](#softmax数值稳定版)
+- [Top-K 选择（partial_sort）](#top-k-选择partial_sort)
 
 ---
 
@@ -129,3 +131,41 @@ Ort::Value input_tensor = Ort::Value::CreateTensor<float>(
 **坑**：CPU 包（`onnxruntime-linux-x64`）不含 `libonnxruntime_providers_cuda.so`，用它跑 `--cuda` 必然回退（报 "Failed to load shared library"）。要真上 GPU 须用 **GPU 包**配置，且 build 目录配置/编译/运行三步前后一致。回退判断要 try 包住「append + Session 创建」整体（失败可能在 append，也可能在 cudnn/cublas 的 dlopen）。
 
 > 实战出处：`02_Inference_Analysis/w14_ort_basics/notes.md`（生命周期时序图 EP 分支 + 编译与运行节 + W14.5 坑）
+
+---
+
+## Softmax（数值稳定版）
+
+**是什么**：把模型输出的一串裸分数（logits，可正可负、无上下界）换算成「概率分布」——每个值落在 0~1、全部加起来等于 1。公式 `softmax(x_i) = exp(x_i) / Σ exp(x_j)`。
+
+**为什么 / 何时用**：分类模型最后一层输出的 logits 只有「相对大小」有意义（谁大谁更可能），数值本身不可读。softmax 把它变成「65% 像萨摩耶」这种可解释的概率，也方便取 Top-K 时附概率。
+
+**坑**：必须用**数值稳定版**——先减去最大值再取 exp：
+
+```cpp
+const float max_v = *std::max_element(logits.begin(), logits.end());
+out[i] = std::exp(logits[i] - max_v);   // 减 max 防 exp 溢出
+```
+
+直接 `exp(x)` 当 x 较大（如 88+）时 `float` 直接溢出成 `inf`，结果变 `nan`。减最大值后最大指数项变成 `exp(0)=1`，其余都 ≤1，不溢出；而分子分母同乘 `exp(-max)` 数学上恒等，概率值不变。空输入要先判空再取 `max_element`（否则解引用 end 迭代器 UB）。
+
+> 实战出处：`02_Inference_Analysis/w15_classify_pipeline/notes.md`（后处理节，commit 251f70d）
+
+---
+
+## Top-K 选择（partial_sort）
+
+**是什么**：从 N 个概率里挑出最大的 K 个并排好序（K 通常 ≪ N，如 1000 选 5）。用 `std::partial_sort` 而非全排序。
+
+**为什么 / 何时用**：只要前 K 名时，全排序（`sort`，O(N log N)）是浪费——`partial_sort` 只保证前 K 个有序、其余乱序，复杂度 O(N log K)。1000 选 5 差出两个量级。做法是排「索引」而非排概率本身（避免丢失「第几类」这个信息）：
+
+```cpp
+std::vector<int> idx(probs.size());
+std::iota(idx.begin(), idx.end(), 0);                  // idx = 0,1,2,...
+std::partial_sort(idx.begin(), idx.begin() + k, idx.end(),
+                  [&](int a, int b){ return probs[a] > probs[b]; });  // 按概率降序排索引
+```
+
+**坑**：`k` 要先 `std::min(k, N)` 夹一下——请求的 K 超过类别数时 `idx.begin()+k` 越界。比较器用 `>`（降序）才是「最大的 K 个」，写成 `<` 会取到最小的 K 个且不报错（silent bug）。
+
+> 实战出处：`02_Inference_Analysis/w15_classify_pipeline/notes.md`（后处理节，commit 251f70d）
