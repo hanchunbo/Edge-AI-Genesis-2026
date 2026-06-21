@@ -1,13 +1,11 @@
-// Copyright 2026 Edge-AI-Genesis
+// SPDX-License-Identifier: MIT
 //
-// ============================================================================
 // 文件功能：BGR→Gray 多版实现（无 main，编译为静态库供 bench 和 test 链接）
 //   V1：双层循环 + .ptr<T>()      — 展示 step/stride 内存布局
 //   V2：isContinuous() 单层展开   — 连续内存优化
 //   V3：std::mdspan (C++23)       — 统一多维视图抽象
 //   V4：AVX2 SIMD                 — 每批 8 像素向量化（P1 修复）
 //   BgrToNormCHW：float32 CHW 输出 — 推理引擎标准输入（P1 修复）
-// ============================================================================
 
 // [Legacy C++11/17]: 直接用二维下标 mat.at<uchar>(r, c*3+ch) 访问像素，
 //                   每次调用都有边界检查开销，且无法表达 HWC/CHW 内存语义。

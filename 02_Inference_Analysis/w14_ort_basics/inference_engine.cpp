@@ -1,8 +1,6 @@
-// Copyright 2026 Edge-AI-Genesis
+// SPDX-License-Identifier: MIT
 //
-// ============================================================================
 // 文件功能：W14 InferenceEngine 类实现 —— 详见 inference_engine.hpp。
-// ============================================================================
 
 #include "inference_engine.hpp"
 

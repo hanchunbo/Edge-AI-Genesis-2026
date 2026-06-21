@@ -1,8 +1,6 @@
-// Copyright 2026 Edge-AI-Genesis
+// SPDX-License-Identifier: MIT
 //
-// ============================================================================
 // 文件功能：fixed_lab 公开接口声明（供 GTest 引用）
-// ============================================================================
 
 #ifndef LINUX_CPP_FOUNDATIONS_W11_DEBUGGING_FIXED_LAB_HPP_
 #define LINUX_CPP_FOUNDATIONS_W11_DEBUGGING_FIXED_LAB_HPP_

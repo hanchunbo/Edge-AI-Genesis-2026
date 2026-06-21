@@ -1,10 +1,8 @@
-// Copyright 2026 Edge-AI-Genesis
+// SPDX-License-Identifier: MIT
 //
-// ============================================================================
 // 文件功能：W11 调试实验室 —— 修复后的版本
 //           对应 buggy_lab.cpp 中三个 Bug 的修复实现，供 GTest 验证和
 //           Valgrind 验证使用。
-// ============================================================================
 //
 // 修复对照：
 //   Bug 1 修复：SimulateFrameProcessing → 改用 std::vector<uint8_t> RAII 管理

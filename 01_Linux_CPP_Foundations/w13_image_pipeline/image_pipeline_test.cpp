@@ -1,10 +1,8 @@
-// Copyright 2026 Edge-AI-Genesis
+// SPDX-License-Identifier: MIT
 //
-// ============================================================================
 // 文件功能：ImagePipeline 单元测试（GTest）
 //   覆盖构造/查询、Gray/Tensor 输出格式、LetterboxInfo、并发完整性、
 //   TimingReport 统计、生命周期控制（Shutdown/Reset/WaitForAll）等核心路径。
-// ============================================================================
 
 #include "image_pipeline.hpp"
 

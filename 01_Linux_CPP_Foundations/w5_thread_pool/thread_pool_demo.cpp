@@ -1,9 +1,7 @@
-// Copyright 2026 Edge-AI-Genesis
+// SPDX-License-Identifier: MIT
 //
-// ============================================================================
 // 文件功能：线程池演示程序，展示 Submit / SubmitWithToken / WaitForAll
 // 等核心接口
-// ============================================================================
 
 #include "thread_pool.hpp"
 

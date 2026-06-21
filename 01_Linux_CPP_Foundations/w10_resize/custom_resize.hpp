@@ -1,9 +1,7 @@
-// Copyright 2026 Edge-AI-Genesis
+// SPDX-License-Identifier: MIT
 //
-// ============================================================================
 // 文件功能：自定义图像 Resize 算子接口声明
 //           V1 最近邻 / V2 双线性（定点加速）/ V3 Letterbox（YOLO 预处理）
-// ============================================================================
 
 #ifndef LINUX_CPP_FOUNDATIONS_W10_RESIZE_CUSTOM_RESIZE_HPP_
 #define LINUX_CPP_FOUNDATIONS_W10_RESIZE_CUSTOM_RESIZE_HPP_

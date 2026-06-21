@@ -1,8 +1,6 @@
-// Copyright 2026 Edge-AI-Genesis
+// SPDX-License-Identifier: MIT
 //
-// ============================================================================
 // 文件功能：W7 演示程序 —— 验证 PUBLIC include 自动继承，无需手动指定头文件路径
-// ============================================================================
 
 // 关键演示点：
 //   app/CMakeLists.txt 只写了 target_link_libraries(w7_app PRIVATE

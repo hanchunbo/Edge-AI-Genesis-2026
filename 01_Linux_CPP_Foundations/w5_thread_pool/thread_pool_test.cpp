@@ -1,5 +1,6 @@
-// Copyright 2026 Edge-AI-Genesis
-// ThreadPool GTest 测试 - 验证并行执行、生命周期管理和 C++20 特性
+// SPDX-License-Identifier: MIT
+//
+// 文件功能：ThreadPool GTest 测试 - 验证并行执行、生命周期管理和 C++20 特性
 
 #include "thread_pool.hpp"
 

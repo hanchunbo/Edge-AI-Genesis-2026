@@ -1,8 +1,6 @@
-// Copyright 2026 Edge-AI-Genesis
+// SPDX-License-Identifier: MIT
 //
-// ============================================================================
 // 文件功能：W15 分类预处理 —— cv::Mat(BGR) 转 ImageNet 归一化 CHW float 张量。
-// ============================================================================
 
 #ifndef EDGE_AI_GENESIS_2026_W15_PREPROCESS_HPP_
 #define EDGE_AI_GENESIS_2026_W15_PREPROCESS_HPP_

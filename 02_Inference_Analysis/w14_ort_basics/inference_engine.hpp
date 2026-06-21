@@ -1,9 +1,7 @@
-// Copyright 2026 Edge-AI-Genesis
+// SPDX-License-Identifier: MIT
 //
-// ============================================================================
 // 文件功能：W14 InferenceEngine 类声明 —— RAII 封装 ONNX Runtime C++ Session，
 //           支持模型加载、I/O 元数据查询、零拷贝输入推理。
-// ============================================================================
 
 #ifndef EDGE_AI_GENESIS_2026_W14_INFERENCE_ENGINE_HPP_
 #define EDGE_AI_GENESIS_2026_W14_INFERENCE_ENGINE_HPP_

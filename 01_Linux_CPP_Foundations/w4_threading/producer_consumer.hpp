@@ -1,8 +1,6 @@
-// Copyright 2026 Edge-AI-Genesis
+// SPDX-License-Identifier: MIT
 //
-// ============================================================================
 // 文件功能：生产者-消费者核心类声明（从 producer_consumer.cpp 提取）
-// ============================================================================
 
 #ifndef W4_THREADING_PRODUCER_CONSUMER_HPP_
 #define W4_THREADING_PRODUCER_CONSUMER_HPP_

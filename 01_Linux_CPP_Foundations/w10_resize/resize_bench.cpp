@@ -1,8 +1,6 @@
-// Copyright 2026 Edge-AI-Genesis
+// SPDX-License-Identifier: MIT
 //
-// ============================================================================
 // 文件功能：Resize 算子 benchmark，对比 V1/V2/V3 与 cv::resize 的耗时
-// ============================================================================
 
 #include "custom_resize.hpp"
 

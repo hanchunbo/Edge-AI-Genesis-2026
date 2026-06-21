@@ -1,10 +1,8 @@
-// Copyright 2026 Edge-AI-Genesis
+// SPDX-License-Identifier: MIT
 //
-// ============================================================================
 // 文件功能：ImagePipeline 类实现
 //   核心路径：SubmitBatch → worker 线程 → ProcessGray/ProcessTensor →
 //   RecordTiming
-// ============================================================================
 
 #include "image_pipeline.hpp"
 

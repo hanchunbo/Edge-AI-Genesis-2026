@@ -1,8 +1,6 @@
-// Copyright 2026 Edge-AI-Genesis
+// SPDX-License-Identifier: MIT
 //
-// ============================================================================
 // 文件功能：AI 模型文件扫描器类声明（从 model_scanner.cpp 提取）
-// ============================================================================
 
 #ifndef W3_FILESYSTEM_MODEL_SCANNER_HPP_
 #define W3_FILESYSTEM_MODEL_SCANNER_HPP_

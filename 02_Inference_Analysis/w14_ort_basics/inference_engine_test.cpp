@@ -1,12 +1,10 @@
-// Copyright 2026 Edge-AI-Genesis
+// SPDX-License-Identifier: MIT
 //
-// ============================================================================
 // 文件功能：W14 InferenceEngine GTest 单测 —— 覆盖错误路径、Env 单例、
 //           以及依赖 MobileNetV2 模型的加载 / I/O 元数据 / 零拷贝推理。
 //
 // 模型路径由 CMake 编译期常量 W14_MODEL_PATH 提供（见同目录 CMakeLists.txt）。
 // 模型未下载时，依赖模型的测试用 GTEST_SKIP() 跳过，不算失败。
-// ============================================================================
 
 #include "inference_engine.hpp"
 

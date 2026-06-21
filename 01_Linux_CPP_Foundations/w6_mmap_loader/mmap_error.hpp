@@ -1,8 +1,6 @@
-// Copyright 2026 Edge-AI-Genesis
+// SPDX-License-Identifier: MIT
 //
-// ============================================================================
 // 文件功能：mmap 加载器错误类型定义
-// ============================================================================
 
 #ifndef W6_MMAP_LOADER_MMAP_ERROR_HPP_
 #define W6_MMAP_LOADER_MMAP_ERROR_HPP_

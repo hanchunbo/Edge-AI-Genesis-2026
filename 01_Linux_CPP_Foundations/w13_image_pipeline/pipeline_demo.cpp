@@ -1,13 +1,11 @@
-// Copyright 2026 Edge-AI-Genesis
+// SPDX-License-Identifier: MIT
 //
-// ============================================================================
 // 文件功能：W13 ImagePipeline 演示程序
 //   场景 A：线程数扩展性 benchmark（100 帧，1/2/4/N 线程）
 //   场景 B：Gray vs Tensor 延迟分布对比（P50/P95/P99）
 //   场景 C：LetterboxInfo 数值验证（展示检测框反算公式）
 //
 //   输出可直接重定向到 docs/benchmarks/Q1_week_13.md 作为 Q2 基准数据。
-// ============================================================================
 
 #include "image_pipeline.hpp"
 

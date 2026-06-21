@@ -1,9 +1,7 @@
-// Copyright 2026 Edge-AI-Genesis
+// SPDX-License-Identifier: MIT
 //
-// ============================================================================
 // 文件功能：W15 Classifier 编排类 —— 串联预处理、W14 推理、后处理，
 //           对外提供「图片 -> Top-K 分类结果」一站式接口。
-// ============================================================================
 
 #ifndef EDGE_AI_GENESIS_2026_W15_CLASSIFIER_HPP_
 #define EDGE_AI_GENESIS_2026_W15_CLASSIFIER_HPP_

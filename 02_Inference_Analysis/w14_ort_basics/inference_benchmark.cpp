@@ -1,6 +1,5 @@
-// Copyright 2026 Edge-AI-Genesis
+// SPDX-License-Identifier: MIT
 //
-// ============================================================================
 // 文件功能：W14.5 推理延迟基准 —— 预热后多次计时取均值/最小值，量化单次推理
 //           耗时，支持 CPU / CUDA EP 对比。
 //
@@ -8,7 +7,6 @@
 //   w14_inference_benchmark [--model <path>] [--cuda] [--warmup N] [--iters N]
 //   预热（默认 20 次）丢弃，规避 GPU 冷启动（kernel 加载 / cuDNN
 //   autotune）虚高。
-// ============================================================================
 
 #include "inference_engine.hpp"
 

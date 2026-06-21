@@ -1,8 +1,6 @@
-// Copyright 2026 Edge-AI-Genesis
+// SPDX-License-Identifier: MIT
 //
-// ============================================================================
 // 文件功能：W15 分类后处理 —— softmax、Top-K 选择、ImageNet 标签加载与映射。
-// ============================================================================
 
 #ifndef EDGE_AI_GENESIS_2026_W15_POSTPROCESS_HPP_
 #define EDGE_AI_GENESIS_2026_W15_POSTPROCESS_HPP_

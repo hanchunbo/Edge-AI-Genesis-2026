@@ -1,13 +1,11 @@
-// Copyright 2026 Edge-AI-Genesis
+// SPDX-License-Identifier: MIT
 //
-// ============================================================================
 // 文件功能：W14 ORT 基础闭环 demo —— 加载 ONNX 模型、打印 I/O 节点元数据、
 //           生成随机输入、跑一次推理、打印输出 shape 与 Top-1 索引。
 //
 // 用法：
 //   w14_ort_basics_demo [--model <path>]
 //   默认模型路径：02_Inference_Analysis/w14_ort_basics/models/mobilenetv2.onnx
-// ============================================================================
 
 #include "inference_engine.hpp"
 

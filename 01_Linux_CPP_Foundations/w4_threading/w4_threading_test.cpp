@@ -1,8 +1,6 @@
-// Copyright 2026 Edge-AI-Genesis
+// SPDX-License-Identifier: MIT
 //
-// ============================================================================
 // 文件功能：SemaphoreRingBuffer / SimulatedImage 单元测试
-// ============================================================================
 
 #include "producer_consumer.hpp"
 

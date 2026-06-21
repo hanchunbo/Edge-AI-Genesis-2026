@@ -1,8 +1,6 @@
-// Copyright 2026 Edge-AI-Genesis
+// SPDX-License-Identifier: MIT
 //
-// ============================================================================
 // 文件功能：SafeTensorBuffer 单元测试
-// ============================================================================
 
 #include "safe_tensor_buffer.hpp"
 

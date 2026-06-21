@@ -1,8 +1,6 @@
-// Copyright 2026 Edge-AI-Genesis
+// SPDX-License-Identifier: MIT
 //
-// ============================================================================
 // 文件功能：W15 Classifier 实现 —— 详见 classifier.hpp。
-// ============================================================================
 
 #include "classifier.hpp"
 
