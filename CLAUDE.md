@@ -5,19 +5,13 @@
 
 ## 当前进度
 
-**当前处于 Q2 W15（分类推理端到端闭环）已完成，W1-W14 全部完成，W14.5（CUDA EP）已完成。W15 新建 `02_Inference_Analysis/w15_classify_pipeline/`（命名空间 w15）：分类预处理（resize/centercrop/ImageNet 归一化/CHW）+ 后处理（softmax/Top-K/标签）+ Classifier 编排类复用 W14 InferenceEngine，真实图端到端验证通过（Samoyed 0.65）。W14.5：InferenceEngine 加可选 CUDA EP（默认 CPU，不可用时整段 Session 优雅回退，ActiveEp()/EpFallbackReason() 查状态），本地 RTX 3060 + CUDA 12.3 + cuDNN 9 + ORT GPU 1.26 实测 ActiveEp()==kCuda，CPU 环境用例优雅跳过；安装与排障见 README「W14.5 可选：CUDA EP」节。遗留：ResNet18 对比、VPS CPU EP 环境（均待定）。**
-每开始新的 week，必须更新此处的进度描述。
+**Q2 W15（分类推理端到端闭环）已完成；W1–W14 + W14.5（CUDA EP）全部完成。各周细节见对应模块 `notes.md`，可复用概念见 `docs/notes/`；遗留 ResNet18 对比（降级可选）、VPS CPU EP 环境（待定）。**
+每开始新的 week，必须更新此处的进度描述（一句话：当前周 + 状态 + 遗留，细节进模块 notes）。
 
 ## Build（构建速查）
 
-详细命令见 `README.md` Quick Start 节（含离线/ASAN/TSAN 场景）。常用命令：
-
-```bash
-cmake -B build -S . -DCMAKE_CXX_COMPILER=g++-15 -G Ninja  # 首次配置（Ninja 必须，C++20 模块不支持 Unix Makefiles）
-cmake --build build --target <目标名> -j$(nproc)            # 编译当前周目标
-ctest --test-dir build -R "W9_" --output-on-failure        # 当前周测试
-find . -maxdepth 3 -regex '.*0[1-4]_.*' \( -name "*.cpp" -o -name "*.hpp" \) | xargs clang-format-21 --dry-run --Werror  # 格式检查（CI 强制，必须用 v21）
-```
+编译 / 测试 / 格式检查命令见 `README.md` Quick Start 节（含离线/ASAN/TSAN 场景）；
+工具链约束见 C++ Standards 节（必须 Ninja）与 Commit Checklist 节（必须 clang-format-21）。
 
 > 查目标名：`cmake --build build --target help 2>/dev/null | grep "w[0-9]"`
 
@@ -29,7 +23,15 @@ find . -maxdepth 3 -regex '.*0[1-4]_.*' \( -name "*.cpp" -o -name "*.hpp" \) | x
 **周次模块**（如 `w9_opencv_optimized/`）各自有独立 `CMakeLists.txt`，
 从根目录通过 `add_subdirectory` 引入，使用独立命名空间（`w1`、`w2`… `w9`）。
 
-**分支命名**：`dev-W{N}-{Feature}-chunbo`（周次工作）或 `dev-{topic}-chunbo`（非周次的工程 / 规范 / 修复）。合入流程见下方 「Branch & Merge Policy」 节。
+**开发分支**：日常直接在 `dev` 上开发（不再开 feature 分支）。合入 `main` 的流程与铁律见下方 「Branch & Merge Policy」 节。
+
+### Notes 知识库分工（周笔记 vs 主题库）
+
+- **周笔记**（`wXX/notes.md`）：模块专属——概述、Mermaid 图、本模块设计决策、踩坑（带 commit）、测试/基准、编译运行命令。
+- **主题库**（`docs/notes/*.md`）：可复用概念——按主题组织，三段式（是什么 / 为什么 / 坑 + 实战出处），格式与索引见 `docs/notes/README.md`。
+- **判定**：这段话离开本模块代码还成立吗？成立 → 主题库；只对本模块有意义 → 周笔记。
+- **首次即入库**：可复用概念**首次出现就直接写进主题库**（不在周笔记暂存、不批量迁移）；周笔记只留「本模块怎么用」+ 向上链接。
+- **单一事实源**：同一概念正文只在主题库一份；双向链接（周笔记 → 主题库看概念，主题库 → 周笔记看 Mermaid / 语境）。
 
 ## C++ Standards and Conventions（C++ 规范）
 
@@ -38,23 +40,9 @@ find . -maxdepth 3 -regex '.*0[1-4]_.*' \( -name "*.cpp" -o -name "*.hpp" \) | x
 - **构建工具**：必须用 Ninja（`-G Ninja`），C++20 具名模块不支持 Unix Makefiles 生成器。
 - **风格**：Google C++ Style Guide（2026 增强版），由 `.clang-format` 和 `.clang-tidy` 自动检查。
 
-### Naming（命名规范，来自 .clang-tidy）
+### Naming（由 .clang-tidy 强制，下列为易写错的非常规约定）
 
-| 元素 | 规范 | 示例 |
-|---------------|---------------------------|----------------------|
-| 类名 | 大驼峰 | `SafeTensorBuffer` |
-| 函数名 | 大驼峰 | `GetThreadCount()` |
-| 普通变量 | 下划线小写 | `thread_count` |
-| 成员变量 | 下划线小写 + 末尾 `_` | `data_` |
-| 常量 | `k` 前缀 + 大驼峰 | `kMaxBufferSize` |
-| 命名空间 | 全小写 | `w5` |
-
-### Formatting（格式规范，来自 .clang-format）
-
-- 缩进 2 空格，禁止 Tab，每行最多 80 字符
-- K&R 风格大括号（开括号不换行）
-- 指针靠左：`int* x`，不写 `int *x`
-- `#include` 顺序：项目头文件（`"..."`）在前，标准库（`<...>`）在后
+类名/函数名大驼峰（`GetThreadCount()`）、普通变量 snake_case、成员变量末尾 `_`（`data_`）、常量 `k` 前缀大驼峰（`kMaxBufferSize`）、命名空间全小写（`w5`）。格式（缩进/列宽/括号/指针位/include 序）由 `.clang-format` 自动处理，无需记忆。
 
 ### Resource Constraints（边缘 AI 资源约束）
 
@@ -119,43 +107,32 @@ find . -maxdepth 3 -regex '.*0[1-4]_.*' \( -name "*.cpp" -o -name "*.hpp" \) | x
    find . -maxdepth 3 -regex '.*0[1-4]_.*' \( -name "*.cpp" -o -name "*.hpp" \) | xargs clang-format-21 --dry-run --Werror
    ```
 
-2. **文档进度同步**：确认 `README.md`、`docs/Q1.md`、`docs/tech-debt.md`、模块 `notes.md` 进度与代码一致，**不符则先更新再 commit**。
+2. **文档进度同步**：确认 `README.md`、`docs/Q2.md`、`docs/tech-debt.md`、模块 `notes.md` 进度与代码一致，**不符则先更新再 commit**。
 
 3. **环境依赖同步**：若本次开发安装了新工具（编译器、调试器、覆盖率工具等），必须同步更新 `README.md` 的「前提条件」安装命令。目的：VPS 上积累的隐式环境依赖若不记录，换机器（如 WSL、CI）时会批量复现已解决的问题。
 
-4. **commit author**：格式为 `hanchunbo <hanchunbo@users.noreply.github.com>`，并附 `Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>`
+4. **commit author**：格式为 `hanchunbo <hanchunbo@users.noreply.github.com>`
 
 ## Branch & Merge Policy（分支与合入流程）
 
-**铁律：Claude 不能未经用户明确许可就把任何分支合入 `main`。**
+**铁律：Claude 不能未经用户明确许可就把任何改动合入 `main`。**
 
-每次代码 / 文档变更必须按下面三段流程走：
+日常**直接在 `dev` 上开发**，分两步：
 
-1. **Feature 分支** — `dev-W{N}-{Feature}-chunbo` 或 `dev-{topic}-chunbo`
-   - 在这里 commit / push 不需要询问
-   - 推到 origin 的同名远端分支即可
+1. **在 `dev` 上 commit / push** — 无需询问
+   - 先 `git fetch origin`，看远端是否有用户直推的提交，避免漏改基线
+   - commit 后 `git push origin dev`
 
-2. **合入 `dev`** — Claude 可以**自动**做（无需询问）
-   - 切到 `dev` → `git pull --ff-only origin dev`（防止远端有用户直推的新提交）
-   - `git merge --ff-only <feature-branch>`
-   - `git push origin dev`
+2. **合入 `main`** — **必须先停下来问用户**
+   - 询问形式：「这批改动已在 dev（commit `xxxxx`），要现在合入 main 吗？」
+   - 用户明确说"合"/"可以"/"go" 才执行；说"先不合"/"留在 dev" → 停在 dev，**绝不自作主张**
 
-3. **合入 `main`** — **必须先停下来问用户**
-   - 询问形式：「W14 这批改动已合到 dev（commit `xxxxx`），要现在合入 main 吗？」
-   - **用户明确说"合"/"可以"/"go" 之后才执行**
-   - 用户说"先不合"/"等等"/"留在 dev" → 停在 dev，**绝对不要自作主张**
+### 为什么 & 注意
 
-### 为什么这么规定
-
-- `main` 是产出快照，用于对外展示；合入意味着 "这版可以对外讲"，需要用户自己评估
-- 此前 W14 三次合并都没问就直推 `main`（commit 2b493b1、98cf25b、75820c6），用户事后才发现并要求加规则
-- 远端 `main` 有 "Changes must be made through a pull request" 保护规则，直推会留 `Bypassed rule violations` 警告，长期不利于审计
-
-### 实践提示
-
-- 同步远端：每次切到 `dev` 后先 `git fetch origin` 看一眼远端是否有用户直推的提交，避免 FF 失败或漏改基线
-- 不绕过钩子：不加 `--no-verify` / `--no-gpg-sign` 等参数；规则触发时 stop & fix
-- 历史已合入 `main` 的部分不回滚 —— 仅约束未来行为
+- `main` 是对外展示的产出快照，合入意味着"这版可以对外讲"，需用户自己评估
+- 远端 `main` 有 "Changes must be made through a pull request" 保护规则，直推会留 `Bypassed rule violations` 警告
+- 不绕过钩子：不加 `--no-verify` / `--no-gpg-sign`；规则触发时 stop & fix
+- 历史已合入 `main` 的部分不回滚——仅约束未来行为
 
 ## CI（持续集成）
 
