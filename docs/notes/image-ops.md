@@ -1,11 +1,12 @@
 # 图像预处理 / 后处理概念详解
 
 > 可复用概念的「主题正文」，复习时进这里读。模块专属的设计/Mermaid/踩坑/测试在周笔记。
-> 来源周：W15（分类端到端，已入）；W9/W10/W13 的双线性插值、Letterbox、坐标对齐、isContinuous 待毕业。
+> 来源周：W15（分类端到端 + ROI/stride，已入）；W9/W10/W13 的双线性插值、Letterbox、坐标对齐待毕业。
 
 ## 目录
 
 - [分类预处理范式（resize 短边 → center-crop）](#分类预处理范式resize-短边--center-crop)
+- [cv::Mat ROI 视图 vs clone（stride / isContinuous）](#cvmat-roi-视图-vs-clonestride--iscontinuous)
 - [ImageNet 归一化](#imagenet-归一化)
 - [BGR ↔ RGB 通道序](#bgr--rgb-通道序)
 - [HWC ↔ CHW 内存布局](#hwc--chw-内存布局)
@@ -26,9 +27,26 @@ const int x = (nw - crop) / 2, y = (nh - crop) / 2;        // 中心裁剪起点
 cropped = resized(cv::Rect(x, y, crop, crop)).clone();
 ```
 
-**坑**：检测任务（YOLO）用的是 **Letterbox**（等比缩放 + 灰边填充，不裁剪）——两套范式不能混用：分类容忍裁掉边缘，检测必须保留全图否则目标框丢失。`cv::Rect` 取的是视图，跨步后续写入要 `.clone()` 拿独立连续内存。
+**坑**：① resize 短边要缩到**比 crop 大一圈**（256 而非 224），留出余量再中心裁 224——裁剪率 256/224≈0.875 是约定常数，对应"切掉四周各 ~12.5% 边缘 + 画面略放大"。直接"短边→224 再裁 224"虽然不变形、能跑，但等于不裁边、看全图，构图和模型 eval 管线（torchvision `Resize(256)+CenterCrop(224)`）不符，Top-1 会有零点几个点的 silent 偏差。256 不是魔法数字，是"resize 尺寸 > crop 尺寸"这一套路的配套值（换模型可能是 `Resize(232)+CenterCrop(224)`）。② 检测任务（YOLO）用的是 **Letterbox**（等比缩放 + 灰边填充，不裁剪）——两套范式不能混用：分类容忍裁掉边缘，检测必须保留全图否则目标框丢失。③ `cv::Rect` 取的是视图，跨步后续写入要 `.clone()` 拿独立连续内存。
 
 > 实战出处：`02_Inference_Analysis/w15_classify_pipeline/notes.md`（预处理节，commit a232ac7）
+
+---
+
+## cv::Mat ROI 视图 vs clone（stride / isContinuous）
+
+**是什么**：`resized(cv::Rect(x, y, w, h))` 不返回新图，而是一个 **ROI 视图**（Region Of Interest，从父图里框出的子区域）。要分清三个东西：父图（整张 `resized`）、ROI（框出的子块，借父图内存）、`clone()` 后的独立图。ROI 与父图**共享同一块内存**，只改了起点指针和逻辑宽高，**行跨步 `step` 仍继承父图**。
+
+**为什么 / 何时用**：`Mat` 定位第 r 行靠的是 `step`（每行字节数），不是逻辑宽度。父图 341 宽时 `step=341×3=1023`；从中框出 224 宽的 ROI，`step` 仍是 1023，于是 ROI 每行有效数据之间**夹着被裁掉的列**——内存一段段断开，`isContinuous()` 为 `false`。`clone()` 会**另开一块大小刚好 = 224×(224×3) 的新内存**（`step=672`，正好一行无余量），把 ROI 逐行紧凑拷过去，行间无空隙 → `isContinuous()` 变 `true`，整块可当一维连续数组遍历。判定式：`isContinuous()` ⟺ `step == 宽×通道`。
+
+```cpp
+cv::Mat roi = resized(cv::Rect(58, 16, 224, 224));  // 视图，step=1023，不连续
+cv::Mat cropped = roi.clone();                      // 新内存，step=672，连续
+```
+
+**坑**：① 不 `.clone()` 直接把 ROI 当连续 buffer 遍历（如按 CHW 顺序写张量），会读到本该被裁掉的列，数据错位且不报错——又一个 silent bug。② ROI 生命周期绑在父图上：父图析构，ROI 悬空。③ 别把"父图连续"当"ROI 连续"——`resized` 整张是连续的，从它框出的子块才不连续。
+
+> 实战出处：`02_Inference_Analysis/w15_classify_pipeline/notes.md`（预处理节 center-crop，commit a232ac7）
 
 ---
 
