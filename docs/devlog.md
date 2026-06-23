@@ -12,6 +12,51 @@
 
 ---
 
+## 2026-06-22（Session 5 — W14 源码精读 + benchmark 实操，W15 启动前）
+
+### 操作摘要
+- 复盘 W14：逐段精读 `InferenceEngine` 构造函数、`ort_basics_demo.cpp`、`inference_benchmark.cpp`；跑通 demo + CPU/GPU benchmark 对比；为进入 W15 做知识体检
+- **无代码改动，纯复习 + 实操**；本条主要沉淀今日暴露的三处理解短板
+- 沉淀产物：`docs/interview_faq.md` 新增 Q40-Q42（W14 推理闭环复盘）、`docs/README.md` FAQ 计数 39→42
+
+### 今日深讲内容（构造函数 + demo 数据流）
+- **构造函数四阶段**：① 路径预检（`filesystem::exists` 提前给友好错误）→ ② 全局 `Ort::Env`（**必须先于 CUDA append**，否则默认日志器未注册抛 "DefaultLogger but none registered"，CUDA 可用却被误判回退；该 bug 只在进程内首次构造复现，单测因前序用例已建 Env 而假绿）→ ③ EP **两级优雅回退**（CUDA 失败静默记 `ep_fallback_reason_` 降级，CPU 保底也失败才真抛 `runtime_error`）→ ④ I/O 元数据一次性缓存
+- **name 缓存 vs typeinfo(shape/dtype) 缓存分工**：`name` 给 `Run()` 按名指定喂/取哪个口（ORT Run API 强制要 `const char*` 名字数组）；`shape`/`dtype` 给调用方做输入准备 + 校验 + 输出解析；都是热路径外缓存，避免 `Run` 反复触发 ORT 内部分配
+- **demo 数据驱动推导链（133-135）**：声明形状 `{-1,3,224,224}` →`ResolveDynamicShape` 动态维消 1→`ElementCount` 连乘 150528→`vector<float>` 分配连续 buffer；换输入尺寸不同的模型零改动
+- **输出解析（152-170）**：`Ort::Value&` 引用避免拷贝 → 取 `GetTensorData<float>()` 裸指针 + shape + count → `max_element` + 指针差做 argmax → 打印 Top-1；整段被 `:102` 的 try/catch 罩住，退出码 0(help)/1(运行失败)/2(参数错) 分语义
+
+### 今日暴露的短板 / 困惑（已提成 FAQ Q40-Q42）
+- **分类输出语义不清（重点短板）**：起初不理解「1000 个 logit」= ImageNet 1000 类的原始得分；模型对输入只做机械前向，不在乎真图还是噪声；argmax 取最大 logit 的索引 = 预测类别。本 demo 喂固定种子随机数，故 Top-1=892 **无现实语义**，只验证链路通。logit 未过 softmax——只为比大小找 Top-1 不需要 softmax → **Q40**
+- **`static_cast<size_t>` 必要性**：71 行 `int64_t`→`size_t` 不只是风格——消 signed→unsigned 隐式转换告警（CI 零容忍）、对齐 vector/size 类型、跨平台计算一致；负维安全性靠上游 `ResolveDynamicShape` 已消负维这个**隐式契约**兜底 → **Q41**
+- **`ActiveEp()==CUDA` ≠ 全图在 GPU**：benchmark 那条 `VerifyEachNodeIsAssignedToAnEp` 黄色警告印证 `.hpp:52-53` 注释——ORT 故意把 shape 类小算子留 CPU；逐算子 kernel placement 是 W16/W18 profiling 的事 → **Q42**
+
+### 实操记录
+- **demo（CPU）**：MobileNetV2 输入 `[-1,3,224,224]`→解析 `[1,3,224,224]` 150528 元素 → 输出 `[1,1000]` → Top-1 索引 892 (logit=5.2391，随机输入无语义，固定种子可复现)
+- **benchmark CPU vs GPU**（warmup 20 / iters 100，取 min 最接近真实算力）：
+  - CPU：avg 2.57ms / **min 2.25** / max 3.11
+  - CUDA：avg 1.98ms / **min 1.49** / max 4.50
+  - 结论：GPU≈**1.5× CPU**，并非数量级提升。原因：MobileNetV2 小模型 + batch=1 算力需求低、H2D/D2H 搬运开销、非全图上 GPU；GPU 的 max 抖动反而更大（偶发 kernel 调度/同步）
+
+### 命令备忘
+```bash
+# demo（CPU 构建，从仓库根跑，默认模型路径相对根目录）
+./build/02_Inference_Analysis/w14_ort_basics/w14_ort_basics_demo
+# benchmark CPU vs GPU 对比（GPU 用 build-gpu + --cuda）
+./build/02_Inference_Analysis/w14_ort_basics/w14_inference_benchmark
+./build-gpu/02_Inference_Analysis/w14_ort_basics/w14_inference_benchmark --cuda
+```
+
+### 待办
+- **进入 W15（分类推理端到端闭环）**：真实图片预处理（resize/归一化）+ ImageNet 标签映射，把今天「Top-1 索引无语义」补成有语义的类别名；前后处理也会用上构造期缓存的 shape/dtype
+- （承前）ResNet18 对比、VPS CPU EP 环境
+
+### 关联
+- W14 模块 notes：`02_Inference_Analysis/w14_ort_basics/notes.md`
+- 关联 FAQ：`docs/interview_faq.md` Q40-Q42（W14 推理闭环复盘）
+- 关联前序：本日志 2026-05-25 条（W14 闭环落地）
+
+---
+
 ## 2026-05-25（Session 4 — W14 ONNX Runtime 闭环）
 
 ### 操作摘要
