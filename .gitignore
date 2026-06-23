@@ -46,7 +46,10 @@ build/
 build-gpu/
 
 # IDE
-.vscode/
+.vscode/*
+# 但共享这两个可移植配置：IntelliSense 数据库指向 + 关闭 CMake Tools 自动配置
+!.vscode/c_cpp_properties.json
+!.vscode/settings.json
 .idea/
 
 # Daily test / scratch photos (local only, not committed)
