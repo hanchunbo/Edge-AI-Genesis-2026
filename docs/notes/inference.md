@@ -130,6 +130,8 @@ Ort::Value input_tensor = Ort::Value::CreateTensor<float>(
 
 **坑**：CPU 包（`onnxruntime-linux-x64`）不含 `libonnxruntime_providers_cuda.so`，用它跑 `--cuda` 必然回退（报 "Failed to load shared library"）。要真上 GPU 须用 **GPU 包**配置，且 build 目录配置/编译/运行三步前后一致。回退判断要 try 包住「append + Session 创建」整体（失败可能在 append，也可能在 cudnn/cublas 的 dlopen）。
 
+**`ActiveEp()==CUDA` ≠ 整张图都在 GPU 跑**：它只表示 Session 成功**请求/注册**了 CUDA EP，不证明每个算子都落到 GPU。ORT 会**故意**把 shape 相关的小算子留在 CPU（搬到 GPU 反而更慢），运行时打印 `VerifyEachNodeIsAssignedToAnEp` 警告就是在说这件事——所以一张图常是 GPU/CPU 混合执行，逐算子的 kernel placement 严格确认是后续 profiling（W16/W18）的任务。这也解释了 W14.5 benchmark 实测 GPU 只比 CPU 快约 **1.5×**（min 1.49 vs 2.25ms）而非数量级：MobileNetV2 是小模型 + batch=1 算力需求低、有 H2D/D2H 搬运开销、且非全图上 GPU。结论：小模型/小 batch GPU 收益有限，换大模型/大 batch 才拉得开。
+
 > 实战出处：`02_Inference_Analysis/w14_ort_basics/notes.md`（生命周期时序图 EP 分支 + 编译与运行节 + W14.5 坑）
 
 ---
@@ -168,4 +170,6 @@ std::partial_sort(idx.begin(), idx.begin() + k, idx.end(),
 
 **坑**：`k` 要先 `std::min(k, N)` 夹一下——请求的 K 超过类别数时 `idx.begin()+k` 越界。比较器用 `>`（降序）才是「最大的 K 个」，写成 `<` 会取到最小的 K 个且不报错（silent bug）。
 
-> 实战出处：`02_Inference_Analysis/w15_classify_pipeline/notes.md`（后处理节，commit 251f70d）
+**argmax（Top-1）是 K=1 的退化**：只要最像的那一类时，不必 `partial_sort`，直接 `std::max_element` 找最大 logit 的位置、再用「指针差」得索引即可（`idx = max_it - data`），索引就是预测类别编号。注意两个认知点：① **比大小取 Top-1 不需要先 softmax**——softmax 不改变谁最大，只在要「概率」时才做。② **模型对输入只做机械前向**，不在乎喂的是真图还是噪声；W14 demo 喂固定种子随机数，所以 Top-1 索引**无现实语义**，只验证「推理链路通、输出能解析」——把「链路正确性」和「识别精度」解耦，是先搭骨架的工程节奏。
+
+> 实战出处：`02_Inference_Analysis/w15_classify_pipeline/notes.md`（后处理节，commit 251f70d）；argmax 退化见 `w14_ort_basics/ort_basics_demo.cpp`（`max_element` + 指针差）

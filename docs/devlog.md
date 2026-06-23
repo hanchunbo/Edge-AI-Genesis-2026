@@ -17,7 +17,8 @@
 ### 操作摘要
 - 复盘 W14：逐段精读 `InferenceEngine` 构造函数、`ort_basics_demo.cpp`、`inference_benchmark.cpp`；跑通 demo + CPU/GPU benchmark 对比；为进入 W15 做知识体检
 - **无代码改动，纯复习 + 实操**；本条主要沉淀今日暴露的三处理解短板
-- 沉淀产物：`docs/interview_faq.md` 新增 Q40-Q42（W14 推理闭环复盘）、`docs/README.md` FAQ 计数 39→42
+- **附带修复 study-log 技能与主题库「单一事实源」冲突**：原 study-log 联动只写 FAQ、漏主题库，违反 CLAUDE.md「可复用概念首次即入库主题库」。改为三级路由（先判可复用→主题库唯一正文→FAQ 只留答题角度+链接），并回填今天三概念正文进主题库、FAQ 瘦身
+- 沉淀产物：`docs/notes/inference.md`（EP 加 ActiveEp≠全图、Top-K 加 argmax 退化）、`docs/notes/cpp-core.md`（新增 size_t 小节）、`docs/notes/README.md` 索引、`docs/interview_faq.md` Q40-Q42（瘦身为答题角度+链接）、`docs/README.md` FAQ 计数 39→42、`.claude/skills/study-log/SKILL.md`（第 3 步三级路由 + Common Mistakes）
 
 ### 今日深讲内容（构造函数 + demo 数据流）
 - **构造函数四阶段**：① 路径预检（`filesystem::exists` 提前给友好错误）→ ② 全局 `Ort::Env`（**必须先于 CUDA append**，否则默认日志器未注册抛 "DefaultLogger but none registered"，CUDA 可用却被误判回退；该 bug 只在进程内首次构造复现，单测因前序用例已建 Env 而假绿）→ ③ EP **两级优雅回退**（CUDA 失败静默记 `ep_fallback_reason_` 降级，CPU 保底也失败才真抛 `runtime_error`）→ ④ I/O 元数据一次性缓存
@@ -52,7 +53,8 @@
 
 ### 关联
 - W14 模块 notes：`02_Inference_Analysis/w14_ort_basics/notes.md`
-- 关联 FAQ：`docs/interview_faq.md` Q40-Q42（W14 推理闭环复盘）
+- 概念正文（唯一事实源）：`docs/notes/inference.md`（EP/Top-K）、`docs/notes/cpp-core.md`（size_t）
+- 答题视角：`docs/interview_faq.md` Q40-Q42（已链接主题库，不含概念正文）
 - 关联前序：本日志 2026-05-25 条（W14 闭环落地）
 
 ---

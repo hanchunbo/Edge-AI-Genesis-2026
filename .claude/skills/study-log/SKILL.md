@@ -23,10 +23,12 @@ description: Use when the user finishes a day's study, review, deep-dive, self-t
 
 1. **提炼今天的复习 / 实操要点** —— 回顾本次对话:今天学了 / 做了什么、暴露哪些短板、有哪些实操证据、留下什么待办。**只写有信息量的结论,不复述工具原始输出。**
 2. **追加 dated devlog 条目** —— 按下方模板,把新条目插在「草稿区」分隔线之后、最近一条 `## 日期` 之前(日期倒序,新的在最上)。
-3. **联动更新学习资料** —— 每次都检查 `docs/interview_faq.md` 与 `docs/q1_self_test.md`:
-   - `interview_faq.md`:有可复用的自测复盘点就追加题目,Q 编号接现有最大值;没有就不要写填充题,回报时明确说明未新增 FAQ。
-   - `q1_self_test.md`:更新历史成绩单,并在暴露答案缺口时同步答案区 / 深讲指向。
-   - FAQ 题数变化时同步 `docs/README.md` 计数。
+3. **联动更新学习资料** —— 按下面的**三级路由**分发,核心铁律是**单一事实源:可复用概念正文只进主题库一份**(见 `CLAUDE.md` 的 Notes 知识库分工)。
+   - **先判定有没有「可复用概念」** —— 判据复用 `CLAUDE.md`:「这段话离开本模块代码还成立吗?」成立 → 可复用概念。
+   - **可复用概念 → `docs/notes/` 主题库(唯一正文,首次即入库)**:按主题选对文件(`inference.md` / `cpp-core.md` / `image-ops.md` 等,索引见 `docs/notes/README.md`),用三段式「是什么 / 为什么 / 坑 + 实战出处」写正文。**这是该概念的唯一正文,别处不再复制**。主题库已有该概念就补充/订正,不新开。
+   - **`docs/interview_faq.md`(答题视角,不是概念正文)**:只在**真做了自测 / 暴露答案缺口**、有面试问答价值时追加题目,Q 编号接现有最大值。参考答案写「**答题角度 + 加分回答 + 指向主题库的链接**」,**不重写「是什么/为什么/坑」的概念正文**(那在主题库)。没有就不写填充题,回报时说明未新增 FAQ。
+   - **`docs/q1_self_test.md`**:更新历史成绩单,并在暴露答案缺口时同步答案区 / 深讲指向。
+   - FAQ 题数变化时同步 `docs/README.md` 计数;主题库新增概念时确认 `docs/notes/README.md` 索引表已覆盖。
 4. **commit 到 `dev`** —— 提交全部入库改动,**不改 git config、不 commit 到 main**。提交 author 与 trailer 服从仓库 `CLAUDE.md` 的 Commit Checklist;需要覆盖 author 时用 inline `git -c`。
 
 commit 后,在回复里贴出写入的 devlog 条目全文 + commit hash。
@@ -66,4 +68,6 @@ commit 后,在回复里贴出写入的 devlog 条目全文 + commit hash。
 | 整段工具输出贴进 devlog | 只留结论和关键数据 |
 | 新条目追加到文件末尾 | 日期倒序,插在最新条目之前 |
 | 忘了 interview_faq / q1_self_test 联动 | 按 Workflow 第 3 步检查 |
+| 把概念正文写进 FAQ 长答案 | 概念正文进主题库 `docs/notes/`,FAQ 只留答题角度 + 加分回答 + 链接 |
+| 可复用概念只进 FAQ、漏了主题库 | 先判定可复用 → 首次即入库主题库(唯一正文) |
 | commit 到 main / 改 git config | 一律 `dev`,用 inline `-c` |

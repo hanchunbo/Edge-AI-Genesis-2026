@@ -1265,13 +1265,8 @@ W9 实测 1080P，V3 mdspan：
 
 **考察点**：是否真正理解分类模型的输入输出语义，而不是只会调 API。
 
-**参考答案**：
-MobileNetV2 在 **ImageNet（1000 类）** 上训练，输出形状 `{1,1000}` 的含义是：对这 1000 个类别，每一类给一个**原始得分（logit）**。
-- logit 是**未归一化**的任意实数，谁最大模型就认为图片最像那一类；想变概率要再过 softmax，但**只为找 Top-1 不需要 softmax**（不改变谁最大）。
-- 模型对输入**只做机械的前向计算**——不在乎喂的是真图还是噪声，都按训练好的权重一层层算成 1000 个 logit。
-- `argmax`（代码里 `std::max_element` + 指针差）就是在这 1000 个数里找最大值的**索引**，这个索引 = 模型预测的类别编号。
-
-W14 demo 喂的是**固定种子的随机数**（`std::mt19937 rng{42}`），所以 Top-1=892 这个索引**没有现实语义**——它只证明「模型能加载、推理链路从头跑通、输出能解析、argmax 能取到」这个工程闭环。让索引变成有意义的类别名是 W15 的事（真实图片预处理 + ImageNet 标签表）。
+**答题角度**（概念正文见主题库 [inference.md — Softmax](notes/inference.md#softmax数值稳定版) / [Top-K + argmax 退化](notes/inference.md#top-k-选择partial_sort)）：
+输出 `{1,1000}` = ImageNet 1000 类各一个原始得分（logit，未归一化、比大小才有意义）；argmax 取最大 logit 的索引 = 预测类别。比大小不需要先 softmax。模型对输入只做机械前向，不在乎真图/噪声——W14 demo 喂固定种子随机数，Top-1 索引无现实语义，只验证链路通。
 
 **加分回答**：
 > "固定种子还保证每次跑 Top-1 都是 892、logit 都是 5.2391，可复现，方便比对日志。W14 关心的是『链路通不通』而非『识别准不准』，所以随机输入就够了——把正确性和精度这两件事解耦，是先搭骨架再填肉的工程节奏。"
@@ -1282,11 +1277,8 @@ W14 demo 喂的是**固定种子的随机数**（`std::mt19937 rng{42}`），所
 
 **考察点**：有符号/无符号混用的隐患 + 类型语义意识。
 
-**参考答案**：
-累加器 `n` 是 `size_t`（无符号），而 ONNX 形状元素 `d` 是 `int64_t`（有符号，因为要用 `-1` 表动态维）。三个理由：
-1. **消隐式转换告警**：`n *= d` 会触发 signed→unsigned 隐式转换，项目开 `-Wsign-conversion` + 严格 clang-tidy，CI 对告警零容忍。显式 cast 表明「故意为之」，告警消失。
-2. **类型语义对齐**：结果要喂给 `std::vector<float>(elem_count)`、和 `span.size()` 等，它们都收 `size_t`。「数量/尺寸」本就该用 `size_t`，全程待在无符号尺寸域里。
-3. **跨平台计算一致**：32 位平台上 `size_t`(32) 和 `int64_t`(64) 秩不同，隐式提升规则微妙；显式 cast 把每步钉在 `size_t` 域。
+**答题角度**（概念正文见主题库 [cpp-core.md — 有符号/无符号混用与 size_t](notes/cpp-core.md#有符号无符号混用与-size_t)）：
+三个理由——① 消 signed→unsigned 隐式转换告警（`-Wsign-conversion` + clang-tidy，CI 零容忍）；② 类型语义对齐（`vector(n)`/`size()` 都收 `size_t`，全程待无符号尺寸域）；③ 跨平台计算一致（32 位上 `size_t` 与 `int64_t` 秩不同）。
 
 **加分回答**：
 > "这里转 `size_t` 安全，是因为调用前 `ResolveDynamicShape` 已把所有 `<= 0` 的维消成 1，走到连乘时 `d` 必为正，不会出现负数被转成巨大无符号值的 bug。安全性是靠**调用顺序**保证的，不是 `ElementCount` 自己检查——这是个隐式契约，重构时要小心别把顺序打乱。"
@@ -1297,8 +1289,8 @@ W14 demo 喂的是**固定种子的随机数**（`std::mt19937 rng{42}`），所
 
 **考察点**：不把"EP 注册成功"误读成"全图上 GPU"，理解 ORT 的算子分配。
 
-**参考答案**：
-**不等于。** `ActiveEp()==CUDA` 只表示 Session 成功**请求/注册**了 CUDA EP，不证明每个算子都落到 GPU。那条黄色警告（`Some nodes were not assigned to the preferred execution providers... ORT explicitly assigns shape related ops to CPU`）正是 ORT 在告诉你：它**故意**把 shape 相关的小算子留在 CPU——这类算子搬到 GPU 反而更慢（数据搬运开销 > 计算收益）。所以一张图常是 GPU/CPU 混合执行。逐算子的 kernel placement 严格确认是 W16/W18 profiling 的任务。
+**答题角度**（概念正文见主题库 [inference.md — EP 优雅回退 + ActiveEp≠全图](notes/inference.md#execution-provider-与优雅回退)）：
+不等于。`ActiveEp()==CUDA` 只表示 Session 注册成功了 CUDA EP；ORT 会故意把 shape 类小算子留 CPU（搬 GPU 反而慢），`VerifyEachNodeIsAssignedToAnEp` 警告就是说这事，故常是混合执行。逐算子 placement 留 W16/W18 profiling。
 
 **加分回答**：
 > "这也部分解释了 benchmark 实测 GPU 只比 CPU 快约 1.5×（min 1.49 vs 2.25ms）：① MobileNetV2 是移动端小模型、batch=1，算力需求低，GPU 并行优势发挥不出来；② 有 H2D/D2H 数据搬运开销；③ 图里本来就有一部分算子在 CPU 上。结论是『换大模型/大 batch 才拉得开差距』——benchmark 的价值就是把这个判断从拍脑袋变成可信数字，而不是想当然以为上 GPU 就快一个数量级。"

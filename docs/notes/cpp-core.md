@@ -7,6 +7,7 @@
 
 - [static 的四种用法](#static-的四种用法)
 - [ABI vs API](#abi-vs-api)
+- [有符号/无符号混用与 size_t](#有符号无符号混用与-size_t)
 
 > 说明：本文件目前先收录 W14 答疑中梳理的 `static` 与 `ABI`；RAII、移动语义、`std::span`、
 > Concepts、`std::expected`、`std::format` 等按方案甲后续从各周笔记批量毕业进来。
@@ -48,3 +49,16 @@
 
 > 实战出处：`02_Inference_Analysis/w14_ort_basics/notes.md`（设计决策 2 零拷贝，`const_cast` 注）
 > 关联：[零拷贝张量输入](inference.md#零拷贝张量输入--buffer-存活契约)
+
+---
+
+## 有符号/无符号混用与 size_t
+
+**是什么**：把「数量 / 尺寸 / 下标」这类**非负**的量统一用无符号的 `size_t` 表达，而不是有符号的 `int` / `int64_t`。混用两者（如 `size_t n; int64_t d; n *= d;`）会触发隐式的有符号↔无符号转换。
+
+**为什么 / 何时用**：① **类型语义对齐**——标准库里所有「大小」接口（`vector(n)`、`.size()`、`sizeof`）收的都是 `size_t`，累加器从一开始就用它，全程待在无符号尺寸域，不用回头再转。② **消隐式转换告警**——`-Wsign-conversion` + 严格 clang-tidy 下隐式 signed→unsigned 会报警告（CI 零容忍）；显式 `static_cast<size_t>(d)` 表明「故意为之」，告警消失、意图自证。③ **跨平台一致**——32 位平台 `size_t`(32) 与 `int64_t`(64) 秩不同，隐式提升规则微妙；显式 cast 把每步钉在 `size_t` 域。
+
+**坑**：显式转换**不消除负数风险**——若 `d` 真为负（如 ONNX 动态维 `-1`），转成 `size_t` 会变成一个巨大的无符号值，连乘后彻底失真。所以转换的**安全性靠调用顺序兜底**：必须在上游先把负值消掉（如 W14 `ResolveDynamicShape` 把 `<= 0` 的维替换成 1）才轮到连乘。这是个**隐式契约**，重构时若打乱顺序、让负值漏到 `static_cast` 这一步，不会报错但结果错——典型 silent bug。
+
+> 实战出处：`02_Inference_Analysis/w14_ort_basics/ort_basics_demo.cpp`（`ElementCount` 连乘，`static_cast<size_t>(d)`）
+> 关联：[shape / tensor / Ort::Value 三者关系](inference.md#shape--tensor--ortvalue-三者关系)（动态维 -1 的来历）
