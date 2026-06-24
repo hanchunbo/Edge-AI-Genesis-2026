@@ -126,11 +126,12 @@ cmake --build build --target w16_yolo_demo
 
 | 场景 | P50 | 解读 |
 |---|---|---|
-| CPU batch=1 Run | 44.1ms | 基线 |
-| CUDA batch=1 Run | 5.85ms | 上 GPU EP，单帧 **7.5×** |
-| CUDA batch=1 IOBinding | 5.60ms | D2H 固定开销占比最大处，+4~9% |
-| CUDA batch=4 | 15.5ms / 258 img/s | batch 提吞吐不提延迟（单路实时选 batch=1）|
-| IntraOp 1→2→4 | 102→64→51ms | 次线性，单算子内并行受带宽限 |
+| CPU 纯推理 batch=1 | 44ms | 基线 |
+| CUDA 纯推理 batch=1 | 5.9ms | 上 GPU EP，纯推理 ~7× |
+| **CUDA 端到端 batch=1** | **10.6ms / 94 FPS** | 含前后处理（pre/post ~22%），**这才是真实 FPS** |
+| CUDA IOBinding | ±0.4ms | **噪声级**，多 run 优劣翻转，别当稳定优化项 |
+| CUDA batch=4 | 16ms / 250 img/s | batch 提吞吐不提延迟（单路实时选 batch=1）|
+| IntraOp 1→2→4 | 102→62→49ms | 次线性，单算子内并行受带宽限 |
 
 概念（IntraOp vs InterOp、IOBinding）见 inference.md。
 

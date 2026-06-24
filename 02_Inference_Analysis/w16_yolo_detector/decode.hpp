@@ -28,11 +28,16 @@ namespace w16 {
 // scale / pad_left / pad_top 即 w10::LetterboxInfo 的三个字段（此处用裸值，
 // 让解码核心不依赖 OpenCV/w10，可独立单测——坐标反算是最高 bug 风险点）。
 //
+// img_w / img_h 为**原图尺寸**：反算后把框 clamp 到 [0,img_w]×[0,img_h]，
+// 与 ultralytics 一致——贴边/出界目标的框不会出现负坐标或超图，避免下游画框 /
+// 裁 ROI / 算 IoU 出错。
+//
 // out.size() 必须等于 (4 + num_classes) * num_anchors，否则抛
 // std::invalid_argument。
 [[nodiscard]] std::vector<Detection> DecodeYolov8(
     std::span<const float> out, int num_classes, int num_anchors,
-    float conf_thresh, float scale, int pad_left, int pad_top);
+    float conf_thresh, float scale, int pad_left, int pad_top, int img_w,
+    int img_h);
 
 }  // namespace w16
 

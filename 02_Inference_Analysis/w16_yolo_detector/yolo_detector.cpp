@@ -51,9 +51,10 @@ std::vector<Detection> YOLODetector::Detect(const cv::Mat& bgr) {
       static_cast<std::size_t>(num_channels) * num_anchors;
 
   // 4) 解码（含坐标反算回原图）+ 5) 逐类 NMS。
-  std::vector<Detection> dets = DecodeYolov8(
-      std::span<const float>(out_data, count), num_classes, num_anchors,
-      cfg_.conf_thresh, info.scale, info.pad_left, info.pad_top);
+  std::vector<Detection> dets =
+      DecodeYolov8(std::span<const float>(out_data, count), num_classes,
+                   num_anchors, cfg_.conf_thresh, info.scale, info.pad_left,
+                   info.pad_top, bgr.cols, bgr.rows);
   return Nms(std::move(dets), cfg_.iou_thresh);
 }
 

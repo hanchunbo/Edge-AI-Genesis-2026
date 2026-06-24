@@ -9,7 +9,9 @@
 // 路径。
 
 #include "custom_resize.hpp"  // w10::LetterboxToTensor
+#include "decode.hpp"
 #include "inference_engine.hpp"
+#include "nms.hpp"
 
 #include <algorithm>
 #include <chrono>
@@ -74,6 +76,57 @@ Stat Bench(w14::InferenceEngine& engine, const std::vector<float>& input,
   return Stat{p50, Percentile(lat, 0.99), batch * 1000.0 / p50};
 }
 
+// 端到端三段计时（batch=1）：preprocess(cvtColor+letterbox) / infer(Run) /
+// postprocess(decode+NMS)。各段取 P50，total 取整帧 P50，FPS = 1000/total。
+// 复刻 YOLODetector::Detect 的流水线——纠正「纯推理当 FPS」的高估。
+struct Pipe {
+  double pre, infer, post, total, fps;
+};
+
+Pipe BenchPipeline(w14::InferenceEngine& engine, const cv::Mat& bgr) {
+  // 先跑一次拿输出形状，推断 num_classes / num_anchors。
+  cv::Mat rgb;
+  cv::cvtColor(bgr, rgb, cv::COLOR_BGR2RGB);
+  w10::LetterboxInfo info{};
+  std::vector<float> tensor = w10::LetterboxToTensor(rgb, kInput, kInput, info);
+  const std::vector<int64_t> shape{1, 3, kInput, kInput};
+  auto probe = engine.Run(tensor, shape);
+  const auto oshape = probe[0].GetTensorTypeAndShapeInfo().GetShape();
+  const int num_classes = static_cast<int>(oshape[1]) - 4;
+  const int num_anchors = static_cast<int>(oshape[2]);
+
+  std::vector<double> pre, inf, post, tot;
+  for (int i = 0; i < kWarmup + kIters; ++i) {
+    auto t0 = std::chrono::steady_clock::now();
+    cv::Mat r;
+    cv::cvtColor(bgr, r, cv::COLOR_BGR2RGB);
+    w10::LetterboxInfo lb{};
+    std::vector<float> in = w10::LetterboxToTensor(r, kInput, kInput, lb);
+    auto t1 = std::chrono::steady_clock::now();
+    auto out = engine.Run(in, shape);
+    auto t2 = std::chrono::steady_clock::now();
+    const float* od = out[0].GetTensorData<float>();
+    const std::size_t n =
+        static_cast<std::size_t>(num_classes + 4) * num_anchors;
+    auto dets = w16::DecodeYolov8(std::span<const float>(od, n), num_classes,
+                                  num_anchors, 0.25f, lb.scale, lb.pad_left,
+                                  lb.pad_top, bgr.cols, bgr.rows);
+    dets = w16::Nms(std::move(dets), 0.45f);
+    auto t3 = std::chrono::steady_clock::now();
+    if (i < kWarmup) {
+      continue;
+    }
+    using ms = std::chrono::duration<double, std::milli>;
+    pre.push_back(ms(t1 - t0).count());
+    inf.push_back(ms(t2 - t1).count());
+    post.push_back(ms(t3 - t2).count());
+    tot.push_back(ms(t3 - t0).count());
+  }
+  const double total = Percentile(tot, 0.50);
+  return Pipe{Percentile(pre, 0.50), Percentile(inf, 0.50),
+              Percentile(post, 0.50), total, 1000.0 / total};
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
@@ -123,6 +176,23 @@ int main(int argc, char** argv) {
           "CUDA 库路径以测 GPU）。\n");
       break;
     }
+  }
+
+  // 端到端三段（真实 Detect 流水线，batch=1）：上面的纯推理表不含前后处理，
+  // 会高估真实吞吐；这里测含 preprocess + postprocess 的整帧 FPS。
+  std::printf("\n## 端到端三段（batch=1，含前后处理 = 真实 FPS）\n");
+  std::printf(
+      "| EP | preprocess | infer | postprocess | total(P50) | FPS |\n"
+      "|---|---|---|---|---|---|\n");
+  for (w14::Ep ep : {w14::Ep::kCpu, w14::Ep::kCuda}) {
+    w14::InferenceEngine engine(model, w14::SessionConfig{.ep = ep});
+    if (ep == w14::Ep::kCuda && engine.ActiveEp() == w14::Ep::kCpu) {
+      break;
+    }
+    const char* en = engine.ActiveEp() == w14::Ep::kCuda ? "CUDA" : "CPU";
+    const Pipe p = BenchPipeline(engine, bgr);
+    std::printf("| %s | %.2f | %.2f | %.2f | %.2f | %.1f |\n", en, p.pre,
+                p.infer, p.post, p.total, p.fps);
   }
 
   // IntraOp 线程扫描（CPU, batch=1）：展示单算子内并行度对延迟的影响。

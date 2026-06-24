@@ -4,6 +4,7 @@
 
 #include "decode.hpp"
 
+#include <algorithm>
 #include <cstddef>
 #include <format>
 #include <stdexcept>
@@ -12,7 +13,8 @@ namespace w16 {
 
 std::vector<Detection> DecodeYolov8(std::span<const float> out, int num_classes,
                                     int num_anchors, float conf_thresh,
-                                    float scale, int pad_left, int pad_top) {
+                                    float scale, int pad_left, int pad_top,
+                                    int img_w, int img_h) {
   const std::size_t expected =
       static_cast<std::size_t>(4 + num_classes) * num_anchors;
   if (out.size() != expected) {
@@ -54,8 +56,13 @@ std::vector<Detection> DecodeYolov8(std::span<const float> out, int num_classes,
 
     // letterbox 坐标反算回原图：orig = (lb - pad) / scale。
     const float inv = 1.0f / scale;
-    dets.push_back(Detection{(lx1 - pad_left) * inv, (ly1 - pad_top) * inv,
-                             (lx2 - pad_left) * inv, (ly2 - pad_top) * inv,
+    const float fw = static_cast<float>(img_w);
+    const float fh = static_cast<float>(img_h);
+    // 反算后 clamp 到原图边界，避免贴边/出界目标产生负坐标或超图框。
+    dets.push_back(Detection{std::clamp((lx1 - pad_left) * inv, 0.0f, fw),
+                             std::clamp((ly1 - pad_top) * inv, 0.0f, fh),
+                             std::clamp((lx2 - pad_left) * inv, 0.0f, fw),
+                             std::clamp((ly2 - pad_top) * inv, 0.0f, fh),
                              best_score, best_cls});
   }
   return dets;

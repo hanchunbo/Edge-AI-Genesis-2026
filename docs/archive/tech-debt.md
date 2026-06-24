@@ -1,6 +1,71 @@
 # 技术债记录
 
-> 最后更新：2026-04-08（Q2 计划校准，新增 2 条 OPEN 项）
+> 最后更新：2026-06-23（W16 AI 部署专家评估，新增 1 FIXED + 4 OPEN）
+
+---
+
+## W16 YOLOv8n 检测 AI 部署专家评估
+
+**发现**：2026-06-23（W16 完成后专家复盘）
+
+### [FIXED] P0 — benchmark 只测纯推理，"FPS" 名不副实
+
+**问题**：`yolo_benchmark` 原只测 `engine.Run`，不含 cvtColor + LetterboxToTensor +
+decode + NMS。报出的「168 img/s」是推理上限，真实端到端 FPS 差 ~44%。对单路实时检测
+（W26 EdgeSight）误导性强。
+
+**修复**：benchmark 新增「端到端三段」表（preprocess/infer/postprocess + total + 真实 FPS）。
+实测 CUDA 端到端 10.59ms = **94 FPS**（pre/post 占 ~22%）。并发现 pipeline 内 infer(8.26ms)
+高于孤立测量(5.5ms)——CPU 前后处理夹在 GPU Run 之间打断了背靠背流水化，是"micro-bench 低估真实
+延迟"的实证。详见 `docs/benchmarks/w16_yolo_bench.md`。
+
+### [FIXED] P0 — 检测框未裁剪到图像边界
+
+**问题**：`DecodeYolov8` 反算后不 clamp 到 [0,w]×[0,h]，贴边/出界目标会产生负坐标或超图框，
+下游画框/裁 ROI/算 IoU 出错（bus.jpg 恰好没暴露）。ultralytics 是 clip 的。
+
+**修复**：`DecodeYolov8` 加 `img_w/img_h` 参数，xyxy 反算后 `std::clamp` 到原图边界；
+detector 传 `bgr.cols/rows`；新增单测 `W16Decode.ClampsBoxToImageBounds`。
+
+### [OPEN] 中优 — W14 线程/IOBinding 旋钮未接进 YOLODetector
+
+**严重度**：🟡 中（产品路径未受益）
+
+**现状**：W16 给 W14 加了 `SessionConfig`(intra/inter 线程) + `RunIoBinding`，但只在 benchmark
+用；`DetectorConfig` 只有 `ep`，无线程配置；`Detect()` 走 `Run` 不走 `RunIoBinding`。即"造了旋钮
+产品没接"。边缘部署线程数是关键调参，单帧场景也正是 IOBinding 收益最大处（虽实测为噪声级）。
+
+**修复方向**：`DetectorConfig` 加 `intra_op_threads/inter_op_threads` 透传给 engine；W17 整合
+inference_engine 库时一并处理。
+
+### [OPEN] 中优 — 动态 batch 只验证"不崩"、未验证"批内每张都对"
+
+**严重度**：🟡 中（正确性证据不足）
+
+**现状**：benchmark 平铺同图测 batch=1/4 时延，但无断言验证 batch=4 的 4 份输出各自解码正确。
+严格说动态 batch 只证明了"能跑"，没证明"批内独立正确"。
+
+**修复方向**：加测试，batch=4 喂 4 张不同图（或同图 4 份），断言每份解码框与 batch=1 单独跑一致。
+
+### [OPEN] 低优 — "多输出头"学习目标只达成一半
+
+**严重度**：🟢 低（认知/范围问题，非 bug）
+
+**现状**：Q2 W16 标题是"复杂模型支持：YOLO 多输出"。但 ultralytics 导出的 YOLOv8 是**单一合并
+输出** `[1,84,8400]`，真正的多输出头（YOLOv5 三检测层 / 分离 boxes+scores+classes 输出）没被
+触达。"多输出解析"这个学习目标其实没练到。
+
+**修复方向**：W17 用一个真多输出模型（如 YOLOv5 或带 NMS 前三层输出的导出）补一次多 head 解析，
+或在文档中诚实标注 YOLOv8 已合并 head、本周未练真多输出。
+
+### [OPEN] 中优 — 对拍仅单图（bus.jpg），鲁棒性证据薄
+
+**严重度**：🟡 中（验证覆盖不足）
+
+**现状**：`W16_DetectorTest` 只用 bus.jpg 一张对拍 ultralytics。无目标图、密集小目标、多类混合、
+极端长宽比都没测，边界鲁棒性无证据。
+
+**修复方向**：加 2-3 张多样图进对拍（含 0 目标的边界用例，断言两端都返回空）。
 
 ---
 

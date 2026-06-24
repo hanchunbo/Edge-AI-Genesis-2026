@@ -220,7 +220,7 @@ std::partial_sort(idx.begin(), idx.begin() + k, idx.end(),
 
 **是什么**：`Ort::IoBinding` 把输入/输出张量**预先绑定**到固定缓冲，跨多次 `Run` 复用，替代「每次 Run 现搭 I/O 名称数组 + 让 ORT 现分配输出 `Ort::Value`」。CUDA EP 下还能把输出绑定到设备/复用的主机缓冲，减少每次 Device→Host 拷贝的分配抖动。
 
-**为什么 / 何时用**：高频小模型推理里，「每次 Run 的输出分配 + D2H 拷贝」这类**固定开销**占比可观。绑定复用把它摊掉。实测 yolov8n CUDA batch=1：5.85→5.60ms（吞吐 +4~9%）——收益恰好集中在「单帧、GPU」这个固定开销占比最大的场景；batch=4 时计算占比上升，收益被淹没；CPU EP 无 D2H 拷贝，几乎无差。
+**为什么 / 何时用**：理论上高频小模型推理里「每次 Run 的输出分配 + D2H 拷贝」这类**固定开销**占比可观，绑定复用把它摊掉。但**实测要诚实**：yolov8n CUDA batch=1 多次 run，IOBinding 与 Run 的 P50 在 5.5~6.1ms 间**优劣翻转**，差异进了噪声——因为模型小、且输出仍需拷回 CPU 解码。结论：对这类场景 IOBinding **不是稳定优化项**；真要量化收益得上更大模型，或用 Nsight 逐段归因。batch 越大计算占比越高、收益越被淹没；CPU EP 无 D2H 拷贝更无差。
 
 **坑**：① **持久输出绑定假定输出形状固定**——绑定一次复用，换 batch / 输入尺寸（输出形状变）必须重建 binding，否则 ORT 抛 `OrtValue shape verification failed`（W16 benchmark 踩过：一个 engine 跨 batch=1/4 复用 binding 直接崩，改成每个 batch 独立 engine）。② 不是银弹——计算密集时固定开销占比小，IOBinding 收益进噪声。③ 输入仍可零拷贝绑定，但输入 buffer 每次不同要重绑（`ClearBoundInputs` + `BindInput`）。
 

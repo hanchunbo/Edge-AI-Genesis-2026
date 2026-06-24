@@ -42,7 +42,7 @@ TEST(W16Decode, ParsesBoxesAndPicksMaxClass) {
 
   // scale=1 / pad=0：坐标反算为恒等，专测解码本身。
   std::vector<w16::Detection> dets =
-      w16::DecodeYolov8(out, nc, na, 0.25f, 1.0f, 0, 0);
+      w16::DecodeYolov8(out, nc, na, 0.25f, 1.0f, 0, 0, 10000, 10000);
   ASSERT_EQ(dets.size(), 2u);
 
   EXPECT_EQ(dets[0].class_id, 1);
@@ -70,7 +70,7 @@ TEST(W16Decode, DropsBelowConfThreshold) {
   Set(out, na, 6, 0, 0.2f);
 
   std::vector<w16::Detection> dets =
-      w16::DecodeYolov8(out, nc, na, 0.25f, 1.0f, 0, 0);
+      w16::DecodeYolov8(out, nc, na, 0.25f, 1.0f, 0, 0, 10000, 10000);
   EXPECT_TRUE(dets.empty());
 }
 
@@ -88,7 +88,7 @@ TEST(W16Decode, LetterboxCoordRemapWithinOnePixel) {
 
   // scale=0.5, pad_left=20, pad_top=10 -> orig = (lb - pad) / scale
   std::vector<w16::Detection> dets =
-      w16::DecodeYolov8(out, nc, na, 0.25f, 0.5f, 20, 10);
+      w16::DecodeYolov8(out, nc, na, 0.25f, 0.5f, 20, 10, 10000, 10000);
   ASSERT_EQ(dets.size(), 1u);
   EXPECT_NEAR(dets[0].x1, (100 - 20) / 0.5f, 1.0f);  // 160
   EXPECT_NEAR(dets[0].y1, (100 - 10) / 0.5f, 1.0f);  // 180
@@ -96,9 +96,31 @@ TEST(W16Decode, LetterboxCoordRemapWithinOnePixel) {
   EXPECT_NEAR(dets[0].y2, (120 - 10) / 0.5f, 1.0f);  // 220
 }
 
+// 框反算后超出原图边界要被 clamp 到 [0,img_w]×[0,img_h]（与 ultralytics
+// 一致）。
+TEST(W16Decode, ClampsBoxToImageBounds) {
+  const int nc = 1, na = 1;
+  std::vector<float> out = MakeTensor(nc, na);
+  // 中心 (50,50) 宽高 200x200 -> xyxy = -50,-50,150,150（左上出界）
+  Set(out, na, 0, 0, 50);
+  Set(out, na, 1, 0, 50);
+  Set(out, na, 2, 0, 200);
+  Set(out, na, 3, 0, 200);
+  Set(out, na, 4, 0, 0.9f);
+
+  // scale=1/pad=0，原图 100x100：左上 clamp 到 0，右下 clamp 到 100。
+  std::vector<w16::Detection> dets =
+      w16::DecodeYolov8(out, nc, na, 0.25f, 1.0f, 0, 0, 100, 100);
+  ASSERT_EQ(dets.size(), 1u);
+  EXPECT_FLOAT_EQ(dets[0].x1, 0.0f);
+  EXPECT_FLOAT_EQ(dets[0].y1, 0.0f);
+  EXPECT_FLOAT_EQ(dets[0].x2, 100.0f);
+  EXPECT_FLOAT_EQ(dets[0].y2, 100.0f);
+}
+
 TEST(W16Decode, ThrowsOnWrongTensorSize) {
   std::vector<float> out(10, 0.0f);  // 不等于 (4+3)*2
-  EXPECT_THROW(w16::DecodeYolov8(out, 3, 2, 0.25f, 1.0f, 0, 0),
+  EXPECT_THROW(w16::DecodeYolov8(out, 3, 2, 0.25f, 1.0f, 0, 0, 100, 100),
                std::invalid_argument);
 }
 
