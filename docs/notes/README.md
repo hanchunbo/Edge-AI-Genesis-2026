@@ -12,11 +12,11 @@
 
 | 文件 | 收纳主题 | 来源周 | 状态 |
 |---|---|---|---|
-| [inference.md](inference.md) | ONNX vs ORT、shape/tensor/Ort::Value、Env/Session/Engine、Env 全局唯一、零拷贝输入、CPU/GPU 内存 + Host→Device、I/O 元数据缓存、EP 优雅回退 + ActiveEp≠全图(混合执行)、Softmax、Top-K + argmax 退化 | W14/W15 | ✅ W14 + W15 后处理（softmax/Top-K）已入 |
+| [inference.md](inference.md) | ONNX vs ORT、shape/tensor/Ort::Value、Env/Session/Engine、Env 全局唯一、零拷贝输入、CPU/GPU 内存 + Host→Device、I/O 元数据缓存、EP 优雅回退 + ActiveEp≠全图(混合执行)、Softmax、Top-K + argmax 退化、YOLOv8 检测头(无 objectness/转置)、NMS/IoU(逐类) | W14/W15/W16 | ✅ W14 + W15 后处理 + W16 检测头/NMS 已入 |
 | [cpp-core.md](cpp-core.md) | static 四种用法、ABI vs API、有符号/无符号 + size_t（RAII/移动语义/span/Concepts/expected/format 待毕业） | W1/W2/W3/W9/W10 | 🟡 部分（W14 答疑的 static/ABI/size_t 已入） |
 | `concurrency.md` | jthread/stop_token、线程池、counting_semaphore、false sharing/alignas(64)、数据竞争检测 | W4/W5 | ⬜ 计划中 |
 | `systems-perf.md` | mmap 零拷贝/madvise、perf+火焰图、Valgrind、GDB 多线程死锁、benchmark 方法 | W6/W11 | ⬜ 计划中 |
-| [image-ops.md](image-ops.md) | 分类预处理范式、ROI 视图 vs clone（stride/isContinuous）、ImageNet 归一化、BGR↔RGB、HWC↔CHW、silent 预处理 bug；（双线性插值、Letterbox、坐标对齐 待补） | W9/W10/W13/W15 | 🟡 部分（W15 已入；W9/10/13 待毕业） |
+| [image-ops.md](image-ops.md) | 分类预处理范式、ROI 视图 vs clone（stride/isContinuous）、ImageNet 归一化、BGR↔RGB、HWC↔CHW、silent 预处理 bug、Letterbox + 坐标反算（检测范式）；（双线性插值 待补） | W9/W10/W13/W15/W16 | 🟡 部分（W15 + W16 Letterbox 已入；双线性插值待毕业） |
 | `engineering.md` | CMake 三层结构/生成器表达式/FetchContent、GTest 集成、gcov/lcov 覆盖率 | W7/W8 | ⬜ 计划中 |
 
 ## 知识点格式

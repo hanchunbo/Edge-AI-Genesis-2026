@@ -5,7 +5,7 @@
 
 ## 当前进度
 
-**Q2 W15（分类推理端到端闭环）已完成；W1–W14 + W14.5（CUDA EP）全部完成。各周细节见对应模块 `notes.md`，可复用概念见 `docs/notes/`；遗留 ResNet18 对比（降级可选）、VPS CPU EP 环境（待定）。**
+**Q2 W16（YOLOv8n 检测 Demo）P0 闭环已完成（NMS + 解码 + 坐标反算 + 对拍 ultralytics，CPU/CUDA EP 均跑通）；遗留 Step 5 ORT 进阶（扩展 W14 线程配置 + IOBinding + batch 1v4 benchmark）进行中。W1–W15 + W14.5（CUDA EP）全部完成。各周细节见对应模块 `notes.md`，可复用概念见 `docs/notes/`；遗留 ResNet18 对比（降级可选）、VPS CPU EP 环境（待定）。**
 每开始新的 week，必须更新此处的进度描述（一句话：当前周 + 状态 + 遗留，细节进模块 notes）。
 
 ## Build（构建速查）

@@ -50,7 +50,8 @@
 |------|------|----------|------|
 | W14 | ONNX Runtime C++ 基础闭环 | RAII Session、`std::span` 零拷贝输入、`Ort::Value::CreateTensor` | ✅ B 路径：本地 CPU + MobileNetV2 闭环（CUDA EP 推至 W14.5 / W15）|
 | W15 | 分类推理端到端闭环（预处理 + Top-K 后处理 + Classifier 编排） | ImageNet 归一化、softmax/Top-K、复用 W14 推理 | ✅ 完成（真图→Top-5，Samoyed 0.65）|
-| W16-W17 | YOLO 多输出头 + 库重构 + TRT EP 对比 | onnxruntime + tensorrt | ⏳ 计划中 |
+| W16 | YOLOv8n 检测 Demo（多输出头解析 + 手写 NMS + 坐标反算） | onnxruntime + 手写后处理 | ✅ P0 闭环（对拍 ultralytics，CPU/CUDA EP；ORT 进阶进行中）|
+| W17 | 库重构 + ONNX 导出 + TRT EP 对比 | onnxruntime + tensorrt | ⏳ 计划中 |
 | W18 | Profiling 报告（Roofline + 火焰图） | perf + ORT profile | ⏳ 计划中 |
 
 ---
@@ -166,6 +167,24 @@ CMake 自动从 `third_party/onnxruntime/onnxruntime-linux-x64-1.26.0/` 接入�
 可用 `-DONNXRUNTIME_ROOT=<path>` 指向其他路径（如系统安装、其他版本）。
 
 CPU 包足以满足 W14/W15 全部成功标准（CUDA EP 实测见下）。
+
+#### W16 额外依赖：Python venv + ultralytics（仅用于导出 onnx + 对拍基准）
+
+W16 的 C++ 推理不依赖 Python；但导出 `yolov8n.onnx` 和生成 ultralytics 对拍基准需要：
+
+```bash
+sudo apt install -y python3.12-venv          # WSL/Ubuntu 默认未装 ensurepip
+python3 -m venv .venv && . .venv/bin/activate
+pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu  # CPU 版即可（导出/单图推理用）
+pip install ultralytics onnx
+# 导出模型 + 标签 + 测试图 + 对拍基准：
+cd 02_Inference_Analysis/w16_yolo_detector
+python tools/export_yolov8n.py && python tools/gen_reference.py
+```
+
+> 坑：`pip install ultralytics` 会拉 torchvision，若与先装的 torch 版本不匹配会报
+> `operator torchvision::nms does not exist`——torch 和 torchvision 必须同源（同从 cpu index 装）。
+> `.venv/` 与 `models/*.onnx`、`models/*.jpg` 不入库（见 `.gitignore`）。
 
 #### W14.5 可选：CUDA EP（GPU 推理，WSL2 + RTX 30 系实测）
 

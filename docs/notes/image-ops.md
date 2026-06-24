@@ -1,7 +1,7 @@
 # 图像预处理 / 后处理概念详解
 
 > 可复用概念的「主题正文」，复习时进这里读。模块专属的设计/Mermaid/踩坑/测试在周笔记。
-> 来源周：W15（分类端到端 + ROI/stride，已入）；W9/W10/W13 的双线性插值、Letterbox、坐标对齐待毕业。
+> 来源周：W15（分类端到端 + ROI/stride，已入）、W16（Letterbox + 坐标反算，已入）；W9/W10/W13 的双线性插值待毕业。
 
 ## 目录
 
@@ -11,6 +11,7 @@
 - [BGR ↔ RGB 通道序](#bgr--rgb-通道序)
 - [HWC ↔ CHW 内存布局](#hwc--chw-内存布局)
 - [silent 预处理 bug（错了不报错只偏结果）](#silent-预处理-bug错了不报错只偏结果)
+- [Letterbox + 坐标反算（检测预处理范式）](#letterbox--坐标反算检测预处理范式)
 
 ---
 
@@ -107,3 +108,15 @@ out[c * hw + pos] = v;   // c 选通道平面，pos 是平面内 y*W+x 偏移 �
 **坑**：单元测试只测「数值算对」不够——通道序、布局这类错误在纯色图上可能照样通过（纯色三通道值接近时不敏感）。必须配真实图语义验证，两者缺一不可。
 
 > 实战出处：`02_Inference_Analysis/w15_classify_pipeline/notes.md`（踩坑节，commit a232ac7 / 8f24e0d）
+
+---
+
+## Letterbox + 坐标反算（检测预处理范式）
+
+**是什么**：Letterbox 是检测任务的标准预处理——等比缩放（`scale = min(W/w, H/h)`）后四周填灰边（YOLO 默认 114）补成方形，**保留全图不裁剪**。与分类的 center-crop 是两套不能混用的范式（分类容忍裁边，检测裁掉就丢目标）。配套产出 `LetterboxInfo{scale, pad_left, pad_top}`，供后处理把检测框从 letterbox 坐标系反算回原图：`orig = (lb_coord - pad) / scale`。
+
+**为什么 / 何时用**：模型在方形输入上推理，输出框是 letterbox 坐标系的；要在原图上画框/算 mAP，必须反算回去。坐标反算是检测里**最高 bug 风险点**——pad 和 scale 任一搞反，框会整体偏移或缩放，且在「目标大致在中间」的图上偏移不明显，是典型 silent bug，必须单独单测（给定已知 `LetterboxInfo` 断言反算结果 <1px）。
+
+**坑**：① **填充居中**：左右/上下均分，余数加到右/下（对齐 YOLOv5/v8 官方）；不居中虽然反算仍对，但喂给模型的像素分布变了，临界框检测结果会漂。② **对拍范式必须一致**：动态 H/W 的 ONNX 让 ultralytics 默认走**矩形推理**（按 stride 补到非方形、几乎无填充），而自己的 C++ 流水线常固定喂方形 640×640。两端 letterbox 范式不一致时，高分目标对得上、临界框（score≈0.25）会差出整框——对拍前先确认两端都用方形（ultralytics 传 `rect=False`）。③ YOLOv8 的归一化只有 `/255`（无 ImageNet mean/std），别把分类那套均值方差套上来。④ Letterbox 按输入通道顺序展平，BGR→RGB 要在 letterbox **之前**做。
+
+> 实战出处：`02_Inference_Analysis/w16_yolo_detector/notes.md`（设计/踩坑节）；算子实现 `01_Linux_CPP_Foundations/w10_resize/custom_resize.cpp`（`Letterbox` / `LetterboxToTensor`）

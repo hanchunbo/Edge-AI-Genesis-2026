@@ -15,6 +15,8 @@
 - [Execution Provider 与优雅回退](#execution-provider-与优雅回退)
 - [Softmax（数值稳定版）](#softmax数值稳定版)
 - [Top-K 选择（partial_sort）](#top-k-选择partial_sort)
+- [YOLOv8 检测头布局（无 objectness + 转置）](#yolov8-检测头布局无-objectness--转置)
+- [NMS / IoU（逐类非极大值抑制）](#nms--iou逐类非极大值抑制)
 
 ---
 
@@ -173,3 +175,27 @@ std::partial_sort(idx.begin(), idx.begin() + k, idx.end(),
 **argmax（Top-1）是 K=1 的退化**：只要最像的那一类时，不必 `partial_sort`，直接 `std::max_element` 找最大 logit 的位置、再用「指针差」得索引即可（`idx = max_it - data`），索引就是预测类别编号。注意两个认知点：① **比大小取 Top-1 不需要先 softmax**——softmax 不改变谁最大，只在要「概率」时才做。② **模型对输入只做机械前向**，不在乎喂的是真图还是噪声；W14 demo 喂固定种子随机数，所以 Top-1 索引**无现实语义**，只验证「推理链路通、输出能解析」——把「链路正确性」和「识别精度」解耦，是先搭骨架的工程节奏。
 
 > 实战出处：`02_Inference_Analysis/w15_classify_pipeline/notes.md`（后处理节，commit 251f70d）；argmax 退化见 `w14_ort_basics/ort_basics_demo.cpp`（`max_element` + 指针差）
+
+---
+
+## YOLOv8 检测头布局（无 objectness + 转置）
+
+**是什么**：YOLOv8 检测模型的单输出头形状是 `[1, C, A]`，其中 `C = 4 + num_classes`（COCO 为 84 = 4+80）、`A = num_anchors`（640 输入对应 8400）。前 4 通道是 `cx, cy, w, h`（输入像素坐标，模型已内置 anchor 解码），后 `num_classes` 通道是各类别概率（导出时已含 sigmoid）。每个 anchor 的 score = 这 80 个类概率的最大值，对应类别即 argmax。
+
+**为什么 / 何时用**：解析检测头是把「一坨 float」变成「框」的第一步。两个易被旧经验带偏的点：① **YOLOv8 没有 objectness**——v5/v3 的输出每个 anchor 多一维「有无物体」置信度，score = obj × cls；v8 取消了 obj，score 直接取类概率最大值。套 v5 的「乘 objectness」公式会多乘一个不存在的维度。② **布局是 channels-major**：内存里同一通道的 8400 个 anchor 连续排（`out[ch*A + a]`），不是「每个 anchor 的 84 个值连续」。解码要按这个 stride 转置遍历。
+
+**坑**：`num_classes` 别写死 80——从输出形状反推 `shape[1] - 4`，换模型才不崩。conf 阈值过滤要在「取完 max 类概率」之后做。框坐标此时还是 letterbox 坐标系，**必须再做坐标反算**回原图（见 image-ops.md「Letterbox + 坐标反算」）。
+
+> 实战出处：`02_Inference_Analysis/w16_yolo_detector/notes.md`（`decode.{hpp,cpp}`，合成张量单测）
+
+---
+
+## NMS / IoU（逐类非极大值抑制）
+
+**是什么**：检测模型对同一目标会吐出多个高度重叠的框，NMS（Non-Maximum Suppression）按 score 降序贪心保留最高分框、抑制与它 IoU 超阈值的同类框。IoU（Intersection over Union）= 两框交集面积 / 并集面积，是「重叠程度」的标准度量。
+
+**为什么 / 何时用**：anchor-based 检测器天然冗余输出，不去重的话一个人会画出十几个框。NMS 是检测后处理的标配。**逐类**很关键：只在同 `class_id` 内部抑制——同一位置可以同时是「人」和「背包」，跨类抑制会把正确的重叠目标误删。
+
+**坑**：① IoU 算交集时，宽/高要 `max(0, ...)` 夹一下，否则无交集时负宽×负高会得正面积（假 IoU）。② 阈值方向：抑制的是 IoU **大于**阈值的（重叠太多 = 同一目标）；iou_thresh 越小抑制越狠。③ 性能：朴素逐类 O(n²) 在过完 conf 阈值后通常只剩数十~数百框，足够快（1000 框 stress test <1ms@Release）；真要更快可用空间分桶，但别过早优化。④ conf 阈值（先筛掉低分候选）和 iou 阈值（NMS 去重）是两个独立旋钮，别混。
+
+> 实战出处：`02_Inference_Analysis/w16_yolo_detector/notes.md`（`nms.{hpp,cpp}`，IoU 手算对拍 + 逐类 + stress 单测）
