@@ -50,7 +50,7 @@
 |------|------|----------|------|
 | W14 | ONNX Runtime C++ 基础闭环 | RAII Session、`std::span` 零拷贝输入、`Ort::Value::CreateTensor` | ✅ B 路径：本地 CPU + MobileNetV2 闭环（CUDA EP 推至 W14.5 / W15）|
 | W15 | 分类推理端到端闭环（预处理 + Top-K 后处理 + Classifier 编排） | ImageNet 归一化、softmax/Top-K、复用 W14 推理 | ✅ 完成（真图→Top-5，Samoyed 0.65）|
-| W16 | YOLOv8n 检测 Demo（多输出头解析 + 手写 NMS + 坐标反算） | onnxruntime + 手写后处理 | ✅ P0 闭环（对拍 ultralytics，CPU/CUDA EP；ORT 进阶进行中）|
+| W16 | YOLOv8n 检测 Demo（多输出头 + 手写 NMS + 坐标反算 + IOBinding/线程调优 + batch benchmark） | onnxruntime + 手写后处理 | ✅ 完成（对拍 ultralytics；RTX 3060 CUDA 单帧 7.5×）|
 | W17 | 库重构 + ONNX 导出 + TRT EP 对比 | onnxruntime + tensorrt | ⏳ 计划中 |
 | W18 | Profiling 报告（Roofline + 火焰图） | perf + ORT profile | ⏳ 计划中 |
 

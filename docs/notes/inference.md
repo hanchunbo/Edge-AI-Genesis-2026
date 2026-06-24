@@ -17,6 +17,8 @@
 - [Top-K 选择（partial_sort）](#top-k-选择partial_sort)
 - [YOLOv8 检测头布局（无 objectness + 转置）](#yolov8-检测头布局无-objectness--转置)
 - [NMS / IoU（逐类非极大值抑制）](#nms--iou逐类非极大值抑制)
+- [IntraOp vs InterOp 线程](#intraop-vs-interop-线程)
+- [IOBinding（绑定 I/O 复用缓冲）](#iobinding绑定-io-复用缓冲)
 
 ---
 
@@ -199,3 +201,27 @@ std::partial_sort(idx.begin(), idx.begin() + k, idx.end(),
 **坑**：① IoU 算交集时，宽/高要 `max(0, ...)` 夹一下，否则无交集时负宽×负高会得正面积（假 IoU）。② 阈值方向：抑制的是 IoU **大于**阈值的（重叠太多 = 同一目标）；iou_thresh 越小抑制越狠。③ 性能：朴素逐类 O(n²) 在过完 conf 阈值后通常只剩数十~数百框，足够快（1000 框 stress test <1ms@Release）；真要更快可用空间分桶，但别过早优化。④ conf 阈值（先筛掉低分候选）和 iou 阈值（NMS 去重）是两个独立旋钮，别混。
 
 > 实战出处：`02_Inference_Analysis/w16_yolo_detector/notes.md`（`nms.{hpp,cpp}`，IoU 手算对拍 + 逐类 + stress 单测）
+
+---
+
+## IntraOp vs InterOp 线程
+
+**是什么**：ORT `SessionOptions` 的两个线程旋钮。**IntraOp**（`SetIntraOpNumThreads`）= 单个算子**内部**的并行度，比如一个大 MatMul/Conv 切多线程一起算。**InterOp**（`SetInterOpNumThreads`）= 计算图里**多个算子之间**的并行度，仅当图有并行分支（同时能跑的独立节点）时才有意义。
+
+**为什么 / 何时用**：CNN/检测网络是近乎串行的链（一层喂下一层），并行机会几乎全在「单个算子内部」——所以 IntraOp 是主旋钮，InterOp 对 YOLOv8 这种串行图基本无收益。实测 yolov8n CPU batch=1：IntraOp 1→2 线程提速 1.6×、1→4 提速 2.0×（W16 bench）。
+
+**坑**：① **次线性扩展**——加到 CPU 核数不会线性加速，受算子并行度上限和内存带宽限制，过了拐点甚至变慢（线程调度/缓存争用）。② 别盲目把 InterOp 调大期待加速，串行图上它只增开销。③ 0 = 用 ORT 默认（通常 = 物理核数），不是「禁用线程」。④ 线程数要结合部署环境定：边缘多进程共享 CPU 时，单 session 吃满核反而拖累整体。
+
+> 实战出处：`docs/benchmarks/w16_yolo_bench.md`（IntraOp 扫描）；机制 `w14_ort_basics/inference_engine.{hpp,cpp}`（`SessionConfig`）
+
+---
+
+## IOBinding（绑定 I/O 复用缓冲）
+
+**是什么**：`Ort::IoBinding` 把输入/输出张量**预先绑定**到固定缓冲，跨多次 `Run` 复用，替代「每次 Run 现搭 I/O 名称数组 + 让 ORT 现分配输出 `Ort::Value`」。CUDA EP 下还能把输出绑定到设备/复用的主机缓冲，减少每次 Device→Host 拷贝的分配抖动。
+
+**为什么 / 何时用**：高频小模型推理里，「每次 Run 的输出分配 + D2H 拷贝」这类**固定开销**占比可观。绑定复用把它摊掉。实测 yolov8n CUDA batch=1：5.85→5.60ms（吞吐 +4~9%）——收益恰好集中在「单帧、GPU」这个固定开销占比最大的场景；batch=4 时计算占比上升，收益被淹没；CPU EP 无 D2H 拷贝，几乎无差。
+
+**坑**：① **持久输出绑定假定输出形状固定**——绑定一次复用，换 batch / 输入尺寸（输出形状变）必须重建 binding，否则 ORT 抛 `OrtValue shape verification failed`（W16 benchmark 踩过：一个 engine 跨 batch=1/4 复用 binding 直接崩，改成每个 batch 独立 engine）。② 不是银弹——计算密集时固定开销占比小，IOBinding 收益进噪声。③ 输入仍可零拷贝绑定，但输入 buffer 每次不同要重绑（`ClearBoundInputs` + `BindInput`）。
+
+> 实战出处：`docs/benchmarks/w16_yolo_bench.md`（Run vs IOBinding）；机制 `w14_ort_basics/inference_engine.cpp`（`RunIoBinding`，持久 binding + 形状契约）

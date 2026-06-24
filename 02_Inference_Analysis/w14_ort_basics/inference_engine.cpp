@@ -29,9 +29,26 @@ InferenceEngine::IoInfo MakeIoInfo(Ort::AllocatedStringPtr name,
   };
 }
 
+// 把线程配置应用到 SessionOptions（0 表示不设、用 ORT 默认）。
+void ApplyThreads(Ort::SessionOptions& opts, const SessionConfig& cfg) {
+  if (cfg.intra_op_threads > 0) {
+    opts.SetIntraOpNumThreads(cfg.intra_op_threads);
+  }
+  if (cfg.inter_op_threads > 0) {
+    opts.SetInterOpNumThreads(cfg.inter_op_threads);
+  }
+}
+
 }  // namespace
 
-InferenceEngine::InferenceEngine(const std::string& model_path, Ep ep) {
+// 既有 (model_path, Ep) 入口委托到 SessionConfig 版本，线程数取默认，
+// 保证 W15/W16 等既有调用方零改动。
+InferenceEngine::InferenceEngine(const std::string& model_path, Ep ep)
+    : InferenceEngine(model_path, SessionConfig{.ep = ep}) {}
+
+InferenceEngine::InferenceEngine(const std::string& model_path,
+                                 const SessionConfig& cfg) {
+  const Ep ep = cfg.ep;
   // 提前给出友好错误，避免 ORT 抛 ORTCHAR 路径相关的晦涩异常。
   if (!std::filesystem::exists(model_path)) {
     throw std::runtime_error("[W14] 模型文件不存在: " + model_path);
@@ -53,6 +70,7 @@ InferenceEngine::InferenceEngine(const std::string& model_path, Ep ep) {
       Ort::SessionOptions cuda_options;
       cuda_options.SetGraphOptimizationLevel(
           GraphOptimizationLevel::ORT_ENABLE_ALL);
+      ApplyThreads(cuda_options, cfg);
       OrtCUDAProviderOptions cuda_opts{};  // device_id 默认 0
       cuda_options.AppendExecutionProvider_CUDA(cuda_opts);
       session_ =
@@ -69,6 +87,7 @@ InferenceEngine::InferenceEngine(const std::string& model_path, Ep ep) {
       Ort::SessionOptions cpu_options;
       cpu_options.SetGraphOptimizationLevel(
           GraphOptimizationLevel::ORT_ENABLE_ALL);
+      ApplyThreads(cpu_options, cfg);
       session_ =
           std::make_unique<Ort::Session>(env, model_path.c_str(), cpu_options);
       active_ep_ = Ep::kCpu;
@@ -139,6 +158,31 @@ std::vector<Ort::Value> InferenceEngine::Run(std::span<const float> input,
   return session_->Run(Ort::RunOptions{nullptr}, input_names.data(),
                        &input_tensor, /*input_count=*/1, output_names.data(),
                        output_names.size());
+}
+
+std::vector<Ort::Value> InferenceEngine::RunIoBinding(
+    std::span<const float> input, std::span<const int64_t> shape) {
+  Ort::MemoryInfo mem_info =
+      Ort::MemoryInfo::CreateCpu(OrtArenaAllocator, OrtMemTypeDefault);
+
+  // 惰性创建持久 binding，并把输出绑定一次（输出形状固定，跨 Run 复用 ORT
+  // 内部分配的缓冲——这正是 IOBinding 相对 Run 省开销的地方）。
+  if (!io_binding_) {
+    io_binding_ = std::make_unique<Ort::IoBinding>(*session_);
+    for (const auto& out : outputs_) {
+      io_binding_->BindOutput(out.name.c_str(), mem_info);
+    }
+  }
+
+  // 输入 buffer 每次不同，只重绑输入（仍是零拷贝借用）。
+  Ort::Value input_tensor = Ort::Value::CreateTensor<float>(
+      mem_info, const_cast<float*>(input.data()), input.size(), shape.data(),
+      shape.size());
+  io_binding_->ClearBoundInputs();
+  io_binding_->BindInput(inputs_[0].name.c_str(), input_tensor);
+
+  session_->Run(Ort::RunOptions{nullptr}, *io_binding_);
+  return io_binding_->GetOutputValues();
 }
 
 }  // namespace w14

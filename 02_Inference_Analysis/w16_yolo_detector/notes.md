@@ -73,6 +73,7 @@ w16_yolo_detector/
   decode.{hpp,cpp}       # DecodeYolov8：转置+阈值+坐标反算（纯 C++）
   yolo_detector.{hpp,cpp}# YOLODetector 编排（组合 W14 + w10 + core）
   yolo_demo.cpp          # ./w16_yolo_demo [img] [model] 画框存图 w16_output.jpg
+  yolo_benchmark.cpp     # batch 1v4 × {CPU,CUDA} × {Run,IOBinding} + IntraOp 扫描
   tools/export_yolov8n.py# ultralytics 导出 onnx + 标签 + 测试图
   tools/gen_reference.py # 跑 onnx 生成对拍基准 reference_detections.txt
   models/                # yolov8n.onnx, coco_classes.txt, test_image.jpg, reference_*.txt
@@ -115,9 +116,25 @@ cmake --build build --target w16_yolo_demo
 ./build/02_Inference_Analysis/w16_yolo_detector/w16_yolo_demo
 ```
 
+## ORT 进阶（Step 5）+ 基准
+
+加性扩展 W14 `InferenceEngine`（默认参数保持 W15/W16 零改动）：
+- `SessionConfig{ep, intra_op_threads, inter_op_threads}` + 委托构造 → 线程调优旋钮。
+- `RunIoBinding`：持久 `Ort::IoBinding`，输出绑定一次复用（**形状契约**：换 batch 要换 engine）。
+
+实测要点（完整表 + 结论见 [`docs/benchmarks/w16_yolo_bench.md`](../../docs/benchmarks/w16_yolo_bench.md)）：
+
+| 场景 | P50 | 解读 |
+|---|---|---|
+| CPU batch=1 Run | 44.1ms | 基线 |
+| CUDA batch=1 Run | 5.85ms | 上 GPU EP，单帧 **7.5×** |
+| CUDA batch=1 IOBinding | 5.60ms | D2H 固定开销占比最大处，+4~9% |
+| CUDA batch=4 | 15.5ms / 258 img/s | batch 提吞吐不提延迟（单路实时选 batch=1）|
+| IntraOp 1→2→4 | 102→64→51ms | 次线性，单算子内并行受带宽限 |
+
+概念（IntraOp vs InterOp、IOBinding）见 inference.md。
+
 ## 与下一步衔接
 
-- **Step 5（ORT 进阶，本周后半）**：扩展 W14 加 IntraOp/InterOp 线程配置 + IOBinding，
-  `yolo_benchmark` 出 batch 1 vs 4 × {CPU,CUDA,±IOBinding} 的 P50/P99（带 warmup）。
 - **W17**：把 W14–W16 整合为 `inference_engine` 库 + 单测；导出 ResNet18（YOLO 已在 W16 导出）。
 - **W18**：对本周 YOLO 程序做专业 Profiling（Nsight/Roofline），与 W16 的工程快测互补。

@@ -76,6 +76,16 @@ target_compile_definitions(w16_yolo_demo PRIVATE
 set_target_properties(w16_yolo_demo PROPERTIES
   BUILD_RPATH "${ONNXRUNTIME_ROOT}/lib")
 
+# Benchmark 可执行：w16_yolo_benchmark（batch 1v4 × {CPU,CUDA} × {Run,IOBinding}）
+add_executable(w16_yolo_benchmark yolo_benchmark.cpp)
+target_link_libraries(w16_yolo_benchmark PRIVATE w16_yolo_lib)
+target_compile_definitions(w16_yolo_benchmark PRIVATE
+  W16_MODEL_PATH="${_W16_MODELS_DIR}/yolov8n.onnx"
+  W16_IMAGE_PATH="${_W16_MODELS_DIR}/test_image.jpg"
+)
+set_target_properties(w16_yolo_benchmark PROPERTIES
+  BUILD_RPATH "${ONNXRUNTIME_ROOT}/lib")
+
 if(BUILD_TESTING)
   add_executable(w16_yolo_detector_test yolo_detector_test.cpp)
   target_link_libraries(w16_yolo_detector_test

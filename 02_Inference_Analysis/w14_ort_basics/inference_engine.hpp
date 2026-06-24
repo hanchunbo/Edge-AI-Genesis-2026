@@ -17,6 +17,16 @@ namespace w14 {
 // ExecutionProvider 选择。kCuda 不可用时构造函数优雅回退 kCpu（见 .cpp）。
 enum class Ep { kCpu, kCuda };
 
+// 会话配置（W16 引入，用于线程调优）。线程数为 0 表示用 ORT 默认。
+//   - intra_op_threads：单算子内部并行度（如一个大 MatMul 切多线程算）。
+//   -
+//   inter_op_threads：算子间并行度（仅对有并行分支的图有意义；串行图无收益）。
+struct SessionConfig {
+  Ep ep = Ep::kCpu;
+  int intra_op_threads = 0;
+  int inter_op_threads = 0;
+};
+
 // InferenceEngine 封装一个 ONNX 模型推理会话。
 //
 // 设计要点：
@@ -37,8 +47,10 @@ class InferenceEngine {
 
   // ep 默认 kCpu，保持既有调用方（W15 Classifier / demo / 旧测试）零改动。
   // 请求 kCuda 但环境不可用时不抛异常，回退 CPU；用 ActiveEp() 查实际生效的
-  // EP。
+  // EP。内部委托到 SessionConfig 版本（线程数取默认）。
   explicit InferenceEngine(const std::string& model_path, Ep ep = Ep::kCpu);
+  // W16 新增：带线程调优的构造。加性扩展，既有调用方不受影响。
+  InferenceEngine(const std::string& model_path, const SessionConfig& cfg);
   ~InferenceEngine();
 
   InferenceEngine(const InferenceEngine&) = delete;
@@ -62,6 +74,15 @@ class InferenceEngine {
   [[nodiscard]] std::vector<Ort::Value> Run(std::span<const float> input,
                                             std::span<const int64_t> shape);
 
+  // W16 新增：用 Ort::IoBinding 跑一次推理。与 Run 的差别是复用一个持久
+  // binding：省去每次 Run 重新搭 I/O 名称数组与输出 Ort::Value 的分配，
+  // CUDA EP 下让 ORT 复用设备/主机缓冲，减少 Device→Host 拷贝抖动。
+  // 语义同 Run：零拷贝借用 input，返回输出 Value（已拷回 CPU，可直接读）。
+  // 契约：持久输出绑定假定**同一 engine 实例的输出形状固定**（即 batch /
+  // 输入尺寸不变）；要换 batch 请用新的 engine 实例。
+  [[nodiscard]] std::vector<Ort::Value> RunIoBinding(
+      std::span<const float> input, std::span<const int64_t> shape);
+
   // 进程级 Env：函数内 static 保证唯一 + 线程安全初始化。
   // 为什么必须全局唯一：Env 持有日志器 + 内部线程池等进程级资源，
   // 多份会重复分配且日志交错；测试代码也用它的地址做"单例"断言。
@@ -73,6 +94,8 @@ class InferenceEngine {
   std::vector<IoInfo> outputs_;
   Ep active_ep_ = Ep::kCpu;
   std::string ep_fallback_reason_;
+  // 持久 IoBinding：首次 RunIoBinding 时惰性创建并复用（见 .cpp）。
+  std::unique_ptr<Ort::IoBinding> io_binding_;
 };
 
 }  // namespace w14
