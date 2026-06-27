@@ -67,14 +67,18 @@
 
 ## 2026 路线图
 
-| 季度 | 核心主题 | 关键技术 | 状态 |
-|------|----------|----------|------|
-| **Q1** | 工程基石与高性能体系 | **C++20/23**、Linux I/O、CMake、OpenCV 底层 | ✅ W1-W12 完成，W13 收尾 |
-| **Q2** | 推理引擎落地与数据驱动优化 | ONNX Runtime C++ API、量化、Profiling、Qt6 | 🔄 进行中 (W14 起) |
-| **Q3** | TensorRT 深度优化与生产级部署 | TRT C++ API、NCNN、ARM EP、Docker、gRPC | ⬜ 待开始 |
-| **Q4** | 端侧 LLM 推理与作品集沉淀 | llama.cpp、MLC-LLM、Kernel Fusion、作品集 | ⬜ 待开始 |
+> **2026-06-27 重构**：W16 后作废季度结构，改走「求职最短路径主线」——CV 收口 2 周 → LLM 主攻做深，边做边投。
 
-详细执行手册见 [docs/Q1.md](./docs/Q1.md) | [docs/Q2.md](./docs/Q2.md) | [docs/Q3.md](./docs/Q3.md) | [docs/Q4.md](./docs/Q4.md)
+| 阶段 | 核心主题 | 关键技术 | 状态 |
+|------|----------|----------|------|
+| 基石 | 工程基石与高性能体系（原 Q1） | **C++20/23**、Linux I/O、CMake、OpenCV 底层 | ✅ W1-W13 完成 |
+| 推理 | ONNX Runtime 推理闭环（原 Q2 前段） | ORT C++ API、前后处理、YOLOv8n 检测、CUDA EP | ✅ W14-W16 完成 |
+| **Phase 0** | CV 收口（变现 + LLM 地基） | INT8 量化、Profiling、TensorRT C++ | 🔄 下一站 W17 |
+| **Phase 1** | LLM 端侧基础（主攻起步） | llama.cpp、KV Cache、GGUF、Transformer 推理 | ⬜ W19 |
+| **Phase 2** | LLM 服务化 + 工程交付 | OpenAI 兼容 API、流式、Docker 容器化 | ⬜ W20-W21 |
+| Phase 3 | 弹性深化池（按面试反馈补） | vLLM、TensorRT-LLM、CUDA 算子 | ⬜ 弹性 |
+
+详细执行手册见 [docs/Roadmap.md](./docs/Roadmap.md)（W16 后唯一主线） | [docs/Q1.md](./docs/Q1.md)（已完成）；旧 Q2/Q3/Q4 季度手册已归档至 [docs/archive/](./docs/archive/)
 
 ---
 

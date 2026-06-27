@@ -3,7 +3,8 @@
 | 文件 | 用途 | 什么时候查 |
 |------|------|-----------|
 | [Q1.md](Q1.md) | Q1 执行手册（W1-W13 学习计划与进度） | 确认周次目标、查产出物要求 |
-| [Q2.md](Q2.md) | Q2 执行手册（W14-W26 推理引擎路线） | 规划下一阶段、确认阶段目标 |
+| [Roadmap.md](Roadmap.md) | **求职最短路径主线（W16 后唯一执行依据）** | 规划下一阶段、确认里程碑与对口岗 |
+| [archive/Q2.md](archive/Q2.md) · [archive/Q3.md](archive/Q3.md) · [archive/Q4.md](archive/Q4.md) | 旧季度执行手册（已被 Roadmap 取代，归档参考） | 翻旧规划素材时参考 |
 | [cpp20_23_cheatsheet.md](cpp20_23_cheatsheet.md) | C++20/23 新旧写法速查表 | 写代码时忘记某个特性的正确写法 |
 | [interview_faq.md](interview_faq.md) | Q1 C++ 自测题库（W1-W11，42 道题含参考答案，含 Q27-Q39 自测复盘深讲、Q40-Q42 W14 推理闭环复盘） | 知识点复习、查漏补缺 |
 | [q1_self_test.md](q1_self_test.md) | Q1 W1-W13 自测题（13 题 quiz 格式，答案折叠） | 季度复盘自检、W14 启动前知识体检 |

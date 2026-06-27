@@ -5,8 +5,10 @@
 
 ## 当前进度
 
-**Q2 W16（YOLOv8n 检测 Demo）全部完成：NMS + 解码 + 坐标反算 + 对拍 ultralytics（逐框<0.001）；ORT 进阶（W14 加性扩展线程配置 + IOBinding + batch 1v4 benchmark，RTX 3060 实测 CUDA 单帧 7.5×、IOBinding +4~9%）。W1–W15 + W14.5（CUDA EP）全部完成。各周细节见对应模块 `notes.md`，可复用概念见 `docs/notes/`；遗留 ResNet18 对比（降级可选）、VPS CPU EP 环境（待定）。**
-每开始新的 week，必须更新此处的进度描述（一句话：当前周 + 状态 + 遗留，细节进模块 notes）。
+**W16（YOLOv8n 检测 Demo）全部完成：NMS + 解码 + 坐标反算 + 对拍 ultralytics（逐框<0.001）；ORT 进阶（W14 加性扩展线程配置 + IOBinding + batch 1v4 benchmark，RTX 3060 实测 CUDA 单帧 7.5×、IOBinding +4~9%）。W1–W15 + W14.5（CUDA EP）全部完成。各周细节见对应模块 `notes.md`，可复用概念见 `docs/notes/`；遗留 ResNet18 对比（降级可选）、VPS CPU EP 环境（待定）。**
+
+**⚠️ 计划重构（2026-06-27）**：W16 之后作废原 Q2/Q3/Q4 季度结构，改走 `docs/Roadmap.md` 求职最短路径主线（CV 收口 2 周 → LLM 主攻做深）。下一站 **W17：INT8 量化 + Profiling 报告**。旧季度手册已归档 `docs/archive/`。
+每开始新的 week，必须更新此处的进度描述（一句话：当前周 + 状态 + 遗留，细节进模块 notes），并同步 `docs/Roadmap.md` 里程碑状态。
 
 ## Build（构建速查）
 
@@ -106,7 +108,7 @@
    find . -maxdepth 3 -regex '.*0[1-4]_.*' \( -name "*.cpp" -o -name "*.hpp" \) | xargs clang-format-21 --dry-run --Werror
    ```
 
-2. **文档进度同步**：确认 `README.md`、`docs/Q2.md`、`docs/tech-debt.md`、模块 `notes.md` 进度与代码一致，**不符则先更新再 commit**。
+2. **文档进度同步**：确认 `README.md`、`docs/Roadmap.md`、`docs/tech-debt.md`、模块 `notes.md` 进度与代码一致，**不符则先更新再 commit**。
 
 3. **环境依赖同步**：若本次开发安装了新工具（编译器、调试器、覆盖率工具等），必须同步更新 `README.md` 的「前提条件」安装命令。目的：VPS 上积累的隐式环境依赖若不记录，换机器（如 WSL、CI）时会批量复现已解决的问题。
 
