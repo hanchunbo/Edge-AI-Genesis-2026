@@ -7,6 +7,45 @@
 > 通用概念去主题库：NMS/IoU、YOLOv8 检测头布局见 [`docs/notes/inference.md`](../../docs/notes/inference.md)；
 > Letterbox + 坐标反算见 [`docs/notes/image-ops.md`](../../docs/notes/image-ops.md)。本笔记只留本模块怎么用 + 设计/踩坑/测试。
 
+## 复习小抄（一个框的完整旅程 + 易混点）
+
+> 后处理三件套 = 解码 → 坐标反算 → NMS。下图把整条链 + 两个易混点串成一张图，复习时先看这里。
+
+```
+原图 cv::Mat 810×1080 (BGR/HWC)
+  │ ① cvtColor BGR→RGB（YOLOv8 按 RGB 训练，顺序反了全错，且不报错）
+  ▼
+RGB 图
+  │ ② Letterbox（复用 W10）：等比缩放 scale + 四周补灰边 114 + ÷255 + HWC→CHW
+  │   产出 LetterboxInfo{scale, pad_left, pad_top} ← 存好，坐标反算要用
+  ▼
+张量 [1,3,640,640] float32
+  │ ③ InferenceEngine.Run（W14，CUDA/CPU EP，零拷贝喂进 ORT Session）
+  ▼
+输出 [1,84,8400]  ← 84 = 4 框坐标 + 80 类（无 objectness）；8400 = 所有格子的预测；坐标在「方形图系」
+  │ ④ Decode（纯 C++ core）：channels-major 转置逐 anchor → 取 80 类 max = score+class_id
+  │   → conf 阈值筛低分（不看类别，只看够不够自信）→ cxcywh→xyxy
+  │   → 坐标反算 orig=(lb-pad)/scale（先减 pad 再除 scale，顺序不能反）
+  ▼
+几百个候选框（已是「原图坐标」）
+  │ ⑤ NMS（纯 C++ core，逐类）：按 score 降序，留最高分、删与它 IoU>阈值的「同类」框
+  │   人和人去重、车和车去重，跨类不碰
+  ▼
+4 person + 1 bus（原图坐标，可直接画框）— 对拍 ultralytics 逐框 <0.001 ✅
+```
+
+**两个阈值旋钮（别混）**
+
+| 旋钮 | 在哪步 | 管什么 | 关键 |
+|---|---|---|---|
+| conf 阈值 | Decode（④） | 筛掉「模型没把握」的框 | **不看类别**，只看自信分够不够 |
+| iou 阈值 | NMS（⑤） | 重叠多少算重复、删一个 | **大于**阈值才删；越小删越狠 |
+
+**两套坐标系（靠坐标反算连接）**：方形图坐标系（模型输出）── `orig=(lb-pad)/scale` ──▶ 原图坐标系（最终画框）。
+反算是检测最高 bug 风险点（框偏了不报错），靠 `<1px` 单测兜底。
+
+**对拍铁律**：C++ 端方形 640 ⟺ ultralytics 也必须 `rect=False`。否则动态尺寸 onnx 让 ultralytics 默认走矩形推理（短边只补到 stride=32 的倍数、几乎不补灰边），与 C++ 全补边范式不一致 → 高分目标看不出、临界框（score≈0.25）翻车。
+
 ## 闭环结果
 
 | 项 | 实际值 |
@@ -111,10 +150,29 @@ cd 02_Inference_Analysis/w16_yolo_detector
 python tools/export_yolov8n.py   # 导出 onnx + 标签 + 测试图
 python tools/gen_reference.py    # 生成 reference_detections.txt
 
-# 编译 + 跑 demo（默认 CUDA EP，不可用回退 CPU）
-cmake --build build --target w16_yolo_demo
-./build/02_Inference_Analysis/w16_yolo_detector/w16_yolo_demo
+# 编译 + 跑 demo（demo 代码默认请求 CUDA EP，加载失败则回退 CPU）
 ```
+
+**CPU / CUDA 走两个独立 build 目录**——关键不在 demo 代码，而在该 build 配置时
+`ONNXRUNTIME_ROOT` 指向哪个 ORT 包：CPU-only 包 `lib/` 里**没有**
+`libonnxruntime_providers_cuda.so`，所以即便代码请求 CUDA 也只能回退 CPU。
+两个目录并存、互不污染，便于 CPU/CUDA 对比基准。
+
+```bash
+# —— CPU 版（默认 ONNXRUNTIME_ROOT = onnxruntime-linux-x64-1.26.0，CPU-only 包）——
+cmake -B build -S . -G Ninja -DCMAKE_CXX_COMPILER=g++-15
+cmake --build build --target w16_yolo_demo
+./build/02_Inference_Analysis/w16_yolo_detector/w16_yolo_demo          # EP=CPU
+
+# —— CUDA 版（覆盖 ONNXRUNTIME_ROOT 指向 -gpu- 包，内含 cuda provider .so）——
+cmake -B build-gpu -S . -G Ninja -DCMAKE_CXX_COMPILER=g++-15 \
+  -DONNXRUNTIME_ROOT="$PWD/third_party/onnxruntime/onnxruntime-linux-x64-gpu-1.26.0"
+cmake --build build-gpu --target w16_yolo_demo
+./build-gpu/02_Inference_Analysis/w16_yolo_detector/w16_yolo_demo      # EP=CUDA
+```
+
+> 易错点：`cmake -B build-gpu` 后若仍 `cmake --build build`（漏改目录），编/跑的还是
+> 旧 CPU 目录，现象是「配置成功却照样回退 CPU」。两处目录名必须一致。
 
 ## ORT 进阶（Step 5）+ 基准
 
