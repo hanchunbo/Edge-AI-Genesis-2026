@@ -26,33 +26,30 @@
 
 ---
 
-## 进度追踪
+## 进度与路线图
 
-### Q1 进度 (2026.01 - 2026.03) `← 当前阶段`
+> 单一执行主线见 [docs/Roadmap.md](./docs/Roadmap.md)（W1→W21 全程）。下表为镜像总览。
+> **2026-06-27 重构**：W16 后作废季度结构，改走「求职最短路径主线」——CV 收口 2 周 → LLM 主攻做深，边做边投。
 
-| 周次 | 主题 | C++20+ 特性 | 状态 |
-|------|------|-------------|------|
-| W1 | 内存安全与RAII | Concepts, std::expected, std::span | ✅ 完成 |
-| W2 | 移动语义与零拷贝 | std::span, std::format | ✅ 完成 |
-| W3 | C++20特性实战 | std::format, string_view | ✅ 完成 |
-| W4 | 多线程与任务同步 | counting_semaphore | ✅ 完成 |
-| W5 | 通用线程池架构 | jthread, stop_token, alignas(64) | ✅ 完成 |
-| W6 | 高性能I/O (mmap) | std::span | ✅ 完成（实现+测试+benchmark） |
-| W7 | CMake工程化 (I) | INTERFACE/PUBLIC/PRIVATE, Generator Expressions | ✅ 完成 |
-| W8 | CMake工程化 (II) & 自动化单元测试 | FetchContent（本地 zip）, lcov/genhtml 覆盖率 | ✅ 完成 |
-| W9-W11 | OpenCV底层实战 + 性能调优工具链 | std::mdspan (C++23) | ✅ W9-W11 全部完成 |
-| W12 | Q1 知识闭环与技术复盘 | C++20/23 对照总结，FAQ 库，Trade-offs | ✅ 完成 |
-| W13 | 阶段项目：高性能多线程图像预处理引擎 | 全栈整合 | ✅ 完成 |
+### 已完成（W1–W16）
 
-### Q2 进度 (2026.04 - 2026.06) `← 当前阶段`
+| 阶段 | 周次 | 核心主题 | 关键技术 | 状态 |
+|------|------|----------|----------|------|
+| 基石（原 Q1） | W1–W13 | 工程基石与高性能体系 | jthread/stop_token、mmap、`std::span`/`mdspan`、CMake、OpenCV 底层算子 | ✅ |
+| 推理（原 Q2 前段） | W14–W16 | ONNX Runtime 推理闭环 | ORT C++ API、前后处理、YOLOv8n 检测、CUDA EP（单帧 ~7.5×） | ✅ |
 
-| 周次 | 主题 | 关键技术 | 状态 |
-|------|------|----------|------|
-| W14 | ONNX Runtime C++ 基础闭环 | RAII Session、`std::span` 零拷贝输入、`Ort::Value::CreateTensor` | ✅ B 路径：本地 CPU + MobileNetV2 闭环（CUDA EP 推至 W14.5 / W15）|
-| W15 | 分类推理端到端闭环（预处理 + Top-K 后处理 + Classifier 编排） | ImageNet 归一化、softmax/Top-K、复用 W14 推理 | ✅ 完成（真图→Top-5，Samoyed 0.65）|
-| W16 | YOLOv8n 检测 Demo（多输出头 + 手写 NMS + 坐标反算 + IOBinding/线程调优 + batch benchmark） | onnxruntime + 手写后处理 | ✅ 完成（对拍 ultralytics；RTX 3060 CUDA 单帧 7.5×）|
-| W17 | 库重构 + ONNX 导出 + TRT EP 对比 | onnxruntime + tensorrt | ⏳ 计划中 |
-| W18 | Profiling 报告（Roofline + 火焰图） | perf + ORT profile | ⏳ 计划中 |
+逐周一行一周明细见 [docs/Roadmap.md「已完成里程碑」](./docs/Roadmap.md)；阶段手册见 [docs/Q1.md](./docs/Q1.md)、[docs/archive/Q2.md](./docs/archive/Q2.md)。
+
+### 主线（W17 起 · 求职最短路径）
+
+| 阶段 | 周次 | 核心主题 | 关键技术 | 状态 |
+|------|------|----------|----------|------|
+| **Phase 0** | W17–W18 | CV 收口（变现 + LLM 地基） | INT8 量化、Profiling、TensorRT C++（FP16 + INT8 Calibrator） | 🔄 下一站 W17 |
+| **Phase 1** | W19 | LLM 端侧基础（主攻起步） | llama.cpp、KV Cache、GGUF、Transformer 推理 | ⬜ |
+| **Phase 2** | W20–W21 | LLM 服务化 + 工程交付 | **vLLM 部署**、OpenAI 兼容 API、PagedAttention、SSE 流式、Docker 容器化 | ⬜ |
+| Phase 3 | 弹性 | 弹性深化池（按面试反馈补） | 昇腾 CANN/MindIE、TensorRT-LLM、SGLang/TGI、ARM/RKNN、CUDA 算子 | ⬜ |
+
+完整执行手册（硬条件反推、投递里程碑阶梯、砍掉清单）见 [docs/Roadmap.md](./docs/Roadmap.md)。
 
 ---
 
@@ -62,23 +59,6 @@
 |------|----------|------|
 | **VPS** | x86 64 Bit, 2GB RAM, **GCC 15.2.0** | 远程开发、CI/CD |
 | **本地笔记本** | i5-12500H, 16GB RAM, RTX 3060, 512GB SSD | 本地开发、GPU 推理测试 |
-
----
-
-## 2026 路线图
-
-> **2026-06-27 重构**：W16 后作废季度结构，改走「求职最短路径主线」——CV 收口 2 周 → LLM 主攻做深，边做边投。
-
-| 阶段 | 核心主题 | 关键技术 | 状态 |
-|------|----------|----------|------|
-| 基石 | 工程基石与高性能体系（原 Q1） | **C++20/23**、Linux I/O、CMake、OpenCV 底层 | ✅ W1-W13 完成 |
-| 推理 | ONNX Runtime 推理闭环（原 Q2 前段） | ORT C++ API、前后处理、YOLOv8n 检测、CUDA EP | ✅ W14-W16 完成 |
-| **Phase 0** | CV 收口（变现 + LLM 地基） | INT8 量化、Profiling、TensorRT C++ | 🔄 下一站 W17 |
-| **Phase 1** | LLM 端侧基础（主攻起步） | llama.cpp、KV Cache、GGUF、Transformer 推理 | ⬜ W19 |
-| **Phase 2** | LLM 服务化 + 工程交付 | OpenAI 兼容 API、流式、Docker 容器化 | ⬜ W20-W21 |
-| Phase 3 | 弹性深化池（按面试反馈补） | vLLM、TensorRT-LLM、CUDA 算子 | ⬜ 弹性 |
-
-详细执行手册见 [docs/Roadmap.md](./docs/Roadmap.md)（W16 后唯一主线） | [docs/Q1.md](./docs/Q1.md)（已完成）；旧 Q2/Q3/Q4 季度手册已归档至 [docs/archive/](./docs/archive/)
 
 ---
 
