@@ -12,6 +12,44 @@
 
 ---
 
+## 2026-07-01（W16 检测 demo 源码精读 — 预处理→推理→decode→NMS→可视化全链路答疑）
+
+### 操作摘要
+- 逐段精读 W16 YOLOv8 检测 demo：命名空间结构 → `LetterboxToTensor` 预处理 → `Detect` 推理（含 W14 `InferenceEngine::Run` 零拷贝）→ `DecodeYolov8` 解码反算 → `Nms` 去重 → demo 可视化输出；跑通 demo（CUDA .so 缺失自动回退 CPU）
+- **无代码改动，纯源码精读 + 一次 demo 实操**；本条沉淀今日澄清的 6 处理解短板
+- 沉淀产物：`docs/notes/image-ops.md`（新增「图像坐标系 y 朝下 + cxcywh↔xyxy + clamp」「cv::imwrite 相对路径落 CWD」）、`docs/notes/cpp-core.md`（新增「匿名 vs 具名命名空间」「默认实参 + 透传」）、`docs/notes/inference.md`（新增「NCHW 四维含义」）、`docs/interview_faq.md` Q43-Q46（答题角度 + 链接，含 YOLO AGPL 授权）、`docs/README.md` FAQ 计数 42→46、`docs/notes/README.md` 索引
+
+### 今日深讲内容
+- **命名空间**：detector 用具名 `w16`（库代码，名字 = API 契约，hpp/cpp 同名是同一个分两处写），demo 用匿名 `namespace {}`（main 叶子文件，藏 `LoadLabels`，内部链接 = 文件级 static，防链接冲突）
+- **LetterboxToTensor（V4）链路**：Letterbox(等比缩放+灰边) → ÷255 → HWC→CHW；灰边 `(114,114,114)` 来自**默认实参**，经 `LetterboxToTensor→Letterbox→copyMakeBorder` 三层透传；info{scale,pad_left,pad_top} 是坐标反算的钥匙
+- **推理两层**：detector 只转交（`engine_.Run` 拿裸指针+shape）；engine 真干活 = 零拷贝 `CreateTensor`(借用 buffer，`const_cast` 对接 C ABID 只读) → 按名指定 I/O → `session_->Run` 跑网络
+- **shape `{1,3,640,640}` = NCHW**：第一个 1 = batch 维，一次推一张也必须显式写；输出 `[1,C,A]`：C=4+类别数=84、A=anchor 数=8400、channels-major（`out[ch*A+a]` 跨步取）
+- **DecodeYolov8 四步**：取每 anchor 最高类分(v8 无 objectness) → conf 筛 → cxcywh→xyxy → `(lb-pad)/scale` 反算 + clamp 夹边界
+- **NMS**：score 降序贪心，删与基准框 IoU>阈值的**同类**框；IoU 算交集负宽高要 `max(0,...)`
+
+### 今日暴露的短板 / 困惑（已提成 FAQ Q43-Q46）
+- **图像坐标系 y 朝下（最强短板）**：直觉以为左上角 y 该用加法；实则图像 y 向下增大，左上角 y = `cy - h/2`（减法）。x 左右符直觉，唯 y 上下翻转 → **Q43**
+- **匿名 vs 具名命名空间**「为啥不一样」：库 vs 入口、API 契约 vs 内部链接 → **Q44**
+- **NCHW 第一个 1**「还是不懂」：batch 维，哪怕一张也不能省 → **Q45**
+- **`[1,C,A]` 是啥**：已在主题库 YOLOv8 检测头小节覆盖，今日补 NCHW 维 + 链接
+- **没传 pad_color 哪来的灰边**：默认实参 + 三层透传（cpp-core 新概念）
+- **YOLO 授权**：yolov8n 是 Ultralytics AGPL-3.0，免费但传染性强，闭源商用需买授权或换 YOLOX(Apache) → **Q46**
+
+### 实操记录
+- 跑 `w16_yolo_demo`：CUDA provider .so 缺失 → ORT 报 `Failed to load libonnxruntime_providers_cuda.so` → **自动回退 EP=CPU**，检测正常完成（3 person + 1 bus + 1 person，conf 0.436~0.890），存图成功
+- **找不到输出文件的真相**：`cv::imwrite("w16_output.jpg")` 是相对路径，落在**运行命令的 CWD**（仓库根 `~/code/Edge-AI-Genesis-2026/`）而非 binary 目录；文件实际已生成（353KB，时间戳对得上）
+
+### 待办
+- 进入 `quant`（Phase 0）：INT8 量化 + 部署硬化 + Profiling 报告（逐算子 kernel placement 在此深挖）
+- （承前）ResNet18 对比、VPS CPU EP 环境
+
+### 关联
+- W16 模块 notes：`02_Inference_Analysis/w16_yolo_detector/notes.md`
+- 概念正文（唯一事实源）：`docs/notes/image-ops.md`（坐标系/imwrite）、`docs/notes/cpp-core.md`（命名空间/默认实参）、`docs/notes/inference.md`（NCHW）
+- 答题视角：`docs/interview_faq.md` Q43-Q46
+
+---
+
 ## 2026-06-22（Session 5 — W14 源码精读 + benchmark 实操，W15 启动前）
 
 ### 操作摘要

@@ -15,6 +15,7 @@
 - [Execution Provider 与优雅回退](#execution-provider-与优雅回退)
 - [Softmax（数值稳定版）](#softmax数值稳定版)
 - [Top-K 选择（partial_sort）](#top-k-选择partial_sort)
+- [NCHW 四维含义（batch / channel / H / W）](#nchw-四维含义batch--channel--h--w)
 - [YOLOv8 检测头布局（无 objectness + 转置）](#yolov8-检测头布局无-objectness--转置)
 - [NMS / IoU（逐类非极大值抑制）](#nms--iou逐类非极大值抑制)
 - [IntraOp vs InterOp 线程](#intraop-vs-interop-线程)
@@ -177,6 +178,18 @@ std::partial_sort(idx.begin(), idx.begin() + k, idx.end(),
 **argmax（Top-1）是 K=1 的退化**：只要最像的那一类时，不必 `partial_sort`，直接 `std::max_element` 找最大 logit 的位置、再用「指针差」得索引即可（`idx = max_it - data`），索引就是预测类别编号。注意两个认知点：① **比大小取 Top-1 不需要先 softmax**——softmax 不改变谁最大，只在要「概率」时才做。② **模型对输入只做机械前向**，不在乎喂的是真图还是噪声；W14 demo 喂固定种子随机数，所以 Top-1 索引**无现实语义**，只验证「推理链路通、输出能解析」——把「链路正确性」和「识别精度」解耦，是先搭骨架的工程节奏。
 
 > 实战出处：`02_Inference_Analysis/w15_classify_pipeline/notes.md`（后处理节，commit 251f70d）；argmax 退化见 `w14_ort_basics/ort_basics_demo.cpp`（`max_element` + 指针差）
+
+---
+
+## NCHW 四维含义（batch / channel / H / W）
+
+**是什么**：视觉模型输入张量 shape `{1, 3, 640, 640}` 是 **NCHW** 四维：**N**=batch（这次喂几张图）、**C**=channel（通道数，RGB=3）、**H**=height、**W**=width。第一个 `1` 就是 batch 维——一次推理 1 张图。
+
+**为什么 / 何时用**：维度是模型 I/O 的固定契约，**哪怕只推一张也必须显式写出 batch 维**（不能因为「只有一张」就省成三维）。`1×3×640×640=1228800` 正好等于 `LetterboxToTensor` 产出的 float 数；那个 `1` 在连乘里不改变总数，但它告诉引擎「这坨数据是 **1 张**图的 3×640×640，batch 在最外层」。输出端同理要校验 `out_shape[0]==1`（喂 1 张要还 1 张）。
+
+**坑**：① batch 是**可调旋钮**不是常量摆设——批量推理提吞吐时把 `1` 改成 `N` 并在最外层拼 N 张图的张量（W16 benchmark 的 batch 1v4 即此）。② N 在**最外层**：NCHW 内存里先排满第 0 张图的全部 CHW，再第 1 张；别和 NHWC（TF 默认，通道在最内）搞混。③ 输入 shape 与张量 buffer 元素数必须自洽，否则 ORT 报维度错。
+
+> 实战出处：`02_Inference_Analysis/w16_yolo_detector/yolo_detector.cpp:36`（`shape{1,3,input,input}`）；HWC↔CHW 排布见 image-ops.md
 
 ---
 

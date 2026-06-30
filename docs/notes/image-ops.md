@@ -12,6 +12,8 @@
 - [HWC ↔ CHW 内存布局](#hwc--chw-内存布局)
 - [silent 预处理 bug（错了不报错只偏结果）](#silent-预处理-bug错了不报错只偏结果)
 - [Letterbox + 坐标反算（检测预处理范式）](#letterbox--坐标反算检测预处理范式)
+- [图像坐标系（y 轴朝下）+ cxcywh↔xyxy + clamp 夹边界](#图像坐标系y-轴朝下--cxcywhxyxy--clamp-夹边界)
+- [cv::imwrite 相对路径落在 CWD（找不到输出文件）](#cvimwrite-相对路径落在-cwd找不到输出文件)
 
 ---
 
@@ -120,3 +122,32 @@ out[c * hw + pos] = v;   // c 选通道平面，pos 是平面内 y*W+x 偏移 �
 **坑**：① **填充居中**：左右/上下均分，余数加到右/下（对齐 YOLOv5/v8 官方）；不居中虽然反算仍对，但喂给模型的像素分布变了，临界框检测结果会漂。② **对拍范式必须一致**：动态 H/W 的 ONNX 让 ultralytics（YOLOv8 的官方 Python 实现，对拍时当「标准答案」）默认走**矩形推理**（按 stride 补到非方形、几乎无填充），而自己的 C++ 流水线常固定喂方形 640×640。两端 letterbox 范式不一致时，高分目标对得上、临界框（score≈0.25）会差出整框——对拍前先确认两端都用方形（ultralytics 传 `rect=False`）。〔stride = 网络对输入的总下采样倍数，YOLOv8 最大 stride=32 → 输入宽高必须被 32 整除；矩形推理正是利用这点，短边只补到最近的 32 倍数而非补满方形，省灰边、算得快。〕③ YOLOv8 的归一化只有 `/255`（无 ImageNet mean/std），别把分类那套均值方差套上来。④ Letterbox 按输入通道顺序展平，BGR→RGB 要在 letterbox **之前**做。
 
 > 实战出处：`02_Inference_Analysis/w16_yolo_detector/notes.md`（设计/踩坑节）；算子实现 `01_Linux_CPP_Foundations/w10_resize/custom_resize.cpp`（`Letterbox` / `LetterboxToTensor`）
+
+---
+
+## 图像坐标系（y 轴朝下）+ cxcywh↔xyxy + clamp 夹边界
+
+**是什么**：图像/屏幕坐标系原点 (0,0) 在**左上角**，x 向右、**y 向下**——与数学课的「y 向上」相反（图片在内存里从上到下逐行存，行号越大越靠下）。直接后果：一个框的「上边缘」y **更小**、「下边缘」y **更大**。所以 box 解码时 `cxcywh → xyxy`（中心宽高 → 对角两点）：
+
+```cpp
+x1 = cx - w/2;  y1 = cy - h/2;   // 左上角 = 两个都减（取小）  ← y 也是减法！
+x2 = cx + w/2;  y2 = cy + h/2;   // 右下角 = 两个都加（取大）
+```
+
+**为什么 / 何时用**：NMS 算 IoU、OpenCV `rectangle`/裁剪都约定用对角两点 `(x1,y1)`=左上、`(x2,y2)`=右下，且 `x1<x2 && y1<y2`。模型输出是 cxcywh，必须转。**反算回原图后再用 `std::clamp(v, 0, 图宽/高)` 把坐标夹进图像合法范围**——贴边/出界目标反算后会出现负坐标或超界值，不夹则 OpenCV 越界访问崩溃、NMS 面积算错。
+
+**坑**：① 凭数学直觉以为「上边缘 = cy + h/2（加法）」是经典错误——图像 y 翻转，**左上角的 y 是 `cy - h/2`（减法）**。x 的左右与直觉一致（左减右加），只有 y 的上下是反的。② `std::clamp(v, lo, hi)` 要求 `lo ≤ hi`，且参数类型一致（坐标是 float 就写 `0.0f` 不是 `0`，否则编译报错）。③ 同一「无交集时负宽高要 `max(0,...)` 夹零」的思想在 IoU 里也出现（见 inference.md「NMS / IoU」坑①）——都是「几何量夹回合法区间」。
+
+> 实战出处：`02_Inference_Analysis/w16_yolo_detector/decode.cpp`（`DecodeYolov8` 第 51-66 行：cxcywh→xyxy + 反算 + clamp）
+
+---
+
+## cv::imwrite 相对路径落在 CWD（找不到输出文件）
+
+**是什么**：`cv::imwrite("out.jpg", img)` 传相对路径时，文件写在**执行命令时所在的当前工作目录（CWD）**，**不是**可执行文件所在的目录。从 `~/project$` 跑 `./build/.../demo`，输出落在 `~/project/`，而非 `build/.../` 旁边。
+
+**为什么 / 何时用**：相对路径的基准永远是进程的 CWD（OS 通用规则，不限 OpenCV）。「跑完找不到输出图」十有八九是去 binary 目录找了，或编辑器没刷新目录树，或文件被 `.gitignore` 忽略（`git status` 看不到 ≠ 磁盘上不存在，是两回事）。
+
+**坑**：① 想稳定落在固定位置就传**绝对路径**或显式拼到目标目录，别依赖 CWD。② WSL 里看生成的图：`explorer.exe out.jpg` 直接调 Windows 图片查看器。③ `git status` 不显示不代表没生成——先 `ls -la` 看磁盘真相。
+
+> 实战出处：`02_Inference_Analysis/w16_yolo_detector/yolo_demo.cpp:31,63`（`out_path = "w16_output.jpg"` → 落在仓库根）
