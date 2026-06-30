@@ -1,6 +1,9 @@
-# 总路线图（Full Roadmap：W1 → W21）
+# 总路线图（W1–W16 周志存档 · W17 起 Phase 主线）
 
-> **本文件是项目唯一执行主线**：前半段（W1–W16）已完成，作存档回顾；后半段（W17 起）走「求职最短路径」，
+> **本文件是项目唯一执行主线**。**结构分两段**：
+> - **W1–W16（存档）**：已完成，按周记录，冻结回顾，不再改动。
+> - **W17 起（前向）**：走「求职最短路径」，采用 **Phase + 交付物里程碑** 两层结构——**不再按周切分**，交付物按内容定大小、各自解锁一档可投岗位。
+>
 > 作废原 Q2/Q3/Q4 季度结构。旧季度手册已归档至 `docs/archive/`（Q2/Q3/Q4.md）留作素材参考，不再作为执行依据。
 >
 > **后半段核心目标**：以最快路径补齐「通往西安高薪端侧 AI 部署/LLM 岗」的硬条件，边做边投。
@@ -57,95 +60,104 @@ CV 与 LLM 都是这个底座上的应用层，**不是二选一**，连接两�
 
 ---
 
-## 高薪岗的硬条件反推（决定主线必须覆盖什么）
+## 高薪岗的硬条件反推（2026-06-27岗位清单）
 
-| 岗位簇 | 代表岗（薪资） | 卡的硬条件 |
+> **一张表回答两件事**：每个交付物**补什么硬条件**（→ 为什么主线这么排）+ **解锁什么岗位**（→ 做完投什么）。
+> 岗位/薪资源自 2026-06-27 岗位清单（30 份 JD）。**交付物为主键，按主线顺序排**；末行 NPU 簇无 demo，进 Phase 3 弹性。
+
+| 交付物 | 解锁岗位簇 · 代表岗（薪资） | 该交付物补的硬条件 |
 |---|---|---|
-| CV 部署（收口） | 睿创 J11352（20–40K）、知象（30–45K，⚠️见备注） | **量化 + TensorRT** + 前后处理 + C++ |
-| LLM 端侧（门槛低·主攻入口） | **紫光国芯 AI 应用部署（面议，经验不限/本科）**、珠海芯动力 LLM 软件（15–30K，硕士） | **KV Cache + 量化 + llama.cpp + Transformer 推理理解 + 服务化 + C++** |
-| LLM 服务化（高薪收尾） | 紫光（面议高）、燧原/朗坤/小儿方（30–70K） | 上一行 + **vLLM/SGLang + OpenAI 兼容 API + PagedAttention + Docker + 服务化落地** |
-| NPU/国产芯（量大·硬件门槛） | 睿创 J11308、影微、中科昇腾（10–60K） | **昇腾 CANN/MindIE、地平线 BPU、自研 NPU 算子映射**——⚠️无板子，进 Phase 3 弹性 |
+| `quant` | CV 部署：睿创 J11352（20–40K）；知象 30–45K（备胎，⚠️见注） | **INT8 量化** + 前后处理 + 部署硬化 + C++ |
+| `trt` | CV 部署强化（小米异构等，25–55K） | + **TensorRT FP16/INT8** + GPU 端到端 |
+| `llm` | LLM 端侧·门槛低入口：**紫光国芯 AI 应用部署起步（面议，经验不限/本科）**、珠海芯动力（15–30K，硕士） | **KV Cache + GGUF 量化 + llama.cpp + Transformer 推理** + C++ |
+| `vllm` | LLM 服务化：燧原/朗坤/小儿方（30–70K） | + **vLLM/SGLang + OpenAI 兼容 API + PagedAttention** + 服务化落地 |
+| `deploy` | LLM 服务化收尾：紫光（面议高） | + **Docker 容器化** + 部署文档 |
+| —（无 demo） | NPU/国产芯（量大·硬件门槛）：睿创 J11308、影微、中科昇腾（10–60K） | 昇腾 CANN/MindIE、地平线 BPU、自研 NPU 算子映射——⚠️无板子，进 Phase 3 弹性 |
 
 > **量化是三个簇的公共必修**，故排第一，一步同时推进 CV 收口与 LLM 地基。
-> **vLLM 提示（2026-06-27 JD 复核）**：30 份 JD 聚合里 vLLM/SGLang/TGI 频次 26、PagedAttention/投机解码 14，高薪 LLM Infra 岗（燧原/朗坤/寒武纪）点名要会用工业框架，而非手搓兼容层——故 vLLM 已从弹性升进主线 W20/W21。
+> **vLLM 提示（2026-06-27 JD 复核）**：30 份 JD 聚合里 vLLM/SGLang/TGI 频次 26、PagedAttention/投机解码 14，高薪 LLM Infra 岗（燧原/朗坤/寒武纪）点名要会用工业框架，而非手搓兼容层——故 vLLM 已从弹性升进主线 Phase 2（交付物 `vllm`/`deploy`）。
 > **NPU 提示**：NPU/昇腾/CANN/BPU 频次 43（排名 3，西安核心盘刚需），但受限于无 Atlas/Jetson/地平线板子，作硬件门槛盲点进 Phase 3 弹性调研（昇腾社区免费算力可补理论 + 一个 demo）。
 > **⚠️ 知象备注**：技术面通过后被放鸽子，诚信存疑，**降级为备胎**，不为其调整节奏；CV 收口的对口锚点以睿创 J11352 为准。
 
 ---
 
-## 主线（W17 起，替换 W16 之后全部计划）
+## 主线（W17 之后全部走此结构：Phase + 交付物里程碑）
 
-### Phase 0 — CV 收口（W17–W18｜变现最快 + LLM 地基）
+> **两层结构**：**Phase** = 战略阶段；**交付物** = 阶段内一个可独立交付、且各自解锁一档可投岗位的里程碑。
+> 交付物用主题名标识（即模块目录/命名空间名），**按内容定大小、不承诺时间**，做完即更新简历投一批。
 
-#### W17 🔴 INT8 量化 + Profiling 报告（模型压缩起步）
-- **范围**：ORT 官方工具对 YOLOv8n 做 PTQ（MinMax / Entropy 两策略）；量化前先用 perf / Nsight 定位瓶颈。
-  剪枝/蒸馏作为**概念覆盖**（JD 里量化/剪枝/蒸馏/图优化常成套出现，频次 29）——讲清三者定位差异即可，不动手实现
+### Phase 0 — CV 收口（变现最快 + LLM 地基）
+
+#### 交付物 `quant` 🔴 INT8 量化 + 部署硬化 + Profiling 报告
+- **范围**：
+  - **量化**：ORT 官方工具对 YOLOv8n 做 PTQ（MinMax / Entropy 两策略）；量化前先用 perf / Nsight 定位瓶颈。
+    剪枝/蒸馏作**概念覆盖**（JD 里量化/剪枝/蒸馏/图优化常成套出现，频次 29）——讲清三者定位差异即可，不动手实现。
+  - **部署硬化**（承接 W16 评估出的部署形态缺口，均为小改高 ROI 项）：
+    decode 预留容量（`reserve`，消除逐帧 realloc）、输入侧 IOBinding 复用（输入输出**双绑** + buffer 池，让 W16「噪声级」收益变实）、
+    `max_det` 上限 + NaN/Inf 鲁棒（`nms.cpp`/`decode.cpp`）、`Detect` 路径运行时分段埋点（pre / infer / post 滚动 P50/P99）、
+    CUDA 不可用时**显式告警**而非静默回退。
+    > GPU 端预处理/后处理融图、FP16 路径属后端优化，归 `trt` 交付物，不在此（避免与 TRT engine 割裂）。
 - **产出**：
   - 量化前后 **体积 / 延迟 / mAP 对比报告**（`docs/benchmarks/`）
   - Profiling 报告（瓶颈归因 + 优化方向）
-  - 模块：`02_Inference_Analysis/w17_quantization/`
-- **成功指标**：INT8 推理延迟较 FP32 显著下降，mAP 掉点可量化并解释；能讲清对称/非对称、Per-Channel vs Per-Tensor；能区分量化 vs 剪枝 vs 蒸馏
-- 🎯 **里程碑：CV 簇可投**（睿创 J11352）；简历挂「INT8 量化 + Profiling」
+  - 部署硬化项 before/after 数字（分配次数 / IOBinding 实测收益 / 鲁棒性用例）
+  - 模块：`02_Inference_Analysis/quantization/`（命名空间 `quant`）
+- **成功指标**：INT8 推理延迟较 FP32 显著下降，mAP 掉点可量化并解释；能讲清对称/非对称、Per-Channel vs Per-Tensor；能区分量化 vs 剪枝 vs 蒸馏；部署硬化项有 before/after 数字支撑
+- 🎯 **里程碑：CV 簇可投**（睿创 J11352）；简历挂「INT8 量化 + Profiling + 部署硬化」
 - ⚡ 同时是 LLM 端侧量化的地基
 
-#### W18 🔴 TensorRT C++ Engine（FP16 + INT8 Calibrator）
-- **范围**：直接调 TRT C++ API（`IBuilder→INetworkDefinition→ICudaEngine→IExecutionContext`）建 engine；实现 `IInt8EntropyCalibrator2`
+#### 交付物 `trt` 🔴 TensorRT C++ Engine（FP16 + INT8 Calibrator + GPU 端到端）
+- **范围**：直接调 TRT C++ API（`IBuilder→INetworkDefinition→ICudaEngine→IExecutionContext`）建 engine；实现 `IInt8EntropyCalibrator2`；
+  **GPU 端预处理/后处理**（letterbox + decode 上 GPU 或融图，消除 PCIe 往返——W16 实测前后处理占端到端 ~45%）
 - **产出**：
   - **四路对比表**：CPU EP / CUDA EP / TRT FP16 / TRT INT8（体积 / 延迟 / mAP）
-  - TRT 优化报告
-  - 模块：`02_Inference_Analysis/w18_tensorrt/`
-- **成功指标**：TRT INT8 延迟 < FP16；能讲清 TRT 与 ORT 量化路径差异
-- 🔼 CV 簇硬问题扛得住；简历升级「多后端 CPU+CUDA+**TensorRT**，含 INT8」
+  - TRT 优化报告 + GPU 端到端流水线延迟拆解
+  - 模块：`02_Inference_Analysis/tensorrt/`（命名空间 `trt`）
+- **成功指标**：TRT INT8 延迟 < FP16；能讲清 TRT 与 ORT 量化路径差异；端到端（含前后处理）延迟较 W16 CUDA EP 明显下降
+- 🔼 CV 簇硬问题扛得住；简历升级「多后端 CPU+CUDA+**TensorRT**，含 INT8 + GPU 端到端」
 
-### Phase 1 — LLM 端侧基础（W19｜主攻起步，做深）
+### Phase 1 — LLM 端侧基础（主攻起步，做深）
 
-#### W19 🔴 llama.cpp 部署 + KV Cache + 源码精读
-- **范围**：跑通小模型 chat demo；精读 `llama_decode` 推理路径；吃透 KV Cache（为何不能常规 batch）+ GGUF 量化类型（Q4_K_M / Q8_0，接 W17 量化内功）；读源码即落地 **Transformer 推理流程**理解
+#### 交付物 `llm` 🔴 llama.cpp 部署 + KV Cache + 源码精读
+- **范围**：跑通小模型 chat demo；精读 `llama_decode` 推理路径；吃透 KV Cache（为何不能常规 batch）+ GGUF 量化类型（Q4_K_M / Q8_0，接 `quant` 量化内功）；读源码即落地 **Transformer 推理流程**理解
 - **产出**：
   - C++ 调 `llama.h` 的命令行 chat demo
   - **KV Cache 显存账** + TTFT / tokens·s⁻¹ 实测报告
-  - 模块：`04_System_Integration/w19_llama_cpp/`
+  - 模块：`04_System_Integration/llama_cpp/`（命名空间 `llm`）
 - **成功指标**：能讲清 KV Cache 显存随上下文增长的账、prefill vs decode 阶段差异、GGUF 量化与 INT8 PTQ 的异同
-- 🎯 **里程碑：LLM 基础打通**，可投门槛不限的 LLM 应用/部署入门岗（紫光应用部署起步、珠海芯动力）；紫光主体要服务化，做完 W20–W21 才完整够得上
+- 🎯 **里程碑：LLM 基础打通**，可投门槛不限的 LLM 应用/部署入门岗（紫光应用部署起步、珠海芯动力）；紫光主体要服务化，做完 `vllm`+`deploy` 才完整够得上
 
-### Phase 2 — LLM 服务化 + 工程交付（W20–W21｜命中紫光/燧原级硬条件）
+### Phase 2 — LLM 服务化 + 工程交付（命中紫光/燧原级硬条件）
 
-#### W20 🔴 vLLM 部署 + OpenAI 兼容服务化（工业框架上手）
+#### 交付物 `vllm` 🔴 vLLM 部署 + OpenAI 兼容服务化（工业框架上手）
 - **范围**：用 **vLLM** 起小模型推理服务，跑通 OpenAI-compatible API（SSE 流式）+ 并发；
-  对照 W19 手写理解，吃透 **PagedAttention / continuous batching** 为何比朴素 KV Cache 高吞吐
+  对照 `llm` 手写理解，吃透 **PagedAttention / continuous batching** 为何比朴素 KV Cache 高吞吐
 - **产出**：
   - vLLM 服务 + OpenAI 兼容接口 + 压测报告（吞吐 / 延迟 / 显存占用）
-  - **vLLM vs 朴素 llama.cpp 服务**吞吐对比；模块：`04_System_Integration/w20_vllm_serving/`
+  - **vLLM vs 朴素 llama.cpp 服务**吞吐对比；模块：`04_System_Integration/vllm_serving/`（命名空间 `vllm`）
 - **成功指标**：能讲清 PagedAttention 显存碎片化解法、continuous batching 调度；能跑出 vLLM 高并发吞吐曲线
 - 🔼 燧原/朗坤/小儿方/寒武纪「vLLM/SGLang/TGI + PagedAttention」直命中（频次 26/14）；简历挂「工业级 LLM 推理框架」
 
-#### W21 🔴 Docker 容器化 + 部署文档
+#### 交付物 `deploy` 🔴 Docker 容器化 + 部署文档
 - **范围**：vLLM 服务打包成镜像；写标准化部署文档（含 GPU runtime 配置）
-- **产出**：Docker 镜像 + 部署文档；模块：`04_System_Integration/w21_deploy/`
-- 🔼 紫光「Docker/K8s」、中科昇腾「镜像编排」命中（Docker/K8s/MaaS 频次 28）；MEM 工程交付视角加分
+- **产出**：Docker 镜像 + 部署文档；模块：`04_System_Integration/deploy/`
+- 🔼 紫光「Docker/K8s」、中科昇腾「镜像编排」命中（Docker/K8s/MaaS 频次 28）；工程交付视角加分
 
 ### Phase 3 — 弹性深化池（不排死，由「边做边投」面试反馈决定补哪个）
 
 按命中频率排候选，反馈回流到这里再决定：
 - **昇腾 CANN/MindIE 调研 + demo**（NPU/昇腾/BPU 频次 43，西安核心盘刚需；无板子→借昇腾社区免费算力补理论 + 跑通一个部署 demo，面试能聊即可）
-- **TensorRT-LLM 初探**（紫光点名，接 W18 的 TRT 内功 + W20 的 vLLM 视角）
-- **SGLang / TGI 横向对比**（在 W20 vLLM 基础上补框架广度）
+- **TensorRT-LLM 初探**（紫光点名，接 `trt` 的 TRT 内功 + `vllm` 视角）
+- **SGLang / TGI 横向对比**（在 `vllm` 基础上补框架广度）
 - **ARM / NCNN / RKNN 嵌入式**（频次 26，需交叉编译 + 边缘板子，偏重）
 - **自定义 CUDA 算子 / TRT Plugin**（小米 / 知象「算子优化」加分，最硬最耗时，放最后）
 
 ---
 
-## 投递里程碑阶梯（边做边投的变现节奏）
+## 投递节奏（边做边投）
 
-| 完成 | 立刻能投 | 薪资 |
-|---|---|---|
-| W17 | 睿创 J11352（CV 部署） | 20–40K |
-| W18 | 强化 CV 簇（小米异构亦可冲刺） | 25–55K |
-| W19 | 紫光应用部署起步、珠海芯动力（LLM 入门，经验不限） | 面议 / 15–30K |
-| W20 | 燧原/朗坤/小儿方（vLLM 服务化） | 30–70K |
-| W21 | 紫光（LLM 服务化落地，含 Docker 交付） | 面议（高） |
-
-每完成一周 → 更新对应版本简历 → 投一批 → 用面试反馈校准 Phase 3 / 下一步。
+每完成一个交付物 → 更新对应版本简历 → 投一批 → 用面试反馈校准 Phase 3 / 下一步。
+**各交付物解锁的岗位与薪资见上方「[高薪岗的硬条件反推](#高薪岗的硬条件反推2026-06-27岗位清单)」矩阵。**
 
 ---
 
@@ -164,4 +176,4 @@ CV 与 LLM 都是这个底座上的应用层，**不是二选一**，连接两�
 
 ---
 
-*数据来源详见 `D:\1-usual\Notes\cv\岗位趋势小结_20260627.md`（30 份完整 JD 聚合 + 技能词频）与同目录 xlsx。每开始新 week，同步更新 `CLAUDE.md` 当前进度与本表里程碑状态。*
+*数据来源详见 `D:\1-usual\Notes\cv\岗位趋势小结_20260627.md`（30 份完整 JD 聚合 + 技能词频）与同目录 xlsx。每开始一个新交付物，同步更新 `CLAUDE.md` 当前进度与本表里程碑状态。*

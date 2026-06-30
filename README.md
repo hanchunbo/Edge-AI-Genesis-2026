@@ -40,13 +40,13 @@
 
 逐周一行一周明细见 [docs/Roadmap.md「已完成里程碑」](./docs/Roadmap.md)；阶段手册见 [docs/Q1.md](./docs/Q1.md)、[docs/archive/Q2.md](./docs/archive/Q2.md)。
 
-### 主线（W17 起 · 求职最短路径）
+### 主线（W17 起 · 求职最短路径 · Phase + 交付物里程碑，不再按周切分）
 
-| 阶段 | 周次 | 核心主题 | 关键技术 | 状态 |
-|------|------|----------|----------|------|
-| **Phase 0** | W17–W18 | CV 收口（变现 + LLM 地基） | INT8 量化、Profiling、TensorRT C++（FP16 + INT8 Calibrator） | 🔄 下一站 W17 |
-| **Phase 1** | W19 | LLM 端侧基础（主攻起步） | llama.cpp、KV Cache、GGUF、Transformer 推理 | ⬜ |
-| **Phase 2** | W20–W21 | LLM 服务化 + 工程交付 | **vLLM 部署**、OpenAI 兼容 API、PagedAttention、SSE 流式、Docker 容器化 | ⬜ |
+| 阶段 | 交付物 | 核心主题 | 关键技术 | 状态 |
+|------|--------|----------|----------|------|
+| **Phase 0** | `quant` / `trt` | CV 收口（变现 + LLM 地基） | INT8 量化、Profiling、**部署硬化**、TensorRT C++（FP16 + INT8 Calibrator + GPU 端到端） | 🔄 下一站 `quant` |
+| **Phase 1** | `llm` | LLM 端侧基础（主攻起步） | llama.cpp、KV Cache、GGUF、Transformer 推理 | ⬜ |
+| **Phase 2** | `vllm` / `deploy` | LLM 服务化 + 工程交付 | **vLLM 部署**、OpenAI 兼容 API、PagedAttention、SSE 流式、Docker 容器化 | ⬜ |
 | Phase 3 | 弹性 | 弹性深化池（按面试反馈补） | 昇腾 CANN/MindIE、TensorRT-LLM、SGLang/TGI、ARM/RKNN、CUDA 算子 | ⬜ |
 
 完整执行手册（硬条件反推、投递里程碑阶梯、砍掉清单）见 [docs/Roadmap.md](./docs/Roadmap.md)。

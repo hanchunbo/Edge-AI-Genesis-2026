@@ -7,8 +7,8 @@
 
 **W16（YOLOv8n 检测 Demo）全部完成：NMS + 解码 + 坐标反算 + 对拍 ultralytics（逐框<0.001）；ORT 进阶（W14 加性扩展线程配置 + IOBinding + batch 1v4 benchmark，RTX 3060 实测 CUDA 单帧 7.5×、IOBinding +4~9%）。W1–W15 + W14.5（CUDA EP）全部完成。各周细节见对应模块 `notes.md`，可复用概念见 `docs/notes/`；遗留 ResNet18 对比（降级可选）、VPS CPU EP 环境（待定）。**
 
-**⚠️ 计划重构（2026-06-27）**：W16 之后作废原 Q2/Q3/Q4 季度结构，改走 `docs/Roadmap.md` 求职最短路径主线（CV 收口 2 周 → LLM 主攻做深）。下一站 **W17：INT8 量化 + Profiling 报告**。旧季度手册已归档 `docs/archive/`。
-每开始新的 week，必须更新此处的进度描述（一句话：当前周 + 状态 + 遗留，细节进模块 notes），并同步 `docs/Roadmap.md` 里程碑状态。
+**⚠️ 结构切换（2026-06-30）**：W1–W16 作为**周志存档冻结不动**；W17 起改走 `docs/Roadmap.md` 的 **Phase + 交付物里程碑** 两层结构——不再按周切分，交付物按内容定大小、各挂一档可投岗位。下一个交付物 **`quant`（Phase 0）：INT8 量化 + 部署硬化 + Profiling 报告**（模块目录用主题名 `02_Inference_Analysis/quantization/`）。旧季度手册已归档 `docs/archive/`。
+每开始一个新交付物，必须更新此处进度描述（一句话：当前交付物 + 状态 + 遗留，细节进模块 notes），并同步 `docs/Roadmap.md` 里程碑状态。
 
 ## Build（构建速查）
 
@@ -22,19 +22,20 @@
 - `01_Linux_CPP_Foundations/` — C++20/23 系统编程（当前活跃，W1-W8 已完成，W9 进行中）
 - `02_Inference_Analysis/`、`03_Hardware_Acceleration/`、`04_System_Integration/` — 规划中
 
-**周次模块**（如 `w9_opencv_optimized/`）各自有独立 `CMakeLists.txt`，
-从根目录通过 `add_subdirectory` 引入，使用独立命名空间（`w1`、`w2`… `w9`）。
+**模块命名**：各模块有独立 `CMakeLists.txt`，从根目录 `add_subdirectory` 引入，使用独立命名空间。
+- **W1–W16（存档）**：周次命名 `wXX_topic/`（如 `w9_opencv_optimized/`），命名空间 `w1`…`w16`，**冻结不改**。
+- **W17 起（前向）**：**主题命名** `<topic>/`（如 `quantization/`、`tensorrt/`、`llama_cpp/`），命名空间用主题缩写（`quant`、`trt`、`llm`…，仍全小写），不再用周编号。
 
 **开发分支**：日常直接在 `dev` 上开发（不再开 feature 分支）。合入 `main` 的流程与铁律见下方 「Branch & Merge Policy」 节。
 
-### Notes 知识库分工（周笔记 vs 主题库）
+### Notes 知识库分工（模块笔记 vs 主题库）
 
-- **周笔记**（`wXX/notes.md`）：模块专属——概述、Mermaid 图、本模块设计决策、踩坑（带 commit）、测试/基准、编译运行命令。
+- **模块笔记**（各模块 `notes.md`）：模块专属——概述、Mermaid 图、本模块设计决策、踩坑（带 commit）、测试/基准、编译运行命令。
   - **Mermaid 图标准**：① **数据流图（`flowchart`）必画**——模块输入 → 各处理阶段 → 输出；② **时序图（`sequenceDiagram`）按需**——仅当模块有对象生命周期 / 多方调用 / 非线性控制流时画（如 W14 的 Env→Session→Run 时序），纯线性变换可省略。写完用 `mmdc` 渲染验证再提交，别凭眼睛猜语法。
 - **主题库**（`docs/notes/*.md`）：可复用概念——按主题组织，三段式（是什么 / 为什么 / 坑 + 实战出处），格式与索引见 `docs/notes/README.md`。
-- **判定**：这段话离开本模块代码还成立吗？成立 → 主题库；只对本模块有意义 → 周笔记。
-- **首次即入库**：可复用概念**首次出现就直接写进主题库**（不在周笔记暂存、不批量迁移）；周笔记只留「本模块怎么用」+ 向上链接。
-- **单一事实源**：同一概念正文只在主题库一份；双向链接（周笔记 → 主题库看概念，主题库 → 周笔记看 Mermaid / 语境）。
+- **判定**：这段话离开本模块代码还成立吗？成立 → 主题库；只对本模块有意义 → 模块笔记。
+- **首次即入库**：可复用概念**首次出现就直接写进主题库**（不在模块笔记暂存、不批量迁移）；模块笔记只留「本模块怎么用」+ 向上链接。
+- **单一事实源**：同一概念正文只在主题库一份；双向链接（模块笔记 → 主题库看概念，主题库 → 模块笔记看 Mermaid / 语境）。
 
 ## C++ Standards and Conventions（C++ 规范）
 
@@ -97,7 +98,7 @@
 
 使用 Google Test v1.15.2，通过 CMake FetchContent 自动下载。
 测试目标链接 `GTest::gtest_main` 和 `Threads::Threads`，
-用 `add_test()` 注册到 CTest，命名格式为 `W5_ThreadPoolTest`（周次 + 模块名）。
+用 `add_test()` 注册到 CTest：W1–W16 存档用 `W5_ThreadPoolTest`（周次 + 模块名）；W17 起前向模块用主题前缀大驼峰 `Quant_PtqTest`（主题 + 模块名）。
 
 ## Commit Checklist（提交前必检）
 
