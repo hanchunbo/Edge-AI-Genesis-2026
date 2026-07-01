@@ -148,7 +148,7 @@ ctest --test-dir build -R "W14_" --output-on-failure
 ### 关联
 - W14 模块代码：`02_Inference_Analysis/w14_ort_basics/`
 - W14 技术笔记：`02_Inference_Analysis/w14_ort_basics/notes.md`
-- Q2 路线规格：`docs/Q2.md` 行 84-116
+- Q2 路线规格：`docs/archive/Q2.md` 行 84-116
 - 上一次 study-log：devlog.md 2026-05-25 Session 3（同日 W10/W9 Q1 review）
 
 ---
@@ -157,7 +157,7 @@ ctest --test-dir build -R "W14_" --output-on-failure
 
 ### 操作摘要
 - Session 3（W10 Resize 数学 + W9 mdspan / cv::Mat 内存模型）—— Q1 review 收尾
-- 沉淀产物：`docs/interview_faq.md` 新增 Q36-Q39，`docs/q1_self_test.md` 历史成绩 / A9 / A10 同步，`docs/README.md` FAQ 计数同步至 39 道
+- 沉淀产物：`docs/interview_faq.md` 新增 Q36-Q39，`docs/self_test.md` 历史成绩 / A9 / A10 同步，`docs/README.md` FAQ 计数同步至 39 道
 
 ### 今日深讲内容
 - **W10 双线性 4 邻权重**：两步线性插值（先水平合并、后垂直合并）等价于 4 邻加权和、权重和恒为 1；记忆诀窍"对角点权重 = 自己到对方两方向距离的乘积"
@@ -183,7 +183,7 @@ ctest --test-dir build -R "W14_" --output-on-failure
 
 ### 关联
 - 深讲补充题：interview_faq.md Q36-Q39
-- 自测题库：q1_self_test.md A9 / A10
+- 自测题库：self_test.md A9 / A10
 - 上一次 study-log：devlog.md 2026-05-21
 
 ---
@@ -193,7 +193,7 @@ ctest --test-dir build -R "W14_" --output-on-failure
 ### 操作摘要
 - Session 2 下半场（W11 调试三件套深讲 + 三项实操）—— Session 2 收口
 - 新建 `study-log` skill（`.claude/skills/study-log/`）：每日学习总结入库工作流，本条目即其第一次试跑产出
-- 沉淀产物：`interview_faq.md` 新增 Q33-Q35，`q1_self_test.md` / `README.md` 同步更新
+- 沉淀产物：`interview_faq.md` 新增 Q33-Q35，`self_test.md` / `README.md` 同步更新
 
 ### 今日深讲内容
 - **Valgrind 四种泄漏**：按"退出时还能否 reach"判定 —— definitely（必修）/ indirectly（被连累，修根即消）/ possibly（指针指中间，人工查）/ still reachable（长命服务 RSS 涨时才是真凶）；长服务该用 massif 而非 memcheck
@@ -224,7 +224,7 @@ perf script -i perf.data | ~/FlameGraph/stackcollapse-perf.pl > out.folded
 
 ### 关联
 - 深讲补充题：interview_faq.md Q33-Q35
-- 自测题库：q1_self_test.md A11
+- 自测题库：self_test.md A11
 
 ---
 
@@ -250,7 +250,7 @@ perf script -i perf.data | ~/FlameGraph/stackcollapse-perf.pl > out.folded
 - 完成 W11 + Session 3 后进 W14（ONNX Runtime 集成）
 
 ### 关联
-- 自测题库：docs/q1_self_test.md（历史成绩表已加 2026-05-20 行）
+- 自测题库：docs/self_test.md（历史成绩表已加 2026-05-20 行）
 - 深讲补充题：docs/interview_faq.md Q27-Q32
 
 ---
@@ -260,7 +260,7 @@ perf script -i perf.data | ~/FlameGraph/stackcollapse-perf.pl > out.folded
 ### 操作摘要
 - Q1 W1-W13 知识自测复盘（W14 ONNX Runtime 集成启动前的最后体检）
 - 完成 13 题自测 + 评分 + 4 红色短板诊断 + Session 1（W2 noexcept move + W3 Concepts/expected）深讲
-- 沉淀产物：`docs/q1_self_test.md`（quiz 自测，答案折叠）+ `docs/interview_faq.md` Q27-Q30（深讲补充题）
+- 沉淀产物：`docs/self_test.md`（quiz 自测，答案折叠）+ `docs/interview_faq.md` Q27-Q30（深讲补充题）
 
 ### 自测结果
 - **整体成绩**：GPA ≈ C+（65-70 分）
@@ -280,7 +280,7 @@ perf script -i perf.data | ~/FlameGraph/stackcollapse-perf.pl > out.folded
 ### 命令备忘
 ```bash
 # 自测复盘文档位置
-docs/q1_self_test.md          # quiz 格式自测
+docs/self_test.md             # quiz 格式自测
 docs/interview_faq.md         # Q27-Q30 深讲
 ```
 

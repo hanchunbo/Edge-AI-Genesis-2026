@@ -147,8 +147,8 @@
 
 ## 关联文档
 
-- 学习计划：[Q1.md](Q1.md)
+- 学习计划：[archive/Q1.md](archive/Q1.md)
 - 深度参考答案与加分回答：[interview_faq.md](interview_faq.md) Q27-Q39
-- 技术决策 trade-offs：[Q1_decisions.md](Q1_decisions.md)
+- 技术决策 trade-offs：[decisions.md](decisions.md)
 - C++20/23 新旧写法：[cpp20_23_cheatsheet.md](cpp20_23_cheatsheet.md)
 - 历史会话记录：[devlog.md](devlog.md)

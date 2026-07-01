@@ -38,7 +38,7 @@
 | 基石（原 Q1） | W1–W13 | 工程基石与高性能体系 | jthread/stop_token、mmap、`std::span`/`mdspan`、CMake、OpenCV 底层算子 | ✅ |
 | 推理（原 Q2 前段） | W14–W16 | ONNX Runtime 推理闭环 | ORT C++ API、前后处理、YOLOv8n 检测、CUDA EP（单帧 ~7.5×） | ✅ |
 
-逐周一行一周明细见 [docs/Roadmap.md「已完成里程碑」](./docs/Roadmap.md)；阶段手册见 [docs/Q1.md](./docs/Q1.md)、[docs/archive/Q2.md](./docs/archive/Q2.md)。
+逐周一行一周明细见 [docs/Roadmap.md「已完成里程碑」](./docs/Roadmap.md)；阶段手册见 [docs/archive/Q1.md](./docs/archive/Q1.md)、[docs/archive/Q2.md](./docs/archive/Q2.md)。
 
 ### 主线（W17 起 · 求职最短路径 · Phase + 交付物里程碑，不再按周切分）
 

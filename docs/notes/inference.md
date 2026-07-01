@@ -16,6 +16,7 @@
 - [Softmax（数值稳定版）](#softmax数值稳定版)
 - [Top-K 选择（partial_sort）](#top-k-选择partial_sort)
 - [NCHW 四维含义（batch / channel / H / W）](#nchw-四维含义batch--channel--h--w)
+- [检测术语小表（Ultralytics / score / thresh / anchor）](#检测术语小表ultralytics--score--thresh--anchor)
 - [YOLOv8 检测头布局（无 objectness + 转置）](#yolov8-检测头布局无-objectness--转置)
 - [NMS / IoU（逐类非极大值抑制）](#nms--iou逐类非极大值抑制)
 - [IntraOp vs InterOp 线程](#intraop-vs-interop-线程)
@@ -193,11 +194,25 @@ std::partial_sort(idx.begin(), idx.begin() + k, idx.end(),
 
 ---
 
+## 检测术语小表（Ultralytics / score / thresh / anchor）
+
+**Ultralytics**：YOLOv8 的主要维护方之一，也是 `ultralytics` Python 包 / CLI 的提供者。W16 用它做两件事：① 从 `yolov8n.pt` 导出 `yolov8n.onnx` + `coco_classes.txt`；② 生成 Python 侧参考检测结果，与 C++ 端逐框对拍。注意授权：Ultralytics YOLOv8 代码和权重走 AGPL-3.0 / Enterprise 双授权，学习 demo 没问题，闭源商用要单独评估。
+
+**score / confidence / detection score**：检测分数、置信度。它不是 bbox 坐标，而是“这个候选框作为某类目标有多可信”。在 W16 的 YOLOv8 中，`score = 80 个类别分数里的最大值`，`class_id = 最大分数对应的类别`。因为 YOLOv8 无 objectness，所以这里不是 YOLOv5 常见的 `objectness * class_prob`。
+
+**thresh / threshold**：阈值。代码里常写缩写 `conf_thresh`、`iou_thresh`。两个阈值方向不同：`score < conf_thresh` 表示模型不够自信，候选框直接丢；`IoU > iou_thresh` 表示两个同类框重叠太高，NMS 会抑制低分框。
+
+**anchor-based / anchor-free**：anchor-based 检测器会在每个位置预设若干默认框（anchor boxes），模型预测“这个默认框该平移/缩放多少 + 是什么类”；YOLOv8 是 anchor-free，更接近每个预测点直接输出 `cx, cy, w, h` 和类别分数。因此 W16 里 `[1,84,8400]` 的 `8400` 更严谨叫 **候选预测数 / prediction points**，不要按旧 YOLO 习惯说成“8400 个 anchor 框”。代码变量里保留 `num_anchors` 是检测代码里的历史命名习惯。
+
+> 实战出处：`02_Inference_Analysis/w16_yolo_detector/tools/export_yolov8n.py`（Ultralytics 导出）；`decode.cpp`（score/conf 阈值 + anchor-free 输出解析）；`nms.cpp`（IoU 阈值）
+
+---
+
 ## YOLOv8 检测头布局（无 objectness + 转置）
 
-**是什么**：YOLOv8 检测模型的单输出头形状是 `[1, C, A]`，其中 `C = 4 + num_classes`（COCO 为 84 = 4+80）、`A = num_anchors`（640 输入对应 8400）。前 4 通道是 `cx, cy, w, h`（输入像素坐标，模型已内置 anchor 解码），后 `num_classes` 通道是各类别概率（导出时已含 sigmoid）。每个 anchor 的 score = 这 80 个类概率的最大值，对应类别即 argmax。
+**是什么**：YOLOv8 检测模型的单输出头形状是 `[1, C, A]`，其中 `C = 4 + num_classes`（COCO 为 84 = 4+80）、`A = 候选预测数`（640 输入对应 8400）。前 4 通道是 `cx, cy, w, h`（letterbox 输入像素坐标），后 `num_classes` 通道是各类别概率（导出时已含 sigmoid）。每个候选预测的 score = 这 80 个类概率的最大值，对应类别即 argmax。
 
-**为什么 / 何时用**：解析检测头是把「一坨 float」变成「框」的第一步。两个易被旧经验带偏的点：① **YOLOv8 没有 objectness**——v5/v3 的输出每个 anchor 多一维「有无物体」置信度，score = obj × cls；v8 取消了 obj，score 直接取类概率最大值。套 v5 的「乘 objectness」公式会多乘一个不存在的维度。② **布局是 channels-major**：内存里同一通道的 8400 个 anchor 连续排（`out[ch*A + a]`），不是「每个 anchor 的 84 个值连续」。解码要按这个 stride 转置遍历。
+**为什么 / 何时用**：解析检测头是把「一坨 float」变成「框」的第一步。两个易被旧经验带偏的点：① **YOLOv8 没有 objectness**——v5/v3 的输出每个 anchor 多一维「有无物体」置信度，score = obj × cls；v8 取消了 obj，score 直接取类概率最大值。套 v5 的「乘 objectness」公式会多乘一个不存在的维度。② **布局是 channels-major**：内存里同一通道的 8400 个候选预测连续排（`out[ch*A + a]`），不是「每个候选预测的 84 个值连续」。解码要按这个 stride 转置遍历。
 
 **坑**：`num_classes` 别写死 80——从输出形状反推 `shape[1] - 4`，换模型才不崩。conf 阈值过滤要在「取完 max 类概率」之后做。框坐标此时还是 letterbox 坐标系，**必须再做坐标反算**回原图（见 image-ops.md「Letterbox + 坐标反算」）。**conf 筛的是「确定程度」不是「类别」**——conf = 80 类里最高那个分（v8 无 objectness，「有没有东西」与「是哪类」合一），低于阈值=模型自己没把握，一律刷掉，与具体是人是车无关；类别信息要到下游**逐类 NMS** 才登场。常见误解：以为 conf 阈值在挑保留哪些类别。
 

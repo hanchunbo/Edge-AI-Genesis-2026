@@ -590,7 +590,7 @@ genhtml filtered.info --output-directory coverage_report
 
 ## Q1 自测复盘补充题（Q27-Q32）
 
-> **来源**：2026-05-18 Q1 自测会话暴露 4 个红色短板（Q27-Q30）；2026-05-20 Session 2 续讲 W5 与 `std::expected` 深化（Q31-Q32）。详见 [q1_self_test.md](q1_self_test.md) 与 [devlog.md](devlog.md)，作为对 Q1-Q26 的补充。
+> **来源**：2026-05-18 Q1 自测会话暴露 4 个红色短板（Q27-Q30）；2026-05-20 Session 2 续讲 W5 与 `std::expected` 深化（Q31-Q32）。详见 [self_test.md](self_test.md) 与 [devlog.md](devlog.md)，作为对 Q1-Q26 的补充。
 
 ---
 

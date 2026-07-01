@@ -13,7 +13,7 @@
 
 ## 已完成里程碑（W1–W16）
 
-> 紧凑回顾，一行一周；逐周细节见各模块 `notes.md`，阶段手册见 [`Q1.md`](./Q1.md)（W1–W13）与 [`archive/Q2.md`](./archive/Q2.md)（W14–W16）。
+> 紧凑回顾，一行一周；逐周细节见各模块 `notes.md`，阶段手册见 [`archive/Q1.md`](./archive/Q1.md)（W1–W13）与 [`archive/Q2.md`](./archive/Q2.md)（W14–W16）。
 
 ### 基石 — 工程基石与高性能体系（W1–W13，原 Q1）
 

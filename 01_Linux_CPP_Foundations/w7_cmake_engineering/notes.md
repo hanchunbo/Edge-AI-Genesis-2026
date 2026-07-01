@@ -166,7 +166,7 @@ Ninja 据此自动排序，stamp workaround 已完全不需要（验证于 CMake
 
 ### 6. INSTALL 规则（生产级安装配置）
 
-> **注意**：install 规则不在 W7 核心任务范围内（见 Q1.md W7 节），是为演示
+> **注意**：install 规则不在 W7 核心任务范围内（见 docs/archive/Q1.md W7 节），是为演示
 > `$<INSTALL_INTERFACE:...>` 生成器表达式的完整用法而补充的。理解"是干什么的"即可，
 > 不需要深究 find_package / 导出集的细节。
 
