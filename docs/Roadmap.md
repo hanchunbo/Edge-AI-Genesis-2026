@@ -85,7 +85,7 @@ CV 与 LLM 都是这个底座上的应用层，**不是二选一**，连接两�
 
 ### Phase 0 — CV 收口（变现最快 + LLM 地基）
 
-#### 交付物 `quant` 🔴 INT8 量化 + 部署硬化 + Profiling 报告
+#### 交付物 `quant` 🔄 进行中：INT8 量化 + 部署硬化 + Profiling 报告
 - **范围**：
   - **量化**：ORT 官方工具对 YOLOv8n 做 PTQ（MinMax / Entropy 两策略）；量化前先用 perf / Nsight 定位瓶颈。
     剪枝/蒸馏作**概念覆盖**（JD 里量化/剪枝/蒸馏/图优化常成套出现）——讲清三者定位差异即可，不动手实现。
