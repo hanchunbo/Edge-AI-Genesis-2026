@@ -5,6 +5,9 @@
 #include "nms.hpp"
 
 #include <algorithm>
+#include <cmath>
+#include <stdexcept>
+#include <utility>
 
 namespace w16 {
 
@@ -34,7 +37,16 @@ float IoU(const Detection& a, const Detection& b) {
   return inter / uni;
 }
 
-std::vector<Detection> Nms(std::vector<Detection> dets, float iou_thresh) {
+std::vector<Detection> Nms(std::vector<Detection> dets,
+                           const NmsOptions& options) {
+  if (!std::isfinite(options.iou_thresh) || options.iou_thresh < 0.0f ||
+      options.iou_thresh > 1.0f) {
+    throw std::invalid_argument("Nms: iou_thresh 必须在 [0,1] 内");
+  }
+  if (options.max_det < 0) {
+    throw std::invalid_argument("Nms: max_det 必须 >= 0");
+  }
+
   // 全局按 score 降序：贪心保留高分框，结果天然有序，便于对拍。
   std::sort(
       dets.begin(), dets.end(),
@@ -55,12 +67,20 @@ std::vector<Detection> Nms(std::vector<Detection> dets, float iou_thresh) {
       if (suppressed[j] || dets[j].class_id != dets[i].class_id) {
         continue;
       }
-      if (IoU(dets[i], dets[j]) > iou_thresh) {
+      if (IoU(dets[i], dets[j]) > options.iou_thresh) {
         suppressed[j] = true;
       }
     }
   }
+  if (options.max_det > 0 &&
+      kept.size() > static_cast<std::size_t>(options.max_det)) {
+    kept.resize(static_cast<std::size_t>(options.max_det));
+  }
   return kept;
+}
+
+std::vector<Detection> Nms(std::vector<Detection> dets, float iou_thresh) {
+  return Nms(std::move(dets), NmsOptions{.iou_thresh = iou_thresh});
 }
 
 }  // namespace w16

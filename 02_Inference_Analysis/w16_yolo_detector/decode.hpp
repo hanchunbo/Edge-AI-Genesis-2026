@@ -12,6 +12,12 @@
 
 namespace w16 {
 
+struct DecodeOptions {
+  float conf_thresh = 0.25f;
+  bool skip_non_finite = false;
+  int reserve_hint = 0;
+};
+
 // 解析 YOLOv8 单 batch 输出张量为候选检测框（未做 NMS）。
 //
 // 输入张量布局（ultralytics 导出的 ONNX 输出 [1, C, A]，行主序展平）：
@@ -34,6 +40,12 @@ namespace w16 {
 //
 // out.size() 必须等于 (4 + num_classes) * num_anchors，否则抛
 // std::invalid_argument。
+[[nodiscard]] std::vector<Detection> DecodeYolov8(
+    std::span<const float> out, int num_classes, int num_anchors,
+    const DecodeOptions& options, float scale, int pad_left, int pad_top,
+    int img_w, int img_h);
+
+// 旧入口保留给 W16 历史调用方；内部委托到 DecodeOptions 版本。
 [[nodiscard]] std::vector<Detection> DecodeYolov8(
     std::span<const float> out, int num_classes, int num_anchors,
     float conf_thresh, float scale, int pad_left, int pad_top, int img_w,

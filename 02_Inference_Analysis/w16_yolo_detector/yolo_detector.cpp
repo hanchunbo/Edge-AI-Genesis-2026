@@ -8,20 +8,44 @@
 #include "decode.hpp"
 #include "nms.hpp"
 
+#include <chrono>
 #include <cstdint>
 #include <opencv2/imgcodecs.hpp>
 #include <opencv2/imgproc.hpp>
 #include <stdexcept>
+#include <utility>
 
 namespace w16 {
 
+namespace {
+
+using Clock = std::chrono::steady_clock;
+
+double Ms(Clock::duration duration) {
+  return std::chrono::duration<double, std::milli>(duration).count();
+}
+
+}  // namespace
+
 YOLODetector::YOLODetector(const std::string& model_path, DetectorConfig cfg)
-    : engine_(model_path, cfg.ep), cfg_(cfg) {}
+    : engine_(model_path,
+              w14::SessionConfig{.ep = cfg.ep,
+                                 .intra_op_threads = cfg.intra_op_threads,
+                                 .inter_op_threads = cfg.inter_op_threads}),
+      cfg_(cfg) {}
 
 std::vector<Detection> YOLODetector::Detect(const cv::Mat& bgr) {
+  DetectionResult result = DetectWithProfile(bgr);
+  return std::move(result.detections);
+}
+
+DetectionResult YOLODetector::DetectWithProfile(const cv::Mat& bgr) {
   if (bgr.empty()) {
     throw std::runtime_error("[W16] 输入图像为空");
   }
+
+  const auto total_start = Clock::now();
+  const auto pre_start = total_start;
 
   // 1) BGR→RGB：YOLOv8 按 RGB 训练，而 OpenCV 解码为 BGR。
   //    w10::LetterboxToTensor 仅做 /255+CHW（无 mean/std，正合 YOLOv8），
@@ -34,9 +58,16 @@ std::vector<Detection> YOLODetector::Detect(const cv::Mat& bgr) {
   const std::vector<float> input =
       w10::LetterboxToTensor(rgb, cfg_.input_size, cfg_.input_size, info);
   const std::vector<int64_t> shape{1, 3, cfg_.input_size, cfg_.input_size};
+  const auto pre_end = Clock::now();
 
   // 3) 推理（零拷贝喂入）。
-  std::vector<Ort::Value> outputs = engine_.Run(input, shape);
+  const auto infer_start = pre_end;
+  std::vector<Ort::Value> outputs = cfg_.use_iobinding
+                                        ? engine_.RunIoBinding(input, shape)
+                                        : engine_.Run(input, shape);
+  const auto infer_end = Clock::now();
+
+  const auto post_start = infer_end;
   const float* out_data = outputs[0].GetTensorData<float>();
   const std::vector<int64_t> out_shape =
       outputs[0].GetTensorTypeAndShapeInfo().GetShape();
@@ -51,11 +82,23 @@ std::vector<Detection> YOLODetector::Detect(const cv::Mat& bgr) {
       static_cast<std::size_t>(num_channels) * num_anchors;
 
   // 4) 解码（含坐标反算回原图）+ 5) 逐类 NMS。
-  std::vector<Detection> dets =
-      DecodeYolov8(std::span<const float>(out_data, count), num_classes,
-                   num_anchors, cfg_.conf_thresh, info.scale, info.pad_left,
-                   info.pad_top, bgr.cols, bgr.rows);
-  return Nms(std::move(dets), cfg_.iou_thresh);
+  std::vector<Detection> dets = DecodeYolov8(
+      std::span<const float>(out_data, count), num_classes, num_anchors,
+      DecodeOptions{.conf_thresh = cfg_.conf_thresh,
+                    .skip_non_finite = cfg_.skip_non_finite,
+                    .reserve_hint = cfg_.reserve_hint},
+      info.scale, info.pad_left, info.pad_top, bgr.cols, bgr.rows);
+  dets = Nms(std::move(dets), NmsOptions{.iou_thresh = cfg_.iou_thresh,
+                                         .max_det = cfg_.max_det});
+  const auto post_end = Clock::now();
+
+  return DetectionResult{
+      .detections = std::move(dets),
+      .timing = DetectionTiming{.pre_ms = Ms(pre_end - pre_start),
+                                .infer_ms = Ms(infer_end - infer_start),
+                                .post_ms = Ms(post_end - post_start),
+                                .total_ms = Ms(post_end - total_start)},
+  };
 }
 
 std::vector<Detection> YOLODetector::Detect(const std::string& image_path) {
@@ -64,6 +107,14 @@ std::vector<Detection> YOLODetector::Detect(const std::string& image_path) {
     throw std::runtime_error("[W16] 图片读取失败: " + image_path);
   }
   return Detect(bgr);
+}
+
+DetectionResult YOLODetector::DetectWithProfile(const std::string& image_path) {
+  const cv::Mat bgr = cv::imread(image_path, cv::IMREAD_COLOR);
+  if (bgr.empty()) {
+    throw std::runtime_error("[W16] 图片读取失败: " + image_path);
+  }
+  return DetectWithProfile(bgr);
 }
 
 }  // namespace w16

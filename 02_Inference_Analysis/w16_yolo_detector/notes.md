@@ -193,6 +193,18 @@ cmake --build build-gpu --target w16_yolo_demo
 
 概念（IntraOp vs InterOp、IOBinding）见 inference.md。
 
+## 后续 quant 加性扩展（2026-07-02）
+
+W16 仍作为 YOLOv8n 检测 baseline 保留；后续 `quant` 交付物只做向后兼容的部署硬化扩展：
+
+- `DecodeYolov8` 新增 `DecodeOptions` overload：`skip_non_finite`、`reserve_hint`，旧 `conf_thresh` 入口继续可用。
+- `Nms` 新增 `NmsOptions` overload：`max_det`，旧 `iou_thresh` 入口继续可用。
+- `YOLODetector` 的 `DetectorConfig` 透传线程数、IOBinding、decode/NMS 硬化项，并新增 `DetectWithProfile()` 分段计时。
+
+W16 原始 benchmark 仍代表当时 demo 状态；部署硬化后的新评估数字以
+[`docs/benchmarks/quant_yolo_hardening.md`](../../docs/benchmarks/quant_yolo_hardening.md)
+和 `02_Inference_Analysis/quantization/notes.md` 为准。
+
 ## 与下一步衔接
 
 - **W17**：把 W14–W16 整合为 `inference_engine` 库 + 单测；导出 ResNet18（YOLO 已在 W16 导出）。

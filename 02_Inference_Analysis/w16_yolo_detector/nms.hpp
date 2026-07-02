@@ -11,6 +11,11 @@
 
 namespace w16 {
 
+struct NmsOptions {
+  float iou_thresh = 0.45f;
+  int max_det = 0;  // 0 表示不限制，保持 W16 历史行为。
+};
+
 // 两个轴对齐框的 IoU（交并比）。任一框面积为 0 或无交集时返回 0。
 [[nodiscard]] float IoU(const Detection& a, const Detection& b);
 
@@ -22,6 +27,10 @@ namespace w16 {
 // 全局降序排列（结果确定，便于对拍）。
 //
 // 入参按值传递：内部需排序，复制一份避免改动调用方数据。
+[[nodiscard]] std::vector<Detection> Nms(std::vector<Detection> dets,
+                                         const NmsOptions& options);
+
+// 旧入口保留给 W16 历史调用方；内部委托到 NmsOptions 版本。
 [[nodiscard]] std::vector<Detection> Nms(std::vector<Detection> dets,
                                          float iou_thresh);
 

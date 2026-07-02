@@ -19,6 +19,7 @@
 #include <cstdio>
 #include <opencv2/imgcodecs.hpp>
 #include <opencv2/imgproc.hpp>
+#include <stdexcept>
 #include <string>
 #include <vector>
 
@@ -51,24 +52,26 @@ std::vector<float> TileBatch(const std::vector<float>& one, int batch) {
 }
 
 // 计时一种配置：use_binding 决定走 Run 还是 RunIoBinding。
+void RunOnce(w14::InferenceEngine& engine, const std::vector<float>& input,
+             const std::vector<int64_t>& shape, bool use_binding) {
+  std::vector<Ort::Value> outputs = use_binding
+                                        ? engine.RunIoBinding(input, shape)
+                                        : engine.Run(input, shape);
+  if (outputs.empty()) {
+    throw std::runtime_error("W16 benchmark: ORT 推理没有返回输出");
+  }
+}
+
 Stat Bench(w14::InferenceEngine& engine, const std::vector<float>& input,
            const std::vector<int64_t>& shape, int batch, bool use_binding) {
   for (int i = 0; i < kWarmup; ++i) {
-    if (use_binding) {
-      engine.RunIoBinding(input, shape);
-    } else {
-      engine.Run(input, shape);
-    }
+    RunOnce(engine, input, shape, use_binding);
   }
   std::vector<double> lat;
   lat.reserve(kIters);
   for (int i = 0; i < kIters; ++i) {
     auto t0 = std::chrono::steady_clock::now();
-    if (use_binding) {
-      engine.RunIoBinding(input, shape);
-    } else {
-      engine.Run(input, shape);
-    }
+    RunOnce(engine, input, shape, use_binding);
     auto t1 = std::chrono::steady_clock::now();
     lat.push_back(std::chrono::duration<double, std::milli>(t1 - t0).count());
   }

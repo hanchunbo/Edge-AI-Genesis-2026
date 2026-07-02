@@ -8,6 +8,7 @@
 #include <cstdint>
 #include <gtest/gtest.h>
 #include <random>
+#include <stdexcept>
 #include <vector>
 
 namespace {
@@ -16,6 +17,19 @@ namespace {
 w16::Detection Box(float x1, float y1, float x2, float y2, float score,
                    int cls) {
   return w16::Detection{x1, y1, x2, y2, score, cls};
+}
+
+void ExpectSameDetections(const std::vector<w16::Detection>& lhs,
+                          const std::vector<w16::Detection>& rhs) {
+  ASSERT_EQ(lhs.size(), rhs.size());
+  for (std::size_t i = 0; i < lhs.size(); ++i) {
+    EXPECT_FLOAT_EQ(lhs[i].x1, rhs[i].x1);
+    EXPECT_FLOAT_EQ(lhs[i].y1, rhs[i].y1);
+    EXPECT_FLOAT_EQ(lhs[i].x2, rhs[i].x2);
+    EXPECT_FLOAT_EQ(lhs[i].y2, rhs[i].y2);
+    EXPECT_FLOAT_EQ(lhs[i].score, rhs[i].score);
+    EXPECT_EQ(lhs[i].class_id, rhs[i].class_id);
+  }
 }
 
 TEST(W16Nms, IoUMatchesHandComputed) {
@@ -62,6 +76,62 @@ TEST(W16Nms, ResultSortedByScoreDesc) {
   ASSERT_EQ(kept.size(), 3u);
   EXPECT_GE(kept[0].score, kept[1].score);
   EXPECT_GE(kept[1].score, kept[2].score);
+}
+
+TEST(W16Nms, OptionsOverloadMatchesLegacyOverload) {
+  std::vector<w16::Detection> dets{
+      Box(0, 0, 10, 10, 0.9f, 0),
+      Box(1, 1, 11, 11, 0.6f, 0),
+      Box(100, 100, 110, 110, 0.7f, 1),
+  };
+
+  std::vector<w16::Detection> legacy = w16::Nms(dets, 0.45f);
+  std::vector<w16::Detection> options =
+      w16::Nms(dets, w16::NmsOptions{.iou_thresh = 0.45f});
+
+  ExpectSameDetections(legacy, options);
+}
+
+TEST(W16Nms, MaxDetZeroDoesNotLimitResults) {
+  std::vector<w16::Detection> dets{
+      Box(0, 0, 10, 10, 0.9f, 0),
+      Box(20, 20, 30, 30, 0.8f, 0),
+      Box(40, 40, 50, 50, 0.7f, 0),
+  };
+
+  std::vector<w16::Detection> kept =
+      w16::Nms(std::move(dets), w16::NmsOptions{.iou_thresh = 0.45f});
+
+  EXPECT_EQ(kept.size(), 3u);
+}
+
+TEST(W16Nms, MaxDetTruncatesAfterGlobalScoreSort) {
+  std::vector<w16::Detection> dets{
+      Box(0, 0, 10, 10, 0.3f, 0),
+      Box(20, 20, 30, 30, 0.9f, 0),
+      Box(40, 40, 50, 50, 0.7f, 1),
+  };
+
+  std::vector<w16::Detection> kept = w16::Nms(
+      std::move(dets), w16::NmsOptions{.iou_thresh = 0.45f, .max_det = 2});
+
+  ASSERT_EQ(kept.size(), 2u);
+  EXPECT_FLOAT_EQ(kept[0].score, 0.9f);
+  EXPECT_FLOAT_EQ(kept[1].score, 0.7f);
+}
+
+TEST(W16Nms, ThrowsOnInvalidOptionsArguments) {
+  std::vector<w16::Detection> dets{Box(0, 0, 10, 10, 0.9f, 0)};
+
+  EXPECT_THROW(
+      static_cast<void>(w16::Nms(dets, w16::NmsOptions{.iou_thresh = -0.01f})),
+      std::invalid_argument);
+  EXPECT_THROW(
+      static_cast<void>(w16::Nms(dets, w16::NmsOptions{.iou_thresh = 1.01f})),
+      std::invalid_argument);
+  EXPECT_THROW(
+      static_cast<void>(w16::Nms(dets, w16::NmsOptions{.max_det = -1})),
+      std::invalid_argument);
 }
 
 // stress test（非真实负载——YOLOv8n 过 conf 阈值后通常只剩数十~数百框；

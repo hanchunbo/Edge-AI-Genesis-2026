@@ -31,6 +31,12 @@ bool Exists(const char* p) {
   return std::filesystem::exists(p);
 }
 
+void SkipIfAssetsMissing() {
+  if (!Exists(W16_MODEL_PATH) || !Exists(W16_IMAGE_PATH)) {
+    GTEST_SKIP() << "缺少模型/图片（先跑 tools/ 下的 Python 脚本）";
+  }
+}
+
 TEST(W16Detector, MatchesUltralyticsReference) {
   if (!Exists(W16_MODEL_PATH) || !Exists(W16_IMAGE_PATH) ||
       !Exists(W16_REFERENCE_PATH)) {
@@ -59,6 +65,55 @@ TEST(W16Detector, MatchesUltralyticsReference) {
                          << " score=" << r.score << " box=[" << r.x1 << ","
                          << r.y1 << "," << r.x2 << "," << r.y2 << "]";
   }
+}
+
+TEST(W16Detector, HardenedDeploymentConfigRuns) {
+  SkipIfAssetsMissing();
+
+  w16::DetectorConfig cfg{
+      .input_size = 640,
+      .conf_thresh = 0.25f,
+      .iou_thresh = 0.45f,
+      .ep = w14::Ep::kCpu,
+      .intra_op_threads = 1,
+      .inter_op_threads = 1,
+      .use_iobinding = true,
+      .skip_non_finite = true,
+      .reserve_hint = 512,
+      .max_det = 300,
+  };
+  w16::YOLODetector det(W16_MODEL_PATH, cfg);
+
+  const std::vector<w16::Detection> got = det.Detect(W16_IMAGE_PATH);
+
+  EXPECT_FALSE(got.empty());
+}
+
+TEST(W16Detector, DetectWithProfileReturnsNonNegativeTiming) {
+  SkipIfAssetsMissing();
+
+  w16::YOLODetector det(W16_MODEL_PATH,
+                        w16::DetectorConfig{.ep = w14::Ep::kCpu});
+
+  const w16::DetectionResult result = det.DetectWithProfile(W16_IMAGE_PATH);
+
+  EXPECT_FALSE(result.detections.empty());
+  EXPECT_GE(result.timing.pre_ms, 0.0);
+  EXPECT_GE(result.timing.infer_ms, 0.0);
+  EXPECT_GE(result.timing.post_ms, 0.0);
+  EXPECT_GE(result.timing.total_ms, 0.0);
+}
+
+TEST(W16Detector, CudaFallbackReasonReadableWhenCudaUnavailable) {
+  SkipIfAssetsMissing();
+
+  w16::YOLODetector det(W16_MODEL_PATH,
+                        w16::DetectorConfig{.ep = w14::Ep::kCuda});
+
+  if (det.ActiveEp() == w14::Ep::kCuda) {
+    GTEST_SKIP() << "当前环境 CUDA EP 可用，不触发回退 reason";
+  }
+  EXPECT_FALSE(det.EpFallbackReason().empty());
 }
 
 }  // namespace

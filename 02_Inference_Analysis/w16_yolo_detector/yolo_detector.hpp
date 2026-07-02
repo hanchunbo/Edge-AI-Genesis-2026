@@ -17,10 +17,28 @@ namespace w16 {
 
 // 检测器配置。默认值对齐 ultralytics YOLOv8 推理默认。
 struct DetectorConfig {
-  int input_size = 640;         // 模型方形输入边长
-  float conf_thresh = 0.25f;    // 候选框置信度阈值
-  float iou_thresh = 0.45f;     // NMS IoU 阈值
-  w14::Ep ep = w14::Ep::kCuda;  // 默认 CUDA EP（不可用时引擎内部回退 CPU）
+  int input_size = 640;          // 模型方形输入边长
+  float conf_thresh = 0.25f;     // 候选框置信度阈值
+  float iou_thresh = 0.45f;      // NMS IoU 阈值
+  w14::Ep ep = w14::Ep::kCuda;   // 默认 CUDA EP（不可用时引擎内部回退 CPU）
+  int intra_op_threads = 0;      // 0 表示 ORT 默认
+  int inter_op_threads = 0;      // 0 表示 ORT 默认
+  bool use_iobinding = false;    // true 时推理段走 W14 RunIoBinding
+  bool skip_non_finite = false;  // true 时解码跳过 NaN/Inf 候选
+  int reserve_hint = 0;          // 解码候选预留容量，0 表示不预留
+  int max_det = 0;               // NMS 输出上限，0 表示不限制
+};
+
+struct DetectionTiming {
+  double pre_ms = 0.0;
+  double infer_ms = 0.0;
+  double post_ms = 0.0;
+  double total_ms = 0.0;
+};
+
+struct DetectionResult {
+  std::vector<Detection> detections;
+  DetectionTiming timing;
 };
 
 // YOLODetector：**组合**（非继承）W14 InferenceEngine。
@@ -35,8 +53,17 @@ class YOLODetector {
   // 从文件路径检测（内部 cv::imread；读取失败抛 std::runtime_error）。
   [[nodiscard]] std::vector<Detection> Detect(const std::string& image_path);
 
+  // 带运行时分段计时的检测入口。计时不包含文件读取，只覆盖已解码图像的
+  // preprocess / infer / postprocess 三段，便于 quant harness 复用。
+  [[nodiscard]] DetectionResult DetectWithProfile(const cv::Mat& bgr);
+  [[nodiscard]] DetectionResult DetectWithProfile(
+      const std::string& image_path);
+
   // 实际生效的 EP（CUDA 不可用时为 kCpu）。
   [[nodiscard]] w14::Ep ActiveEp() const { return engine_.ActiveEp(); }
+  [[nodiscard]] const std::string& EpFallbackReason() const {
+    return engine_.EpFallbackReason();
+  }
 
  private:
   w14::InferenceEngine engine_;
