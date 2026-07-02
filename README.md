@@ -170,6 +170,27 @@ python tools/export_yolov8n.py && python tools/gen_reference.py
 > `operator torchvision::nms does not exist`——torch 和 torchvision 必须同源（同从 cpu index 装）。
 > `.venv/` 与 `models/*.onnx`、`models/*.jpg` 不入库（见 `.gitignore`）。
 
+#### quant 额外依赖：ORT static INT8 PTQ（第二阶段量化）
+
+`quant_yolov8_static` CMake target 会调用 ONNX Runtime Python 量化 API，对 W16
+导出的 `yolov8n.onnx` 生成 MinMax / Entropy 两个 QDQ INT8 模型。建议复用上面的
+`.venv`：
+
+```bash
+. .venv/bin/activate
+pip install onnxruntime onnx opencv-python numpy
+cmake -S . -B build -G Ninja -DPython3_EXECUTABLE="$PWD/.venv/bin/python"
+cmake --build build --target quant_yolov8_static
+```
+
+默认校准样本使用 `02_Inference_Analysis/w16_yolo_detector/models/test_image.jpg`，
+因此需先完成 W16 的模型/图片导出。如果 build 目录是在创建 `.venv` 前配置的，必须按上面的
+`-DPython3_EXECUTABLE=...` 重新配置一次，否则 CMake 可能继续使用旧 Python。手动查看参数：
+
+```bash
+python3 02_Inference_Analysis/quantization/tools/quantize_yolov8_static.py --help
+```
+
 #### W14.5 可选：CUDA EP（GPU 推理，WSL2 + RTX 30 系实测）
 
 在本地 GPU 机上启用 ONNX Runtime CUDA ExecutionProvider。**pin 版本：CUDA 12.3

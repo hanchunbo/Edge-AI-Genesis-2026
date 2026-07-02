@@ -5,9 +5,9 @@
 
 ## 当前进度
 
-**W16（YOLOv8n 检测 Demo）全部完成：NMS + 解码 + 坐标反算 + 对拍 ultralytics（逐框<0.001）；ORT 进阶（W14 加性扩展线程配置 + IOBinding + batch 1v4 benchmark，RTX 3060 实测 CUDA 单帧 7.5×、IOBinding +4~9%）。W1–W15 + W14.5（CUDA EP）全部完成。各周细节见对应模块 `notes.md`，可复用概念见 `docs/notes/`；遗留 ResNet18 对比（降级可选）、VPS CPU EP 环境（待定）。**
+**当前交付物：`quant`（Phase 0）进行中——部署硬化（W16 加性扩展）+ 评估 harness + ORT static INT8 PTQ 工具链已落地；遗留：INT8 精度失败样本（单图校准 → 0 检测框，需扩校准集/排除检测头敏感节点）、mAP 评估未做、IOBinding 双绑 + buffer 池未做、本机 CPU ORT 包致 CUDA EP 回退（GPU 数字待重测）。W16 YOLOv8n 检测 Demo 已作为基线完成，遗留 ResNet18 对比（降级可选）、VPS CPU EP 环境（待定）。**
 
-**⚠️ 结构切换（2026-06-30）**：W1–W16 作为**周志存档冻结不动**；W17 起改走 `docs/Roadmap.md` 的 **Phase + 交付物里程碑** 两层结构——不再按周切分，交付物按内容定大小、各挂一档可投岗位。下一个交付物 **`quant`（Phase 0）：INT8 量化 + 部署硬化 + Profiling 报告**（模块目录用主题名 `02_Inference_Analysis/quantization/`）。旧季度手册已归档 `docs/archive/`。
+**⚠️ 结构切换（2026-06-30）**：W1–W16 作为**周志存档冻结不动**；W17 起改走 `docs/Roadmap.md` 的 **Phase + 交付物里程碑** 两层结构——不再按周切分，交付物按内容定大小、各挂一档可投岗位。当前交付物 **`quant`（Phase 0）：INT8 量化 + 部署硬化 + Profiling 报告**（模块目录用主题名 `02_Inference_Analysis/quantization/`）。旧季度手册已归档 `docs/archive/`。
 每开始一个新交付物，必须更新此处进度描述（一句话：当前交付物 + 状态 + 遗留，细节进模块 notes），并同步 `docs/Roadmap.md` 里程碑状态。
 
 ## Build（构建速查）

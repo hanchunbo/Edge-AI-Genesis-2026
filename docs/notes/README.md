@@ -12,10 +12,10 @@
 
 | 文件 | 收纳主题 | 来源周 | 状态 |
 |---|---|---|---|
-| [inference.md](inference.md) | ONNX vs ORT、shape/tensor/Ort::Value、Env/Session/Engine、Env 全局唯一、零拷贝输入、CPU/GPU 内存 + Host→Device、I/O 元数据缓存、EP 优雅回退 + ActiveEp≠全图(混合执行)、Softmax、Top-K + argmax 退化、NCHW 四维(batch 维)、检测术语(Ultralytics/score/thresh/anchor)、YOLOv8 检测头(无 objectness/转置)、NMS/IoU(逐类)、IntraOp vs InterOp、IOBinding | W14/W15/W16 | ✅ W14 + W15 后处理 + W16 NCHW/检测术语/检测头/NMS/线程/IOBinding 已入 |
+| [inference.md](inference.md) | ONNX vs ORT、shape/tensor/Ort::Value、Env/Session/Engine、Env 全局唯一、零拷贝输入、CPU/GPU 内存 + Host→Device、I/O 元数据缓存、EP 优雅回退 + ActiveEp≠全图(混合执行)、Softmax、Top-K + argmax 退化、NCHW 四维(batch 维)、检测术语(Ultralytics/score/thresh/anchor)、YOLOv8 检测头(无 objectness/转置)、NMS/IoU(逐类)、IntraOp vs InterOp、IOBinding、PTQ/MinMax/Entropy、对称/非对称、Per-Tensor/Per-Channel、QDQ/QOperator、量化 vs 剪枝 vs 蒸馏 | W14/W15/W16/quant | ✅ W14 + W15 后处理 + W16 检测/线程/IOBinding + quant PTQ 概念已入 |
 | [cpp-core.md](cpp-core.md) | static 四种用法、ABI vs API、有符号/无符号 + size_t、匿名 vs 具名命名空间、默认实参 + 透传（RAII/移动语义/span/Concepts/expected/format 待毕业） | W1/W2/W3/W9/W10/W16 | 🟡 部分（W14 的 static/ABI/size_t + W16 命名空间/默认实参 已入） |
 | `concurrency.md` | jthread/stop_token、线程池、counting_semaphore、false sharing/alignas(64)、数据竞争检测 | W4/W5 | ⬜ 计划中 |
-| `systems-perf.md` | mmap 零拷贝/madvise、perf+火焰图、Valgrind、GDB 多线程死锁、benchmark 方法 | W6/W11 | ⬜ 计划中 |
+| [systems-perf.md](systems-perf.md) | P50/P99、micro-benchmark vs end-to-end、profiling 报告方法、fallback/Debug/skip 的结论边界；mmap/perf/Valgrind/GDB 待补 | W11/quant | 🟡 部分（quant profiling 方法已入） |
 | [image-ops.md](image-ops.md) | 分类预处理范式、ROI 视图 vs clone（stride/isContinuous）、ImageNet 归一化、BGR↔RGB、HWC↔CHW、silent 预处理 bug、Letterbox + 坐标反算（检测范式）、图像坐标系(y 朝下) + cxcywh↔xyxy + clamp、cv::imwrite 相对路径(CWD)；（双线性插值 待补） | W9/W10/W13/W15/W16 | 🟡 部分（W15 + W16 Letterbox/坐标系/imwrite 已入；双线性插值待毕业） |
 | `engineering.md` | CMake 三层结构/生成器表达式/FetchContent、GTest 集成、gcov/lcov 覆盖率 | W7/W8 | ⬜ 计划中 |
 

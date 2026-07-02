@@ -64,8 +64,23 @@ ctest --test-dir build -R "Quant_" --output-on-failure
 当前 CPU ORT 包环境下，`quant_benchmark` 会显式打印 CUDA fallback reason；这不是失败，而是本机没有 GPU ORT provider 的真实状态。第一阶段实测见
 [`docs/benchmarks/quant_yolo_hardening.md`](../../docs/benchmarks/quant_yolo_hardening.md)。
 
+## INT8 PTQ
+
+```bash
+cmake -S . -B build -G Ninja -DPython3_EXECUTABLE="$PWD/.venv/bin/python"
+cmake --build build --target quant_yolov8_static
+./build/02_Inference_Analysis/quantization/quant_benchmark \
+  02_Inference_Analysis/w16_yolo_detector/models/test_image.jpg \
+  02_Inference_Analysis/w16_yolo_detector/models/yolov8n.onnx \
+  build/02_Inference_Analysis/quantization/models/yolov8n.int8.minmax.onnx \
+  build/02_Inference_Analysis/quantization/models/yolov8n.int8.entropy.onnx
+```
+
+FP32/INT8 第一版报告见
+[`docs/benchmarks/quant_int8_report.md`](../../docs/benchmarks/quant_int8_report.md)。当前单图校准下 INT8 模型体积和 CPU 延迟下降明显，但检测输出为 0 框；这说明工具链闭环已跑通，精度还不能作为可用结论。
+
 ## 当前边界
 
 - `use_iobinding=true` 复用 W14 已有 IOBinding，不等价于完整“输入输出双绑 + buffer 池”。
 - `reserve_hint` 已覆盖结果等价，但尚未接 allocator 计数，不能单独报告 realloc 改善。
-- INT8 MinMax/Entropy 模型生成与 FP32/INT8 对比报告在第二阶段接入。
+- INT8 目前只完成单图校准/单图一致性检查；正式结论需要 COCO subset 或项目小样本集评估。

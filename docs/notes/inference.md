@@ -21,6 +21,10 @@
 - [NMS / IoU（逐类非极大值抑制）](#nms--iou逐类非极大值抑制)
 - [IntraOp vs InterOp 线程](#intraop-vs-interop-线程)
 - [IOBinding（绑定 I/O 复用缓冲）](#iobinding绑定-io-复用缓冲)
+- [PTQ / MinMax / Entropy](#ptq--minmax--entropy)
+- [对称/非对称 + Per-Tensor/Per-Channel](#对称非对称--per-tensorper-channel)
+- [QDQ vs QOperator](#qdq-vs-qoperator)
+- [量化 vs 剪枝 vs 蒸馏](#量化-vs-剪枝-vs-蒸馏)
 
 ---
 
@@ -257,3 +261,45 @@ std::partial_sort(idx.begin(), idx.begin() + k, idx.end(),
 **坑**：① **持久输出绑定假定输出形状固定**——绑定一次复用，换 batch / 输入尺寸（输出形状变）必须重建 binding，否则 ORT 抛 `OrtValue shape verification failed`（W16 benchmark 踩过：一个 engine 跨 batch=1/4 复用 binding 直接崩，改成每个 batch 独立 engine）。② 不是银弹——计算密集时固定开销占比小，IOBinding 收益进噪声。③ 输入仍可零拷贝绑定，但输入 buffer 每次不同要重绑（`ClearBoundInputs` + `BindInput`）。
 
 > 实战出处：`docs/benchmarks/w16_yolo_bench.md`（Run vs IOBinding）；机制 `w14_ort_basics/inference_engine.cpp`（`RunIoBinding`，持久 binding + 形状契约）
+
+---
+
+## PTQ / MinMax / Entropy
+
+**是什么**：PTQ（Post-Training Quantization）是在训练完成后，把 FP32 权重/激活映射到 INT8 等低精度表示的部署优化。Static PTQ 需要校准数据跑一遍模型，统计激活范围；MinMax 直接取观测到的最小/最大值，Entropy 用 KL/直方图方法选阈值，试图在截断异常值与保留分布细节之间折中。
+
+**为什么 / 何时用**：不重训、成本低，适合先验证端侧延迟/体积收益。YOLOv8n 在 CPU ORT 上实测 INT8 纯 infer P50 从约 40ms 降到 18ms，模型从 13M 降到 3.8M，说明工程链路有价值。
+
+**坑**：校准数据决定激活范围。单张图只能验证工具链，不能代表真实分布；本项目第一版 INT8 模型虽然更快，但单图检测输出变成 0 框，说明 PTQ 精度失败，不能写成 mAP 结论。动态 shape 的 YOLO 导出模型在 ORT `quant_pre_process` 里可能 symbolic shape 推导失败，需要跳过 symbolic shape、保留普通 shape inference。
+
+> 实战出处：`02_Inference_Analysis/quantization/tools/quantize_yolov8_static.py`；`docs/benchmarks/quant_int8_report.md`
+
+## 对称/非对称 + Per-Tensor/Per-Channel
+
+**是什么**：对称量化用 0 作为实数零点，常见公式是 `real ~= scale * int8`；非对称量化多一个 `zero_point`，公式是 `real ~= scale * (uint8 - zero_point)`，能覆盖非零中心分布。Per-Tensor 是整个张量共享一个 scale/zero_point；Per-Channel 是每个输出通道一套量化参数。
+
+**为什么 / 何时用**：权重常用对称 + per-channel，因为卷积不同输出通道分布差异大，分通道能减少量化误差；激活常用非对称 per-tensor，因为运行时范围随输入变，硬件/算子支持也更统一。
+
+**坑**：量化参数越细，精度越好但算子支持和部署复杂度越高。不是所有后端都支持任意 per-channel 激活量化；要以 ORT/TensorRT/目标硬件支持矩阵为准。调量化策略时必须同步记录精度口径，否则只看延迟会把不可用模型当优化成功。
+
+> 实战出处：`02_Inference_Analysis/quantization/tools/quantize_yolov8_static.py`（QDQ static PTQ，weight per-channel）
+
+## QDQ vs QOperator
+
+**是什么**：QDQ 格式在图里显式插入 `QuantizeLinear` / `DequantizeLinear` 节点，让原算子周围标注量化边界；QOperator 格式把算子替换成量化算子（如 `QLinearConv`）。
+
+**为什么 / 何时用**：QDQ 更适合现代后端优化器识别和融合，也更容易保留原图结构，便于调试哪些张量被量化。ORT static quantization 推荐优先用 QDQ，TensorRT 等后端也更容易从 QDQ 图做融合。
+
+**坑**：QDQ 图不代表每个节点都真的用 INT8 kernel 跑，最终仍要看 EP 支持和 runtime placement。若某些算子不支持 INT8，后端可能插回 dequant 或落回 FP32，延迟收益会打折；需要 benchmark 和 profiling 证明。
+
+> 实战出处：`02_Inference_Analysis/quantization/tools/quantize_yolov8_static.py`（`QuantFormat.QDQ`）
+
+## 量化 vs 剪枝 vs 蒸馏
+
+**是什么**：量化降低数值精度（FP32→INT8/INT4），主要减小模型体积和算力/带宽；剪枝删除不重要的权重、通道或结构，目标是减少实际计算图规模；蒸馏用大模型指导小模型训练，让小模型学到更好的输出分布。
+
+**为什么 / 何时用**：三者经常同时出现在部署 JD 里，但解决的问题不同。量化是部署后处理，最容易接现有 ONNX/ORT/TRT 流水线；剪枝通常需要训练/微调和结构化约束；蒸馏更偏训练策略，用来得到本来就更小的学生模型。
+
+**坑**：别把“模型变小”都叫量化。量化不改变层数和通道数，剪枝会改变结构或稀疏性，蒸馏产出的是另一个模型。面试表达时要说清优化对象、是否需要训练、部署后端是否真能利用。
+
+> 实战出处：`docs/Roadmap.md` 的 `quant` 交付物只实现 PTQ；剪枝/蒸馏本阶段作概念覆盖。

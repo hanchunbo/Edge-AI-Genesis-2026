@@ -11,6 +11,20 @@ endif()
 
 find_package(Threads REQUIRED)
 
+if(NOT DEFINED Python3_EXECUTABLE
+    AND EXISTS "${CMAKE_SOURCE_DIR}/.venv/bin/python")
+  set(Python3_EXECUTABLE "${CMAKE_SOURCE_DIR}/.venv/bin/python"
+      CACHE FILEPATH "Python interpreter for quantization tools")
+endif()
+find_package(Python3 QUIET COMPONENTS Interpreter)
+
+set(_QUANT_W16_MODEL
+  "${CMAKE_SOURCE_DIR}/02_Inference_Analysis/w16_yolo_detector/models/yolov8n.onnx")
+set(_QUANT_W16_IMAGE
+  "${CMAKE_SOURCE_DIR}/02_Inference_Analysis/w16_yolo_detector/models/test_image.jpg")
+set(_QUANT_MODELS_DIR "${CMAKE_CURRENT_BINARY_DIR}/models")
+set(_QUANT_STATIC_SCRIPT "${CMAKE_CURRENT_SOURCE_DIR}/tools/quantize_yolov8_static.py")
+
 add_library(quant_core STATIC
   rolling_stats.cpp
   eval_harness.cpp
@@ -28,6 +42,22 @@ target_compile_definitions(quant_benchmark PRIVATE
 target_compile_features(quant_benchmark PRIVATE cxx_std_20)
 set_target_properties(quant_benchmark PROPERTIES
   BUILD_RPATH "${ONNXRUNTIME_ROOT}/lib")
+
+if(Python3_Interpreter_FOUND)
+  add_custom_target(quant_yolov8_static
+    COMMAND ${Python3_EXECUTABLE} "${_QUANT_STATIC_SCRIPT}"
+            --model "${_QUANT_W16_MODEL}"
+            --calib-image "${_QUANT_W16_IMAGE}"
+            --output-dir "${_QUANT_MODELS_DIR}"
+    COMMENT "[quant] 生成 YOLOv8n ORT static INT8 QDQ 模型"
+    USES_TERMINAL)
+else()
+  add_custom_target(quant_yolov8_static
+    COMMAND ${CMAKE_COMMAND} -E echo
+            "[quant] 未找到 Python3 Interpreter，无法运行 ORT static quantization"
+    COMMAND ${CMAKE_COMMAND} -E false
+    USES_TERMINAL)
+endif()
 
 if(BUILD_TESTING)
   add_executable(quant_rolling_stats_test rolling_stats_test.cpp)
