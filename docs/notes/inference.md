@@ -268,9 +268,9 @@ std::partial_sort(idx.begin(), idx.begin() + k, idx.end(),
 
 **是什么**：PTQ（Post-Training Quantization）是在训练完成后，把 FP32 权重/激活映射到 INT8 等低精度表示的部署优化。Static PTQ 需要校准数据跑一遍模型，统计激活范围；MinMax 直接取观测到的最小/最大值，Entropy 用 KL/直方图方法选阈值，试图在截断异常值与保留分布细节之间折中。
 
-**为什么 / 何时用**：不重训、成本低，适合先验证端侧延迟/体积收益。YOLOv8n 在 CPU ORT 上实测 INT8 纯 infer P50 从约 40ms 降到 18ms，模型从 13M 降到 3.8M，说明工程链路有价值。
+**为什么 / 何时用**：不重训、成本低，适合先验证端侧延迟/体积收益。YOLOv8n 在 CPU ORT 上实测：整图量化 INT8 纯 infer P50 从约 40ms 降到 18ms、模型 13M→3.8M，但检测头被量化导致 0 框（见坑）；改为检测头保 FP32 后 P50 约 31ms、模型 13M→6.2M——加速/体积收益缩水，换回检测可用。可见 PTQ 的量化范围直接决定精度与加速的权衡。
 
-**坑**：校准数据决定激活范围。单张图只能验证工具链，不能代表真实分布；本项目第一版 INT8 模型虽然更快，但单图检测输出变成 0 框，说明 PTQ 精度失败，不能写成 mAP 结论。动态 shape 的 YOLO 导出模型在 ORT `quant_pre_process` 里可能 symbolic shape 推导失败，需要跳过 symbolic shape、保留普通 shape inference。
+**坑**：① 校准数据决定激活范围，单张图只能验证工具链、不代表真实分布，不能写成 mAP 结论。② 更隐蔽的坑：整图量化会把 YOLO 检测头也量化，其 (1,84,8400) 输出混合框坐标（0~640）与类别分数（0~1），Concat 后 per-tensor scale≈2.5 把所有分数坍缩到 0，导致单图 0 框——**与校准集大小无关**，修复是排除检测头节点（`/model.22/`）保 FP32。③ 动态 shape 的 YOLO 导出模型在 ORT `quant_pre_process` 里可能 symbolic shape 推导失败，需要跳过 symbolic shape、保留普通 shape inference。
 
 > 实战出处：`02_Inference_Analysis/quantization/tools/quantize_yolov8_static.py`；`docs/benchmarks/quant_int8_report.md`
 

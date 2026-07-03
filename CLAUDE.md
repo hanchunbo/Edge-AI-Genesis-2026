@@ -5,7 +5,7 @@
 
 ## 当前进度
 
-**当前交付物：`quant`（Phase 0）进行中——部署硬化（W16 加性扩展）+ 评估 harness + ORT static INT8 PTQ 工具链已落地；INT8 0 检测框已修复（检测头 /model.22/ 保 FP32 + coco128 校准，`Quant_Int8ConsistencyTest` 框级对齐守护）。遗留：mAP 掉点评估未做、INT8 报告数字待重跑刷新、IOBinding 双绑 + buffer 池未做、本机 CPU ORT 包致 CUDA EP 回退（GPU 数字待重测）。细节见 `02_Inference_Analysis/quantization/notes.md` 与 `docs/benchmarks/quant_*.md`。W1–W16 全部完成（W16 YOLOv8n 检测 Demo 为 quant 基线），遗留 ResNet18 对比（降级可选）、VPS CPU EP 环境（待定）。**
+**当前交付物：`quant`（Phase 0）进行中——部署硬化（W16 加性扩展）+ 评估 harness + ORT static INT8 PTQ 工具链已落地；INT8 0 检测框已修复（检测头 /model.22/ 保 FP32 + coco128 校准，`Quant_Int8ConsistencyTest` 框级对齐守护）。遗留：mAP 掉点评估未做、IOBinding 双绑 + buffer 池未做、本机 CPU ORT 包致 CUDA EP 回退（GPU 数字待重测）。细节见 `02_Inference_Analysis/quantization/notes.md` 与 `docs/benchmarks/quant_*.md`。W1–W16 全部完成（W16 YOLOv8n 检测 Demo 为 quant 基线），遗留 ResNet18 对比（降级可选）、VPS CPU EP 环境（待定）。**
 
 **⚠️ 结构切换（2026-06-30）**：W1–W16 作为**周志存档冻结不动**（仅允许向后兼容加性扩展）；W17 起改走 `docs/Roadmap.md` 的 **Phase + 交付物里程碑** 两层结构——不再按周切分，交付物按内容定大小、各挂一档可投岗位。旧季度手册已归档 `docs/archive/`。
 每开始一个新交付物，必须更新此处进度描述（一句话：当前交付物 + 状态 + 遗留，细节进模块 notes），并同步 `docs/Roadmap.md` 里程碑状态。
