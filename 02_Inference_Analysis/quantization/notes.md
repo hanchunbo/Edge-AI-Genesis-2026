@@ -102,5 +102,7 @@ FP32/INT8 第一版报告见
 - `use_iobinding=true` 复用 W14 已有 IOBinding，不等价于完整“输入输出双绑 + buffer 池”。
 - `reserve_hint` 已覆盖结果等价，但尚未接 allocator 计数，不能单独报告 realloc 改善。
 - ~~INT8 精度失败样本（0 检测框）~~ 已闭环，见上节根因与修复。
-- INT8 精度目前到单图框级一致性；mAP 掉点量化（coco128/COCO subset）未做。
-  `quant_int8_report.md` 的延迟/体积数字已按头部保 FP32 版本重跑刷新（2026-07-02）。
+- INT8 精度：单图框级一致性 + coco128 mAP 均已跑通。coco128 mAP50-95 FP32 0.4454
+  → INT8 0.4285（掉约 1.7 点，MinMax=Entropy），`tools/eval_map_coco128.py`（ultralytics
+  `model.val`）。评估是逐张推理不吃内存，与 Entropy 校准的内存墙无关。
+  `quant_int8_report.md` 的延迟/体积/mAP 数字已按头部保 FP32 版本刷新（2026-07-02）。

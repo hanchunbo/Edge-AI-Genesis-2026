@@ -56,19 +56,32 @@ Run vs IOBinding 差异全部落在 ±2% 噪声区间：当前 `use_iobinding=tr
 
 ## 精度口径
 
-本报告只做单图检测一致性检查，不是 mAP：
+两级验证：单图检测一致性（快速回归守护）+ coco128 mAP（量化掉点）。
 
-- FP32 baseline：5 个检测框，top score 0.8902。
-- INT8 MinMax / Entropy：5 个检测框，top score 0.8884——框数与 FP32 一致、top score 仅降约 0.002，单图检测一致性守住。
-- 修复路径：检测头 `/model.22/` 排除量化保 FP32 + coco128 校准（commit `37abca5`），`Quant_Int8ConsistencyTest` 作为框级对齐守护，防回归。
-- 单图/单例一致性**不等于** COCO mAP：没有 mAP 评估前，不能声称 INT8 精度整体可用。
+**单图检测一致性**（`Quant_Int8ConsistencyTest` 守护，防回归）：
 
-结论范围：量化工具链、模型体积下降、CPU 延迟下降、单图检测一致性已经跑通；mAP 掉点评估是当前最大缺口。
+- FP32：5 框，top score 0.8902。
+- INT8 MinMax / Entropy：5 框，top score 0.8884，框数与 FP32 一致、top score 仅降约 0.002。
+- 修复路径：检测头 `/model.22/` 排除量化保 FP32 + coco128 校准（commit `37abca5`）。
+
+**coco128 mAP**（128 图，ultralytics `model.val`，CPU；命令 `tools/eval_map_coco128.py`）：
+
+| 模型 | mAP50 | mAP50-95 | 掉点(mAP50-95) |
+|---|---:|---:|---:|
+| FP32 | 0.6054 | 0.4454 | — |
+| INT8 MinMax | 0.5833 | 0.4285 | −0.0170（−3.8%） |
+| INT8 Entropy | 0.5833 | 0.4285 | −0.0170（−3.8%） |
+
+- INT8 mAP50-95 仅掉约 1.7 个点（相对 3.8%），精度损失可接受——**推翻早期整图量化 0 框「精度失败」的结论**，检测头保 FP32 后 INT8 精度可用。
+- MinMax 与 Entropy mAP 完全相同：检测头既保 FP32，backbone 两种激活校准策略对最终 mAP 的影响在 coco128 上无法区分；两者等价时选 MinMax 更省（校准不建直方图、不吃内存）。
+- 口径边界：coco128 是训练集子集，mAP 绝对值偏乐观，此处只取 FP32 vs INT8 的**相对掉点**，不代表 COCO val 泛化精度。
+
+结论范围：量化工具链、模型体积下降、CPU 延迟下降、单图一致性、coco128 mAP 掉点已全部跑通。
 
 ## 后续项
 
-- 用 COCO subset 做近似 mAP 评估，量化单图一致性到掉点数字（`tools/eval_map_coco128.py` 已在推进）。
-- 校准集扩容受本机内存墙限制：Entropy 校准需在内存累积中间层直方图，32 图峰值 RSS 已达 5.24GB（本机 WSL 仅 7.7GB），当前 `--calib-limit 32` 是内存墙下的上限而非精度判断。做正式 mAP 评估前需换内存更大的机器放开张数，或先改用 MinMax 校准（不建直方图、内存友好）扩校准集，Entropy 版留到有内存的环境再补。
+- coco128 是训练集子集，mAP 偏乐观；如需泛化结论可在 COCO val 子集上复测——评估本身是逐张推理、**不吃内存**（实测评估阶段内存平稳，与校准无关）。
+- 若未来想进一步压掉点或扩校准集：Entropy 校准受内存墙限制（32 图峰值 RSS 5.24GB / 本机 WSL 仅 7.7GB），需换大内存机器或改用 MinMax（不建直方图、内存友好）。但当前 INT8 只掉 1.7 点已可用，扩校准集非必需。
 - 检测头保 FP32 是「保精度、牺牲加速」的权衡：后续可做逐节点敏感度分析，尝试量化部分检测头节点以恢复更多加速。
 - 在 GPU ORT 包环境重跑 CPU/CUDA EP 差异（当前 CUDA 请求实际回退 CPU）。
 - 实现真正的 IOBinding 双绑 + buffer 池，再复测 Run vs IOBinding 收益。

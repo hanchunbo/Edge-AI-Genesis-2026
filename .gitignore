@@ -72,3 +72,6 @@ w16_output.jpg
 02_Inference_Analysis/w16_yolo_detector/yolov8n.pt
 02_Inference_Analysis/w16_yolo_detector/models/*.onnx
 02_Inference_Analysis/w16_yolo_detector/models/*.jpg
+
+# quant: ultralytics model.val 评估产物（可由 tools/eval_map_coco128.py 重新生成，不入库）
+runs/
