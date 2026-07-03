@@ -83,6 +83,5 @@ Run vs IOBinding 差异全部落在 ±2% 噪声区间：当前 `use_iobinding=tr
 - coco128 是训练集子集，mAP 偏乐观；如需泛化结论可在 COCO val 子集上复测——评估本身是逐张推理、**不吃内存**（实测评估阶段内存平稳，与校准无关）。
 - 若未来想进一步压掉点或扩校准集：Entropy 校准受内存墙限制（32 图峰值 RSS 5.24GB / 本机 WSL 仅 7.7GB），需换大内存机器或改用 MinMax（不建直方图、内存友好）。但当前 INT8 只掉 1.7 点已可用，扩校准集非必需。
 - 检测头保 FP32 是「保精度、牺牲加速」的权衡：后续可做逐节点敏感度分析，尝试量化部分检测头节点以恢复更多加速。
-- 在 GPU ORT 包环境重跑 CPU/CUDA EP 差异（当前 CUDA 请求实际回退 CPU）。
-- 实现真正的 IOBinding 双绑 + buffer 池，再复测 Run vs IOBinding 收益。
+- GPU 环境待做（需 GPU + CUDA 版 ORT 包，两项本机都缺）：① CPU/CUDA EP 延迟差异重测（当前 CUDA 请求实际回退 CPU）；② 完整 IOBinding 双绑 + buffer 池——现有 `RunIoBinding` 已做输出持久绑定 + 输入零拷贝，CPU EP 上已近最优（Run vs IOBinding 在噪声区间），完整双绑的 device buffer / pinned memory / 异步 D2H 只在 GPU 才有收益，故不在 CPU 上补。
 - 后续 TRT INT8 calibrator 需要与 ORT PTQ 结果对照，解释 QDQ 与 TensorRT calibrator 的差异。
