@@ -5,7 +5,7 @@
 
 ## 当前进度
 
-**当前交付物：`quant`（Phase 0）进行中——部署硬化（W16 加性扩展）+ 评估 harness + ORT static INT8 PTQ 工具链已落地；INT8 0 检测框已修复（检测头 /model.22/ 保 FP32 + coco128 校准，`Quant_Int8ConsistencyTest` 框级对齐守护）；coco128 mAP 掉点评估已跑通（INT8 mAP50-95 0.4285 vs FP32 0.4454，掉约 1.7 点，精度可用）。遗留（均需 GPU + CUDA 版 ORT 包，本机 CPU EP 做不出收益，合并为「GPU 环境待做」）：完整 IOBinding 双绑 + buffer 池（现有 RunIoBinding 已做输出持久绑定 + 输入零拷贝，CPU 上已近最优）、CPU/CUDA EP 数字重测。细节见 `02_Inference_Analysis/quantization/notes.md` 与 `docs/benchmarks/quant_*.md`。W1–W16 全部完成（W16 YOLOv8n 检测 Demo 为 quant 基线），遗留 ResNet18 对比（降级可选）、VPS CPU EP 环境（待定）。**
+**当前交付物：`quant`（Phase 0）进行中——部署硬化（W16 加性扩展）+ 评估 harness + ORT static INT8 PTQ 工具链已落地；INT8 0 检测框已修复（检测头 /model.22/ 保 FP32 + coco128 校准，`Quant_Int8ConsistencyTest` 框级对齐守护）；coco128 mAP 掉点评估已跑通（INT8 mAP50-95 0.4285 vs FP32 0.4454，掉约 1.7 点，精度可用）。GPU（`build-gpu` + 本机 RTX 3060 + GPU 版 ORT 包）数字已补：FP32 CUDA 纯 infer 5.64ms（约 6.7× vs CPU），但 INT8 在 CUDA EP 上因 QDQ Memcpy 反而慢约 2×，INT8 的 GPU 加速留给下个交付物 `trt`（TensorRT INT8 EP）；IOBinding CPU/GPU 实测均噪声级，判定不再投入。quant 无剩余本机遗留。细节见 `02_Inference_Analysis/quantization/notes.md` 与 `docs/benchmarks/quant_*.md`。W1–W16 全部完成（W16 YOLOv8n 检测 Demo 为 quant 基线），遗留 ResNet18 对比（降级可选）、VPS CPU EP 环境（待定）。**
 
 **⚠️ 结构切换（2026-06-30）**：W1–W16 作为**周志存档冻结不动**（仅允许向后兼容加性扩展）；W17 起改走 `docs/Roadmap.md` 的 **Phase + 交付物里程碑** 两层结构——不再按周切分，交付物按内容定大小、各挂一档可投岗位。旧季度手册已归档 `docs/archive/`。
 每开始一个新交付物，必须更新此处进度描述（一句话：当前交付物 + 状态 + 遗留，细节进模块 notes），并同步 `docs/Roadmap.md` 里程碑状态。

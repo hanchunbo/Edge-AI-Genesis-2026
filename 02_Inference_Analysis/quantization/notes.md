@@ -99,12 +99,12 @@ FP32/INT8 第一版报告见
 
 ## 当前边界
 
-- `use_iobinding=true` 走 W14 `RunIoBinding`：已做**输出持久绑定**（惰性建 `Ort::IoBinding`、
-  输出 `BindOutput` 一次跨 Run 复用）+ **输入零拷贝借用**，在 **CPU EP 上已接近最优**——这也是
-  benchmark 里 Run vs IOBinding 一直落在噪声区间的原因。完整「输入输出双绑 + buffer 池」缺的部分
-  （预分配 device buffer、`BindOutput` 到自有 pinned buffer、异步 D2H 拷回）**价值只在 GPU**；本机
-  CPU EP + CPU 版 ORT 包既无 D2H 拷贝可省、也装不了 CUDA EP，硬做 CPU 版收益为零。故此项不在 CPU 上
-  补，重定义为「GPU 环境待做」，与下方 CUDA EP 回退合并（详见 `quant_int8_report.md` 后续项）。
+- `use_iobinding=true` 走 W14 `RunIoBinding`：已做**输出持久绑定** + **输入零拷贝借用**。
+  Run vs IOBinding 在 **CPU 与 GPU（CUDA EP）实测均为噪声级**（GPU 用 `build-gpu` 实测：FP32
+  5.64/5.67ms、INT8 两模型优劣翻转），印证 W16 结论。完整双绑（device buffer/pinned/异步 D2H）
+  对 yolov8n 小模型 + 输出需拷回 CPU 解码的场景无稳定收益，CPU/GPU 都不再投入。
+- INT8 GPU：CUDA EP 上 INT8（QDQ）因插入大量 Memcpy + 检测头 FP32 类型边界，反而比 FP32 慢约 2×
+  （FP32 5.64ms vs INT8 ~11ms）；INT8 的 GPU 加速需 TensorRT INT8 EP，见 `quant_int8_report.md` GPU 节。
 - `reserve_hint` 已覆盖结果等价，但尚未接 allocator 计数，不能单独报告 realloc 改善。
 - ~~INT8 精度失败样本（0 检测框）~~ 已闭环，见上节根因与修复。
 - INT8 精度：单图框级一致性 + coco128 mAP 均已跑通。coco128 mAP50-95 FP32 0.4454
