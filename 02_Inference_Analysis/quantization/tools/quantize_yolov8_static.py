@@ -36,6 +36,23 @@ def parse_args() -> argparse.Namespace:
         help="Directory for preprocessed and INT8 ONNX outputs.",
     )
     parser.add_argument("--input-size", type=int, default=640)
+    parser.add_argument(
+        "--calib-limit",
+        type=int,
+        default=0,
+        help=(
+            "校准图数量上限（0 表示不限）。Entropy 校准会在内存中累积全部中间层"
+            "输出做直方图，低内存环境需限制图数避免 OOM。"
+        ),
+    )
+    parser.add_argument(
+        "--exclude-pattern",
+        default="/model.22/",
+        help=(
+            "节点名包含该子串的节点不量化（默认排除 YOLOv8 检测头 /model.22/）。"
+            "传空字符串表示整图量化。"
+        ),
+    )
     return parser.parse_args()
 
 
@@ -117,21 +134,25 @@ def preprocess_image(path: Path, size: int, cv2, np):
 
 
 def make_reader_class(calibration_data_reader_base):
+    # 懒加载：逐张预处理而非全量驻留内存。128 张 640×640 float32 输入约 630MB，
+    # 在低内存环境（WSL 7.7GiB）会挤占 Entropy 校准本就吃紧的直方图内存。
     class YoloCalibrationDataReader(calibration_data_reader_base):
         def __init__(self, input_name: str, image_paths: list[Path], size: int, cv2, np):
             self.input_name = input_name
-            self.samples = [
-                {input_name: preprocess_image(path, size, cv2, np)}
-                for path in image_paths
-            ]
+            self.image_paths = image_paths
+            self.size = size
+            self.cv2 = cv2
+            self.np = np
             self.index = 0
 
         def get_next(self):
-            if self.index >= len(self.samples):
+            if self.index >= len(self.image_paths):
                 return None
-            item = self.samples[self.index]
+            path = self.image_paths[self.index]
             self.index += 1
-            return item
+            return {
+                self.input_name: preprocess_image(path, self.size, self.cv2, self.np)
+            }
 
         def rewind(self):
             self.index = 0
@@ -158,6 +179,8 @@ def main() -> int:
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
     images = collect_images(args.calib_image, args.calib_dir)
+    if args.calib_limit > 0:
+        images = images[: args.calib_limit]
 
     session = ort.InferenceSession(str(model), providers=["CPUExecutionProvider"])
     input_name = session.get_inputs()[0].name
@@ -175,6 +198,23 @@ def main() -> int:
         str(model), str(preprocessed_model), skip_symbolic_shape=True
     )
 
+    # 检测头必须留 FP32：YOLOv8 输出张量混合框坐标（0~640）与类别分数（0~1），
+    # per-tensor 激活量化的 scale≈640/255≈2.5，会把所有 <2.5 的分数坍缩成 0，
+    # 导致 INT8 模型 0 检测框（与校准集大小无关）。头部算力占比小，保 FP32
+    # 对延迟影响可忽略。
+    nodes_to_exclude: list[str] = []
+    if args.exclude_pattern:
+        import onnx  # noqa: PLC0415 — 与其余重依赖一致，延迟到运行期导入
+
+        graph = onnx.load(str(preprocessed_model)).graph
+        nodes_to_exclude = [
+            n.name for n in graph.node if args.exclude_pattern in n.name
+        ]
+        print(
+            f"[quant] exclude nodes: {len(nodes_to_exclude)} "
+            f"(pattern: {args.exclude_pattern!r})"
+        )
+
     reader_cls = make_reader_class(calibration_data_reader_base)
     common_kwargs = {
         "model_input": str(preprocessed_model),
@@ -182,6 +222,7 @@ def main() -> int:
         "activation_type": quant_type.QUInt8,
         "weight_type": quant_type.QInt8,
         "per_channel": True,
+        "nodes_to_exclude": nodes_to_exclude,
     }
 
     quantize_static(

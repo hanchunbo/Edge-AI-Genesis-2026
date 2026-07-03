@@ -77,10 +77,30 @@ cmake --build build --target quant_yolov8_static
 ```
 
 FP32/INT8 第一版报告见
-[`docs/benchmarks/quant_int8_report.md`](../../docs/benchmarks/quant_int8_report.md)。当前单图校准下 INT8 模型体积和 CPU 延迟下降明显，但检测输出为 0 框；这说明工具链闭环已跑通，精度还不能作为可用结论。
+[`docs/benchmarks/quant_int8_report.md`](../../docs/benchmarks/quant_int8_report.md)（其中延迟/体积数字为整图量化版本，待按下述修复后重跑刷新）。
+
+### INT8 0 检测框根因与修复（2026-07-02 闭环）
+
+- **症状**：首版 INT8 模型（MinMax/Entropy）单图评估输出 0 检测框，top score 恰为 0.0000。
+- **根因**：整图量化把检测头也做了激活量化。YOLOv8 输出张量 (1,84,8400) 混合框坐标
+  （0~640）与类别分数（0~1），最终 Concat 输出的 per-tensor scale≈637/255≈2.5——
+  所有 <2.5 的分数只能取 0，全部类别分数坍缩，**与校准集大小无关**（校准图即评估图也复现）。
+  证据：INT8 输出仅 256 个离散值，`output0_DequantizeLinear` scale=2.499。
+- **修复**：`quantize_yolov8_static.py` 默认 `--exclude-pattern "/model.22/"`，检测头
+  154 节点保 FP32（backbone 才是算力大头）；校准集从单图扩为 coco128（`--calib-dir`，
+  `--calib-limit 32`）。
+- **代价**：模型体积 3.9M → 6.5M（压缩率 29% → 50%），头部 FP32 换检测可用。
+- **验证**：`Quant_Int8ConsistencyTest`——FP32 高置信框（score≥0.5）必须在 INT8 结果中
+  有同类别 IoU≥0.7、分数差≤0.15 的匹配；修复前红（0 框触发断言）、修复后绿。
+- **内存约束**：Entropy 校准会在内存中累积全部中间层输出做直方图，32 图峰值 RSS
+  **5.24GB**；本机 WSL 仅 7.7GB，量化必须用 `systemd-run --user --scope -p MemoryMax=5G
+  -p MemorySwapMax=4G` 包内存墙跑（裸跑曾多次打崩 WSL VM），被杀时降 `--calib-limit`
+  而不是提高上限。校准 reader 已改懒加载（逐张预处理，不全量驻留）。
 
 ## 当前边界
 
 - `use_iobinding=true` 复用 W14 已有 IOBinding，不等价于完整“输入输出双绑 + buffer 池”。
 - `reserve_hint` 已覆盖结果等价，但尚未接 allocator 计数，不能单独报告 realloc 改善。
-- INT8 目前只完成单图校准/单图一致性检查；正式结论需要 COCO subset 或项目小样本集评估。
+- ~~INT8 精度失败样本（0 检测框）~~ 已闭环，见上节根因与修复。
+- INT8 精度目前到单图框级一致性；mAP 掉点量化（coco128/COCO subset）未做，
+  `quant_int8_report.md` 的延迟/体积数字也待用头部保 FP32 版本重跑刷新。

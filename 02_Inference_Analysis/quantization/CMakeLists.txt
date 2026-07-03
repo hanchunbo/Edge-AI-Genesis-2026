@@ -43,13 +43,22 @@ target_compile_features(quant_benchmark PRIVATE cxx_std_20)
 set_target_properties(quant_benchmark PROPERTIES
   BUILD_RPATH "${ONNXRUNTIME_ROOT}/lib")
 
+# 校准集优先 coco128（ultralytics 默认数据目录）；缺失时回退单张测试图，
+# 仅用于验证工具链闭环，不作为正式校准结论。
+set(_QUANT_CALIB_DIR "$ENV{HOME}/code/datasets/coco128/images/train2017")
+if(EXISTS "${_QUANT_CALIB_DIR}")
+  set(_QUANT_CALIB_ARGS --calib-dir "${_QUANT_CALIB_DIR}")
+else()
+  set(_QUANT_CALIB_ARGS --calib-image "${_QUANT_W16_IMAGE}")
+endif()
+
 if(Python3_Interpreter_FOUND)
   add_custom_target(quant_yolov8_static
     COMMAND ${Python3_EXECUTABLE} "${_QUANT_STATIC_SCRIPT}"
             --model "${_QUANT_W16_MODEL}"
-            --calib-image "${_QUANT_W16_IMAGE}"
+            ${_QUANT_CALIB_ARGS}
             --output-dir "${_QUANT_MODELS_DIR}"
-    COMMENT "[quant] 生成 YOLOv8n ORT static INT8 QDQ 模型"
+    COMMENT "[quant] 生成 YOLOv8n ORT static INT8 QDQ 模型（检测头保 FP32）"
     USES_TERMINAL)
 else()
   add_custom_target(quant_yolov8_static
@@ -89,4 +98,18 @@ if(BUILD_TESTING)
   set_target_properties(quant_batch_consistency_test PROPERTIES
     BUILD_RPATH "${ONNXRUNTIME_ROOT}/lib")
   add_test(NAME Quant_BatchConsistencyTest COMMAND quant_batch_consistency_test)
+
+  add_executable(quant_int8_consistency_test int8_consistency_test.cpp)
+  target_link_libraries(quant_int8_consistency_test
+    PRIVATE quant_core GTest::gtest_main Threads::Threads)
+  target_compile_definitions(quant_int8_consistency_test PRIVATE
+    QUANT_W16_MODEL_PATH="${_QUANT_W16_MODEL}"
+    QUANT_W16_IMAGE_PATH="${_QUANT_W16_IMAGE}"
+    QUANT_INT8_MINMAX_PATH="${_QUANT_MODELS_DIR}/yolov8n.int8.minmax.onnx"
+    QUANT_INT8_ENTROPY_PATH="${_QUANT_MODELS_DIR}/yolov8n.int8.entropy.onnx"
+  )
+  target_compile_features(quant_int8_consistency_test PRIVATE cxx_std_20)
+  set_target_properties(quant_int8_consistency_test PROPERTIES
+    BUILD_RPATH "${ONNXRUNTIME_ROOT}/lib")
+  add_test(NAME Quant_Int8ConsistencyTest COMMAND quant_int8_consistency_test)
 endif()
