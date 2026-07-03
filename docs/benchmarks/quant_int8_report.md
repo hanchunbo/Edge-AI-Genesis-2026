@@ -68,6 +68,7 @@ Run vs IOBinding 差异全部落在 ±2% 噪声区间：当前 `use_iobinding=tr
 ## 后续项
 
 - 用 COCO subset 做近似 mAP 评估，量化单图一致性到掉点数字（`tools/eval_map_coco128.py` 已在推进）。
+- 校准集扩容受本机内存墙限制：Entropy 校准需在内存累积中间层直方图，32 图峰值 RSS 已达 5.24GB（本机 WSL 仅 7.7GB），当前 `--calib-limit 32` 是内存墙下的上限而非精度判断。做正式 mAP 评估前需换内存更大的机器放开张数，或先改用 MinMax 校准（不建直方图、内存友好）扩校准集，Entropy 版留到有内存的环境再补。
 - 检测头保 FP32 是「保精度、牺牲加速」的权衡：后续可做逐节点敏感度分析，尝试量化部分检测头节点以恢复更多加速。
 - 在 GPU ORT 包环境重跑 CPU/CUDA EP 差异（当前 CUDA 请求实际回退 CPU）。
 - 实现真正的 IOBinding 双绑 + buffer 池，再复测 Run vs IOBinding 收益。
