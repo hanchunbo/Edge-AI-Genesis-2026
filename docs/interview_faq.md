@@ -1347,6 +1347,118 @@ Ultralytics 的 YOLOv8 代码和权重**免费公开**，但许可证是 **AGPL-
 
 ---
 
+## Phase 0 quant：量化 / 部署硬化 / harness 复盘（Q47-Q50）
+
+### Q47: FP32、FP16、INT8 分别是什么？为什么说 INT8 不是“量化精度”？
+
+**考察点**：是否区分数值格式、量化模式与任务精度指标。
+
+**答题角度**（概念正文见主题库 [inference.md — FP32 / FP16 / INT8](notes/inference.md#fp32--fp16--int8数值格式-vs-精度指标)）：
+FP32/FP16/INT8 是模型权重和激活的数值格式：32 位浮点、16 位浮点、8 位整数近似。INT8 是低精度格式，不是最终精度指标；模型量化后是否可用，要看 mAP、Top-1、框级一致性、score 差异等任务指标。
+
+**加分回答**：
+> "我会把 report 分成三列看：format 是 FP32/INT8，performance 是 latency/throughput/model size，accuracy 是 mAP/一致性。INT8 模型生成成功只说明工具链跑通；如果出现 0 框或 mAP 大跌，它依然是不可用模型。"
+
+---
+
+### Q48: Static PTQ 里的 MinMax 和 Entropy 有什么区别？Entropy 具体在做什么？
+
+**考察点**：是否理解 calibration 是在选量化范围，而不是背方法名。
+
+**答题角度**（概念正文见主题库 [inference.md — 量化范围](notes/inference.md#量化范围--scale--zero_point--clipping) / [PTQ / MinMax / Entropy](notes/inference.md#ptq--minmax--entropy)）：
+MinMax 直接取校准数据里观测到的最小/最大值，简单快但怕 outlier。Entropy 会收集 activation histogram，尝试不同 clipping 阈值，模拟量化/反量化后用 KL Divergence 比较原始分布与量化分布，选择信息损失较小的范围；它可能牺牲少数极端值，保住主体分布的细节。
+
+**加分回答**：
+> "Entropy 不是一定更准。它更慢、更吃内存，而且如果被 clip 的少数极端值对模型很关键，也会伤精度。本项目 coco128 上 MinMax/Entropy mAP 数字相同，说明不能按名字预设结论，必须用任务指标验收。"
+
+---
+
+### Q49: Backbone 和 detection head 分别是什么？为什么 YOLOv8 INT8 量化要把检测头保 FP32？
+
+**考察点**：是否理解检测模型结构分工，以及敏感层混合精度的原因。
+
+**答题角度**（概念正文见主题库 [inference.md — Backbone / Neck / Detection Head](notes/inference.md#backbone--neck--detection-head)）：
+Backbone 负责从图片提特征，是算力大头；detection head 在最后输出框坐标和类别分数。YOLOv8 检测头输出 `[1,84,8400]`，同一 tensor 里混了框坐标 `0~640` 和类别分数 `0~1`。整头 per-tensor 量化时 scale 被坐标撑大，分数会被压到 0 附近，导致 0 检测框，所以项目用 `/model.22/` exclude 让检测头保 FP32。
+
+**加分回答**：
+> "这不是说检测头不用优化，而是当前 ORT PTQ 路径下头部是敏感层。混合精度的思路是：backbone INT8 拿主要体积/算力收益，head 保 FP32 保住检测可用性；后续如果用 TensorRT 或更细粒度策略，再重新评估头部是否能安全量化。"
+
+---
+
+### Q50: quant 里的部署硬化、后端优化、harness 分别是什么关系？
+
+**考察点**：是否能把 roadmap 范围讲清，不把工程稳态、性能后端和评估框架混成一类。
+
+**答题角度**（概念正文见主题库 [systems-perf.md — 部署硬化 vs 后端优化](notes/systems-perf.md#部署硬化-vs-后端优化) / [Benchmark / Eval Harness](notes/systems-perf.md#benchmark--eval-harness)）：
+部署硬化是让推理链路更稳、更可测，比如 NaN/Inf skip、`max_det`、fallback reason、分段计时、P50/P99、batch consistency；后端优化是 TensorRT、CUDA kernel、GPU 端前后处理融图、FP16/INT8 engine 这类执行后端改造。Harness 是评估框架，不是模型或算法；它把 FP32/INT8 MinMax/INT8 Entropy 放进同一套流程，统一 warmup、iters、EP 状态、延迟统计和报告。
+
+**加分回答**：
+> "quant 交付物的边界是 ORT PTQ + 部署评估闭环。真正的 TensorRT FP16/INT8、GPU 端到端流水线属于下一个 `trt` 交付物。这样拆能避免在 quant 阶段同时改模型格式、后端 engine、前后处理，导致归因不清。"
+
+---
+
+## W16：YOLO benchmark 读码复盘（Q51-Q55）
+
+### Q51: benchmark 里的吞吐 `img/s` 和端到端 FPS 是一回事吗？
+
+**考察点**：是否区分纯推理上限、端到端体验、batch 对吞吐/延迟的影响。
+
+**答题角度**（概念正文见主题库 [systems-perf.md — 吞吐 img/s vs FPS](notes/systems-perf.md#吞吐-imgs-vs-fps)）：
+不是一回事。W16 纯推理表里的 `img/s` 用 `batch * 1000 / P50(ms)` 算，只覆盖 ORT infer；端到端 FPS 用 `1000 / total(P50)` 算，覆盖 preprocess + infer + postprocess。batch=4 可能整体 `img/s` 更高，但一批要等完整 batch 跑完才出结果，所以单路实时摄像头优先看端到端延迟/FPS。
+
+**加分回答**：
+> "我会同时报两张表：纯 infer 表看 EP、IOBinding、batch 的后端上限；端到端表看真实交付 FPS。只拿纯推理吞吐说实时 FPS 会高估系统能力。"
+
+---
+
+### Q52: HWC 和 CHW 怎么不混？为什么 W16 里 `LetterboxToTensor` 注释说 BGR，但我们已经转 RGB 了？
+
+**考察点**：图像内存布局、通道语义、预处理 silent bug。
+
+**答题角度**（概念正文见主题库 [image-ops.md — HWC ↔ CHW 内存布局](notes/image-ops.md#hwc--chw-内存布局)）：
+HWC 是图片存法，每个像素的通道挨着；CHW 是模型输入常见存法，先放完整 R 平面，再 G，再 B。`LetterboxToTensor` 本质是把输入 Mat 当前第 0/1/2 通道拆成 CHW，不负责判断语义。W16 在调用前已 `BGR→RGB`，所以第 0 通道实际是 R；内部历史变量名 `ch_b` 只是命名误导。
+
+**加分回答**：
+> "我用一个记忆法：HWC = RGB RGB 按像素挨着；CHW = RRR... GGG... BBB... 按通道成三大块。一看到 `tensor.data() + H*W` 这种指针偏移，就是在写 CHW 平面。"
+
+---
+
+### Q53: `input_names` 明明从 session 查出来，为什么 `Run()` 时又传回 session？
+
+**考察点**：ORT Run API 的按名绑定、`inputs_` 元数据缓存 vs 临时 C API 参数数组。
+
+**答题角度**（概念正文见主题库 [inference.md — ORT Run 的 name 绑定](notes/inference.md#ort-run-的-name-绑定)）：
+构造期查 names 是为了知道模型有哪些输入/输出口；Run 时传 names 是为了和 tensor 数组按下标配对，声明本次推理的接线关系。单输入 YOLO 等价于 `"images" -> input_tensor`。`input_names.data()`、`&input_tensor`、`input_count=1` 三个参数合起来，告诉 ORT 从名字数组读一个名字、从 tensor 地址读一个 tensor，并配成一对。
+
+**加分回答**：
+> "单输入单输出看起来像把 name 原样塞回去，这是通用 API 的样板代码。多输入模型就很明显了：`image/scale/mask` 三个名字必须和三个 tensor 顺序一致，否则数据会喂错口。"
+
+---
+
+### Q54: 普通 `Run` 和 `RunIoBinding` 的核心差异是什么？为什么 W16 里收益不大？
+
+**考察点**：IOBinding 的机制边界、形状契约、实测结论诚实表达。
+
+**答题角度**（概念正文见主题库 [inference.md — IOBinding](notes/inference.md#iobinding绑定-io-复用缓冲)）：
+普通 `Run` 每次临时传输入/输出名字，让 ORT 分配输出 `Ort::Value`；`RunIoBinding` 首次创建持久 `Ort::IoBinding`，输出绑定一次复用，输入 buffer 每次不同则清掉再重绑。理论上它能减少固定分配和拷贝抖动，但 W16 yolov8n 小模型、后处理仍在 CPU，CUDA batch=1 的 Run/IOBinding P50 多次优劣翻转，所以结论是噪声级收益。
+
+**加分回答**：
+> "IOBinding 还有形状契约：同一个 engine 的持久输出绑定假定输出 shape 固定，换 batch 或输入尺寸要新建 engine/binding。W16 benchmark 因此每个 `(EP,batch)` 用独立 engine。"
+
+---
+
+### Q55: 「处理多张图片」和「模型有多个输入」是一回事吗？对 `Run()` 的 `input_names`/`input_count` 各有什么影响？
+
+**考察点**：batch 维 vs graph 多输入节点的边界区分，避免把两个独立轴混为一谈。
+
+**答题角度**（概念正文见主题库 [inference.md — ORT Run 的 name 绑定](notes/inference.md#ort-run-的-name-绑定) 坑④、[NCHW 四维含义](notes/inference.md#nchw-四维含义batch--channel--h--w)）：
+不是一回事，是两个独立维度。「多张图片」是同一个 input name（如 `"images"`）对应的 tensor 在 NCHW 的 batch（N）维变大，`input_count` 依然是 1，`Run()` 现有代码不用改就能吃。「多输入模型」是 ONNX 图本身定义了多个不同名字的输入节点（如 `image`/`scale`/`mask`），才需要真正构造多个 `Ort::Value`、多组 name，并把 `input_count` 从 1 改成 N，靠位置对齐把每个 name 和每个 tensor 一一配对。
+
+**加分回答**：
+> "现在 `InferenceEngine::Run` 里 `input_names` 是从 `inputs_` 全量构建的，但 `input_count` 硬编码成 1——这只在模型只有一个输入时正确。W14–W16 用到的模型（MobileNetV2/分类器/YOLOv8n）都是单输入，所以恒成立；真换成多输入模型，这里需要重构成传 `std::vector<Ort::Value>` 和对应的完整 name 数组，`input_count` 也要跟着变。"
+
+---
+
 ## 使用建议
 
 1. **每周复习**：完成每周学习后，尝试口头回答相关题目。

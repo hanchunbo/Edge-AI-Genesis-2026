@@ -12,6 +12,63 @@
 
 ---
 
+## 2026-07-04（W16 benchmark 源码精读 — 吞吐/FPS、batch、IOBinding、ORT Run name 绑定）
+
+### 操作摘要
+- 复盘 W16 YOLOv8n benchmark：先解释 benchmark 目标，再实际重跑 CPU/GPU benchmark，确认普通沙箱看不到 GPU，非沙箱 GPU 环境可用。
+- 逐段精读 `yolo_benchmark.cpp`：`LetterboxToTensor` 预处理、`TileBatch` 拼 batch、`Bench` warmup/iters、CPU/CUDA × batch × Run/IOBinding 性能矩阵、`InferenceEngine::Run` 的 `input_names` / `output_names` 绑定。
+- 追问延伸：`input_names`/`input_count` 的位置对齐机制之后，追问「处理多张图片」和「模型多输入」是否同一件事——辨清 batch(N) 维 vs graph 多输入节点是两个独立轴，并确认 W15 未改过 `inference_engine.{cpp,hpp}`、W14–W16 所有模型均为单输入、现有生产调用点也从未真正用过 batch>1（仅 quant 的 `batch_consistency_test` 用于验证正确性）。
+- 沉淀产物：`02_Inference_Analysis/w16_yolo_detector/notes.md`（新增 benchmark 读码疑问速查）、`docs/notes/systems-perf.md`（新增 warmup/iters、吞吐 img/s vs FPS）、`docs/notes/image-ops.md`（补 HWC/CHW 与通道语义坑）、`docs/notes/inference.md`（新增 ORT Run name 绑定，补坑④ batch 维 vs 多输入模型辨析）、`docs/interview_faq.md` Q51-Q55、`docs/README.md` 和 `docs/notes/README.md` 索引同步。
+
+### 今日深讲内容
+- **benchmark 主线**：W16 不是单纯跑速度，而是扫 `CPU/CUDA × batch=1/4 × Run/IOBinding`，用 P50/P99/吞吐回答后端、batch、IOBinding 哪些组合有实际收益；端到端三段表才代表真实检测 FPS。
+- **GPU 环境定位**：普通沙箱下 `nvidia-smi` 报 GPU access blocked，导致 `build-gpu` 回退 CPU；非沙箱下可见 RTX 3060 Laptop、Driver 546.30、CUDA 12.3，W16 benchmark 成功激活 CUDA EP。
+- **实测关键数字**：CUDA 端到端 `10.71ms / 93.4 FPS`；CPU 端到端 `59.40ms / 16.8 FPS`。纯推理 CUDA batch=1 `7.62ms / 131 img/s`，batch=4 `18.21ms / 220 img/s`，说明 batch 提总产量但增加单批等待。
+- **预处理链路**：`imread` 得 BGR，W16 先 `BGR→RGB`，再 `LetterboxToTensor` 做 letterbox、`/255`、HWC→CHW。函数内部变量名若按 BGR 起名，只是历史命名；实际通道语义由调用方传入的 Mat 决定。
+- **ORT Run name 绑定**：构造期缓存 `name/shape/dtype` 是长期元数据；`Run` 里 `input_names.data()` 与 `&input_tensor`、`input_count=1` 按下标配对，表达 `"images" -> input_tensor`，不是重新告诉 Session 它有哪些口。
+- **batch 维 vs 多输入模型**：两个独立维度——「多张图片」是同一个 input name 对应的 tensor 在 batch(N) 维变大，`input_count` 仍是 1；「多输入模型」是 graph 本身有多个不同名字的输入节点，才需要 `input_count>1` 和多组 name/tensor 按下标配对。当前 `Run()` 里 `input_count=1` 是硬编码，只在单输入模型下恒成立。
+
+### 今日暴露的短板 / 困惑（已提成 FAQ Q51-Q55）
+- **吞吐 vs FPS 混淆**：把 `img/s` 和真实 FPS 看成一回事；修正为纯 infer 上限 vs 端到端检测速度 → **Q51**
+- **HWC/CHW 与 BGR/RGB 混淆**：看到 `ch_b` 误以为 W16 又按 BGR 喂模型；修正为 `LetterboxToTensor` 按输入 Mat 当前通道顺序拆平面 → **Q52**
+- **ORT name 绑定不理解**：觉得从 Session 查 name 又传回 Session 是重复；修正为 names 与 tensor 数组按下标配对，构成本次 Run 的接线图 → **Q53**
+- **Run vs IOBinding 边界不清**：补齐普通 `Run` 每次传名字/分配输出，IOBinding 复用输出绑定但输入仍重绑；W16 实测收益噪声级 → **Q54**
+- **batch 与多输入混淆**：把「一次喂多张图」和「模型有多个输入口」当成一回事；修正为 batch 是同一 name 的 tensor 在 N 维变大，多输入才是多个 name/tensor 按位置配对 → **Q55**
+
+### 命令备忘
+```bash
+# GPU 设备检查需要非沙箱权限，否则当前托管环境会挡住 /dev GPU 访问
+/usr/lib/wsl/lib/nvidia-smi
+./build-gpu/02_Inference_Analysis/w16_yolo_detector/w16_yolo_benchmark
+```
+
+### 关联
+- 模块语境：`02_Inference_Analysis/w16_yolo_detector/notes.md`
+- 概念正文：`docs/notes/systems-perf.md`、`docs/notes/image-ops.md`、`docs/notes/inference.md`
+- 答题视角：`docs/interview_faq.md` Q51-Q55
+
+---
+
+## 2026-07-03（quant 概念答疑 — INT8/PTQ/Entropy/backbone/harness）
+
+### 操作摘要
+- 围绕 Phase 0 `quant` 交付物做概念澄清：FP32/FP16/INT8、量化范围、MinMax vs Entropy、backbone vs detection head、部署硬化 vs 后端优化、EvalHarness。
+- **纯文档沉淀**：按「主题库单一事实源 + FAQ 答题角度 + 模块 notes 只留本模块语境」规则更新文档。
+- 沉淀产物：`docs/notes/inference.md`（新增/扩展 FP32/FP16/INT8、量化范围、PTQ/MinMax/Entropy、Backbone/Neck/Detection Head）、`docs/notes/systems-perf.md`（新增部署硬化 vs 后端优化、Benchmark/EvalHarness）、`02_Inference_Analysis/quantization/notes.md`（新增概念边界速查）、`docs/interview_faq.md` Q47-Q50、`docs/notes/README.md` 和 `docs/README.md` 索引同步。
+
+### 今日暴露的短板 / 困惑（已提成 FAQ Q47-Q50）
+- **FP32/FP16/INT8 语义不稳**：起初把 INT8 说成「量化精度」；修正为数值格式，真正精度看 mAP/框级一致性/score 差异 → **Q47**
+- **量化范围 / MinMax / Entropy 不清**：补齐 calibration = 选激活范围；MinMax 看边界，Entropy 看 histogram + KL，二者都要用任务指标验收 → **Q48**
+- **backbone 与检测头边界不清**：backbone 提特征且是算力大头，detection head 输出框坐标和类别分数；YOLOv8 头部混合 `0~640` 坐标与 `0~1` 分数，整头量化会压没分数 → **Q49**
+- **部署硬化、后端优化、harness 混淆**：部署硬化负责稳定与可测，TensorRT/CUDA/FP16 engine 属后端优化；harness 是统一评估框架，不是模型或量化算法 → **Q50**
+
+### 关联
+- 概念正文：`docs/notes/inference.md`、`docs/notes/systems-perf.md`
+- 模块语境：`02_Inference_Analysis/quantization/notes.md`
+- 答题视角：`docs/interview_faq.md` Q47-Q50
+
+---
+
 ## 2026-07-01（W16 检测 demo 源码精读 — 预处理→推理→decode→NMS→可视化全链路答疑）
 
 ### 操作摘要

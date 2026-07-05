@@ -4,9 +4,9 @@
 
 通用概念见主题库：
 
-- ORT / EP / IOBinding / YOLOv8 检测头 / NMS：[`docs/notes/inference.md`](../../docs/notes/inference.md)
+- ORT / EP / IOBinding / YOLOv8 检测头 / NMS / INT8 PTQ / MinMax / Entropy / backbone 与检测头：[`docs/notes/inference.md`](../../docs/notes/inference.md)
 - Letterbox、BGR/RGB、坐标反算：[`docs/notes/image-ops.md`](../../docs/notes/image-ops.md)
-- profiling 方法、P50/P99、benchmark 边界：[`docs/notes/systems-perf.md`](../../docs/notes/systems-perf.md)（任务 13 补正文）
+- profiling 方法、P50/P99、benchmark 边界、部署硬化 vs 后端优化、EvalHarness：[`docs/notes/systems-perf.md`](../../docs/notes/systems-perf.md)
 
 ## 模块定位
 
@@ -15,6 +15,14 @@
 - W16 继续负责预处理、ORT 推理、YOLOv8 decode、NMS 和 ultralytics 对拍基线。
 - W16 只做加性扩展：`DecodeOptions`、`NmsOptions`、`DetectorConfig` 部署配置、`DetectWithProfile()`。
 - quant 负责部署评估 harness：滚动 P50/P99、多模型 FP32/INT8 切换、batch consistency、Markdown benchmark/report。
+
+## 概念边界速查
+
+- **INT8** 是量化后的数值格式，不等于「量化精度」。真正的精度看 mAP、框级一致性、score 差异等任务指标。
+- **MinMax / Entropy** 是 static PTQ 的 calibration 策略，负责给激活选择量化范围；MinMax 取观测 min/max，Entropy 用 histogram + KL 选择信息损失较小的 clipping 阈值。
+- **backbone / 检测头** 是模型结构分工。backbone 提特征且是算力大头，检测头输出框坐标与类别分数；本模块排除 `/model.22/` 是让检测头保 FP32，避免分数被坐标量纲撑大的 scale 压没。
+- **部署硬化** 是让推理路径更稳、更可测：`max_det`、NaN/Inf skip、`reserve`、fallback reason、分段计时、P50/P99、batch consistency。TensorRT、FP16 engine、GPU 端前后处理融图属于后续 `trt` 的后端优化。
+- **harness** 是评估框架，不是模型也不是量化算法；它把多个模型 case 放进同一套 W16 检测流水线，统一 warmup、正式迭代、延迟统计和报告输出。
 
 ## 数据流
 

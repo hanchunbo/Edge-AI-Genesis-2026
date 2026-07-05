@@ -193,6 +193,20 @@ cmake --build build-gpu --target w16_yolo_demo
 
 概念（IntraOp vs InterOp、IOBinding）见 inference.md。
 
+### benchmark 读码疑问速查（2026-07-04）
+
+- **147-148 行 `LetterboxToTensor`**：这里把已经 `BGR→RGB` 的 `cv::Mat` 转成 YOLO 输入张量。函数内部历史变量名可能写成 `ch_b/ch_g/ch_r`，但本质是按输入 Mat 当前第 0/1/2 通道拆成 CHW；W16 调用前已转 RGB，所以输出平面实际是 R/G/B。
+- **`/255` 归一化**：不是任意优化，而是 YOLOv8 训练/推理约定。输入要从 `uint8 0~255` 变成 `float 0~1`；YOLOv8 不走 ImageNet mean/std。
+- **`TileBatch(one, batch)`**：把一张图的 `[3,640,640]` tensor 复制 N 份，拼成逻辑形状 `[N,3,640,640]` 的连续 buffer；`out.insert(out.end(), one.begin(), one.end())` 就是把 `one` 整段追加到末尾。
+- **吞吐 vs FPS**：纯推理表里的 `img/s = batch * 1000 / P50` 是 infer 上限；端到端 FPS 才包含 preprocess + infer + postprocess。batch=4 可能总产量更高，但第一张也要等整批完成，单路实时仍优先 batch=1。
+- **`warmup` / `iters`**：预热轮数不计入统计，正式迭代次数用于算 P50/P99/吞吐。W16 是 warmup 10 次、正式 50 次。
+- **普通 `Run` 的 names**：`inputs_`/`outputs_` 缓存完整 `name/shape/dtype`；`Run()` 里临时抽 `input_names.data()` 传给 ORT，是为了和 `&input_tensor` 按下标配对，表达 `"images" -> input_tensor`。单输入 YOLO 看起来像把 name 原样塞回去，多输入模型才更明显。
+- **`Run` vs `RunIoBinding`**：二者都跑一次 ORT 推理。普通 `Run` 每次临时传输入/输出名字并让 ORT 分配输出；`RunIoBinding` 首次创建持久 binding，输出绑定一次复用，输入每次重绑。W16 实测收益仍是噪声级。
+
+对应概念正文：[`docs/notes/image-ops.md`](../../docs/notes/image-ops.md)（BGR/RGB、HWC/CHW、Letterbox）、
+[`docs/notes/inference.md`](../../docs/notes/inference.md)（ORT Run name 绑定、NCHW、IOBinding）、
+[`docs/notes/systems-perf.md`](../../docs/notes/systems-perf.md)（warmup/iters、吞吐 vs FPS）。
+
 ## 后续 quant 加性扩展（2026-07-02）
 
 W16 仍作为 YOLOv8n 检测 baseline 保留；后续 `quant` 交付物只做向后兼容的部署硬化扩展：

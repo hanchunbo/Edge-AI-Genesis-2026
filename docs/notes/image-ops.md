@@ -95,9 +95,9 @@ const int src_c = to_rgb ? (2 - c) : c;
 out[c * hw + pos] = v;   // c 选通道平面，pos 是平面内 y*W+x 偏移 → CHW
 ```
 
-**坑**：写成 `out[pos*3 + c]`（HWC）喂给要 CHW 的模型，shape 对得上但数据排布错位，结果全乱且不报错。
+**坑**：① 写成 `out[pos*3 + c]`（HWC）喂给要 CHW 的模型，shape 对得上但数据排布错位，结果全乱且不报错。② `LetterboxToTensor` 这类函数通常只是「按输入 Mat 当前第 0/1/2 通道拆成 CHW」，不负责判断语义是 BGR 还是 RGB；如果调用前已 `BGR→RGB`，那么第 0 平面就是 R，即使局部变量历史上叫 `ch_b` 也只是命名误导。通道语义由调用方预处理顺序决定。
 
-> 实战出处：`02_Inference_Analysis/w15_classify_pipeline/notes.md`（预处理节，commit a232ac7）
+> 实战出处：`02_Inference_Analysis/w15_classify_pipeline/notes.md`（预处理节，commit a232ac7）；`02_Inference_Analysis/w16_yolo_detector/yolo_benchmark.cpp`（先 BGR→RGB 再 `LetterboxToTensor`）
 
 ---
 

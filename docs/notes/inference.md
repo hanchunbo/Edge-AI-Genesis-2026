@@ -12,15 +12,19 @@
 - [零拷贝张量输入 + buffer 存活契约](#零拷贝张量输入--buffer-存活契约)
 - [MemoryInfo 与 CPU 内存 / GPU 显存 / Host→Device](#memoryinfo-与-cpu-内存--gpu-显存--hostdevice)
 - [I/O 元数据构造期一次性缓存](#io-元数据构造期一次性缓存)
+- [ORT Run 的 name 绑定](#ort-run-的-name-绑定)
 - [Execution Provider 与优雅回退](#execution-provider-与优雅回退)
 - [Softmax（数值稳定版）](#softmax数值稳定版)
 - [Top-K 选择（partial_sort）](#top-k-选择partial_sort)
 - [NCHW 四维含义（batch / channel / H / W）](#nchw-四维含义batch--channel--h--w)
 - [检测术语小表（Ultralytics / score / thresh / anchor）](#检测术语小表ultralytics--score--thresh--anchor)
 - [YOLOv8 检测头布局（无 objectness + 转置）](#yolov8-检测头布局无-objectness--转置)
+- [Backbone / Neck / Detection Head](#backbone--neck--detection-head)
 - [NMS / IoU（逐类非极大值抑制）](#nms--iou逐类非极大值抑制)
 - [IntraOp vs InterOp 线程](#intraop-vs-interop-线程)
 - [IOBinding（绑定 I/O 复用缓冲）](#iobinding绑定-io-复用缓冲)
+- [FP32 / FP16 / INT8：数值格式 vs 精度指标](#fp32--fp16--int8数值格式-vs-精度指标)
+- [量化范围 / scale / zero_point / clipping](#量化范围--scale--zero_point--clipping)
 - [PTQ / MinMax / Entropy](#ptq--minmax--entropy)
 - [对称/非对称 + Per-Tensor/Per-Channel](#对称非对称--per-tensorper-channel)
 - [QDQ vs QOperator](#qdq-vs-qoperator)
@@ -132,6 +136,31 @@ Ort::Value input_tensor = Ort::Value::CreateTensor<float>(
 
 ---
 
+## ORT Run 的 name 绑定
+
+**是什么**：`Session::Run` 需要两组并排数组：`input_names` 和 `input_tensors`。ORT 按下标配对，形成本次推理的输入绑定表：
+
+```text
+input_names[0]  -> input_tensors[0]
+input_names[1]  -> input_tensors[1]
+```
+
+单输入 YOLO 里就是：
+
+```text
+"images" -> input_tensor
+```
+
+输出侧的 `output_names` 则告诉 ORT 这次要取哪些输出口。
+
+**为什么 / 何时用**：ONNX 图的输入/输出是有名字的口，不是普通 C++ 函数那种只靠参数位置就能完全表达语义。构造期从 Session 查询 names，是为了知道模型有哪些口；Run 时把 names 和 tensor 一起传回去，是为了声明「这块 tensor 本次插到哪个口」。单输入单输出模型看起来像「查出来又原样塞回去」，但多输入模型会变成 `image/scale/mask` 等多个名字和多个 tensor 的明确接线图。
+
+**坑**：① `input_names.data()` 只是名字数组起点，真正绑定还要看旁边的 `&input_tensor` 和 `input_count=1`；三者合起来才表示「从名字数组读 1 个名字、从 tensor 地址读 1 个 tensor，并按下标配对」。② `input_names` 的顺序必须和 tensor 数组顺序一致，名字错或顺序错都会把数据喂错口。③ `inputs_`/`outputs_` 缓存完整 `name/shape/dtype` 是长期元数据；`Run` 里临时抽 `name.c_str()` 是为了适配 ORT C API 要的 `const char* const*`。④ 别把「多张图片」和「多输入模型」混为一谈——这是两个独立维度：前者是**同一个** input name 对应的 tensor 在 batch（N）维变大（见下面 NCHW 小节），`input_count` 依然是 1；后者才是 graph 本身有多个不同名字的输入节点，需要 `input_count>1` 和多组 name/tensor 按下标配对。当前 W14–W16 用到的模型都只有一个输入，`Run()` 里 `input_count=1` 是恒成立的硬编码，不是「凑巧对上了」。
+
+> 实战出处：`02_Inference_Analysis/w14_ort_basics/inference_engine.cpp`（`Run` 的 `input_names.data()` + `&input_tensor`）
+
+---
+
 ## Execution Provider 与优雅回退
 
 **是什么**：EP（Execution Provider）= ORT 执行算子的「后端」，CPU EP / CUDA EP 等。我们的 `InferenceEngine` 加可选 `Ep` 参数（默认 `kCpu`），请求 CUDA 但环境不可用时**整段 Session 优雅回退 CPU**，不抛异常；`ActiveEp()` 查实际生效、`EpFallbackReason()` 查回退原因。
@@ -224,6 +253,18 @@ std::partial_sort(idx.begin(), idx.begin() + k, idx.end(),
 
 ---
 
+## Backbone / Neck / Detection Head
+
+**是什么**：目标检测模型通常可粗分为三段：`backbone` 提取图像特征，`neck` 融合多尺度特征，`detection head` 根据特征输出最终预测。YOLOv8 的检测头输出 `[1,84,8400]`，其中 84 = 4 个框坐标 + 80 个类别分数，8400 是候选预测点数。
+
+**为什么 / 何时用**：这个分层决定了量化策略。`backbone` 是算力大头，卷积多、权重大，INT8 后通常最能省体积/延迟；`detection head` 更靠近最终语义，输出直接进入 decode/NMS，分数和坐标的小误差会改变是否出框。工程上常见策略是「骨干/中间层量化，敏感头部保 FP32/FP16」。
+
+**坑**：别把 `head` 理解成独立后处理；它仍是神经网络图里的最后预测层。YOLOv8 头部同一个输出张量混合两种量纲：框坐标约 `0~640`，类别分数约 `0~1`。若整头 per-tensor 量化，坐标范围会撑大 scale，把类别分数压到 0 附近，导致 0 检测框。项目里 `--exclude-pattern "/model.22/"` 本质就是让检测头保 FP32，而不是说「检测头不重要」。
+
+> 实战出处：`02_Inference_Analysis/quantization/notes.md`（INT8 0 框根因与 `/model.22/` 保 FP32）；`02_Inference_Analysis/w16_yolo_detector/notes.md`（YOLOv8 decode）
+
+---
+
 ## NMS / IoU（逐类非极大值抑制）
 
 **是什么**：检测模型对同一目标会吐出多个高度重叠的框，NMS（Non-Maximum Suppression）按 score 降序贪心保留最高分框、抑制与它 IoU 超阈值的同类框。IoU（Intersection over Union）= 两框交集面积 / 并集面积，是「重叠程度」的标准度量。
@@ -264,13 +305,41 @@ std::partial_sort(idx.begin(), idx.begin() + k, idx.end(),
 
 ---
 
+## FP32 / FP16 / INT8：数值格式 vs 精度指标
+
+**是什么**：`FP32`、`FP16`、`INT8` 是模型权重/激活的**数值存储与计算格式**。FP32 用 32 bit 浮点存一个小数，FP16 用 16 bit 浮点，INT8 用 8 bit 整数配合 scale/zero_point 近似表示原始小数。
+
+**为什么 / 何时用**：格式越低位，模型体积和内存带宽越省，硬件支持时也可能更快。典型部署路径是先拿 FP32 当基线，再试 FP16/INT8 等低精度路径，比较体积、延迟、精度掉点。`INT8` 是「低精度格式」，不是「模型精度指标」；模型准不准要看 mAP、Top-1、框级一致性等任务指标。
+
+**坑**：不能把「INT8 模型生成成功」等同于「量化成功」。若 mAP 大幅掉点、检测框坍缩、score 全 0，即使模型体积更小也不可用。报告里要分清：`precision/format`（FP32/FP16/INT8）和 `accuracy`（mAP/Top-1/一致性）。
+
+> 实战出处：`docs/benchmarks/quant_int8_report.md`（FP32 vs INT8 体积/延迟/mAP 对比）
+
+---
+
+## 量化范围 / scale / zero_point / clipping
+
+**是什么**：量化范围决定「哪段真实小数」被映射到 INT8/UINT8 的有限整数格子里。常见公式是 `real ~= scale * (q - zero_point)`；`scale` 是每个整数步长代表多少真实值，`zero_point` 是真实 0 对应的整数位置。超出范围的真实值会被夹到边界，称为 `clipping`。
+
+**为什么 / 何时用**：INT8/UINT8 只有 256 个取值，范围定太小会大量 clipping，范围定太大又会让每个格子太粗，正常值细节丢失。Static PTQ 的 calibration 本质就是用代表性样本估计每层激活范围，再据此生成 scale/zero_point。
+
+**坑**：量化范围是「精度损失」的核心来源之一。一个极端 outlier 会把 MinMax 范围拉大，使大多数正常值只占少量整数格；但过度 clipping 又可能截掉关键特征。YOLO 检测头的特殊坑是同一个 tensor 同时含坐标和分数，范围被坐标主导后，分数会被粗步长吞掉。
+
+> 实战出处：`02_Inference_Analysis/quantization/notes.md`（`output0_DequantizeLinear` scale≈2.499 导致类别分数坍缩）
+
+---
+
 ## PTQ / MinMax / Entropy
 
-**是什么**：PTQ（Post-Training Quantization）是在训练完成后，把 FP32 权重/激活映射到 INT8 等低精度表示的部署优化。Static PTQ 需要校准数据跑一遍模型，统计激活范围；MinMax 直接取观测到的最小/最大值，Entropy 用 KL/直方图方法选阈值，试图在截断异常值与保留分布细节之间折中。
+**是什么**：PTQ（Post-Training Quantization）是在训练完成后，把 FP32 权重/激活映射到 INT8 等低精度表示的部署优化。Static PTQ 会用校准数据跑一遍模型，统计每层激活分布，再决定量化范围。MinMax 和 Entropy 都是 calibration 策略，区别在于「怎么选范围」。
 
-**为什么 / 何时用**：不重训、成本低，适合先验证端侧延迟/体积收益。YOLOv8n 在 CPU ORT 上实测：整图量化 INT8 纯 infer P50 从约 40ms 降到 18ms、模型 13M→3.8M，但检测头被量化导致 0 框（见坑）；改为检测头保 FP32 后 P50 约 31ms、模型 13M→6.2M——加速/体积收益缩水，换回检测可用。可见 PTQ 的量化范围直接决定精度与加速的权衡。
+**MinMax**：记录校准过程中某个 tensor 见过的最小值和最大值，直接用 `[min, max]` 作为范围。优点是快、简单、不截断校准样本中出现过的值；缺点是怕 outlier。若 99.9% 的值在 `[-1,1]`，但偶尔出现 `20`，MinMax 会把范围拉到 `[-1,20]`，导致 `[-1,1]` 主体区间只分到少量整数格。
 
-**坑**：① 校准数据决定激活范围，单张图只能验证工具链、不代表真实分布，不能写成 mAP 结论。② 更隐蔽的坑：整图量化会把 YOLO 检测头也量化，其 (1,84,8400) 输出混合框坐标（0~640）与类别分数（0~1），Concat 后 per-tensor scale≈2.5 把所有分数坍缩到 0，导致单图 0 框——**与校准集大小无关**，修复是排除检测头节点（`/model.22/`）保 FP32。③ 动态 shape 的 YOLO 导出模型在 ORT `quant_pre_process` 里可能 symbolic shape 推导失败，需要跳过 symbolic shape、保留普通 shape inference。
+**Entropy**：先收集 activation histogram，再尝试多个候选 clipping 阈值；每个阈值下模拟量化/反量化，把量化后的分布 `Q` 与原始分布 `P` 做 KL Divergence（relative entropy）比较，选择信息损失最小的范围。它愿意牺牲少数极端值，换取主体分布更细的量化步长；代价是更慢、更吃内存，且若极端值本身重要也会伤精度。
+
+**为什么 / 何时用**：PTQ 不重训、成本低，适合先验证端侧延迟/体积收益。YOLOv8n 在 CPU ORT 上实测：整图量化 INT8 纯 infer P50 从约 40ms 降到 18ms、模型 13M→3.8M，但检测头被量化导致 0 框（见坑）；改为检测头保 FP32 后 P50 约 31ms、模型 13M→6.2M——加速/体积收益缩水，换回检测可用。可见 PTQ 的量化范围直接决定精度与加速的权衡。
+
+**坑**：① 校准数据决定激活范围，单张图只能验证工具链、不代表真实分布，不能写成 mAP 结论。② 更隐蔽的坑：整图量化会把 YOLO 检测头也量化，其 (1,84,8400) 输出混合框坐标（0~640）与类别分数（0~1），Concat 后 per-tensor scale≈2.5 把所有分数坍缩到 0，导致单图 0 框——**与校准集大小无关**，修复是排除检测头节点（`/model.22/`）保 FP32。③ Entropy 不是必然比 MinMax 准；本项目 coco128 mAP 上 MinMax/Entropy 数字相同，说明要以任务指标验收，而不是按方法名预设结论。④ 动态 shape 的 YOLO 导出模型在 ORT `quant_pre_process` 里可能 symbolic shape 推导失败，需要跳过 symbolic shape、保留普通 shape inference。
 
 > 实战出处：`02_Inference_Analysis/quantization/tools/quantize_yolov8_static.py`；`docs/benchmarks/quant_int8_report.md`
 

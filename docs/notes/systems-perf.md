@@ -5,7 +5,11 @@
 ## 目录
 
 - [P50 / P99 延迟](#p50--p99-延迟)
+- [warmup / iters](#warmup--iters)
+- [吞吐 img/s vs FPS](#吞吐-imgs-vs-fps)
 - [Micro-benchmark vs End-to-end](#micro-benchmark-vs-end-to-end)
+- [部署硬化 vs 后端优化](#部署硬化-vs-后端优化)
+- [Benchmark / Eval Harness](#benchmark--eval-harness)
 - [Profiling 报告方法](#profiling-报告方法)
 - [fallback / Debug / skip 的结论边界](#fallback--debug--skip-的结论边界)
 
@@ -21,6 +25,26 @@
 
 > 实战出处：`02_Inference_Analysis/quantization/rolling_stats.{hpp,cpp}`；`docs/benchmarks/quant_yolo_hardening.md`
 
+## warmup / iters
+
+**是什么**：`warmup` 是预热轮数，先跑但不计入统计；`iters` 是 iterations 的缩写，指正式计时迭代次数。benchmark 常见流程是「预热 N 次 → 正式计时 M 次 → 对 M 个样本算 P50/P99/吞吐」。
+
+**为什么 / 何时用**：第一次推理经常混入一次性开销：CUDA/cuDNN kernel 准备、autotuning、内存分配、CPU cache 未命中等。把 warmup 排除掉，统计值才更接近稳定运行状态。iters 决定样本量，太少会让 P99 和吞吐抖动大。
+
+**坑**：warmup 不是作弊删慢样本，而是把冷启动和稳态吞吐分开看；如果业务关心首帧延迟，要单独报告 cold start。`iters=50` 只能算工程快测，不能替代长时间压测。
+
+> 实战出处：`02_Inference_Analysis/w16_yolo_detector/yolo_benchmark.cpp`（`kWarmup=10`、`kIters=50`）
+
+## 吞吐 img/s vs FPS
+
+**是什么**：吞吐 `img/s` 是单位时间处理的图片总量，常按 `batch * 1000 / P50(ms)` 估算；FPS（frames per second）是端到端每秒完成多少帧，通常用于实时视频/摄像头体验。
+
+**为什么 / 何时用**：二者单位都像「每秒多少张」，但统计范围和业务语义不同。W16 纯推理表的 `img/s` 只覆盖 ORT infer，回答「模型后端每秒能算多少张」；端到端 FPS 覆盖 preprocess + infer + postprocess，回答「真实检测链路每秒能出多少帧结果」。
+
+**坑**：batch 会把吞吐和单帧等待时间拉开。batch=4 可能 `img/s` 更高，因为 18ms 出 4 张，平均每张更便宜；但第一张也要等整批 18ms 才出结果。单路实时摄像头优先看端到端延迟/FPS，离线批处理才优先看吞吐。
+
+> 实战出处：`docs/benchmarks/w16_yolo_bench.md`（batch 1v4 + 端到端三段表）
+
 ## Micro-benchmark vs End-to-end
 
 **是什么**：micro-benchmark 只测某一段（如纯 ORT infer）；end-to-end 测用户实际路径（preprocess + infer + postprocess + 可能的 IO）。两者回答的问题不同。
@@ -30,6 +54,26 @@
 **坑**：只报最快的 micro 数字会高估系统性能；只报端到端又难定位瓶颈。正确做法是两张表并列：纯 infer 表看后端，端到端表看交付体验。
 
 > 实战出处：`02_Inference_Analysis/quantization/quant_benchmark.cpp`
+
+## 部署硬化 vs 后端优化
+
+**是什么**：部署硬化是让推理链路更稳定、可观测、可回滚、可解释；后端优化是换或改执行后端来提高算子/图执行效率。前者解决「上线能不能稳」，后者解决「算得能不能更快」。
+
+**为什么 / 何时用**：两者经常都出现在部署工程里，但边界不同。quant 阶段的硬化包括 NaN/Inf 防护、`max_det` 上限、`reserve`、CUDA fallback reason、`DetectWithProfile()` 分段计时、P50/P99、batch consistency；TensorRT、CUDA kernel、GPU 端前后处理融图、FP16/INT8 engine 则属于后端优化，放到 `trt` 交付物更合理。
+
+**坑**：别把每个性能相关改动都叫后端优化。`reserve` 或 IOBinding 复用可能影响延迟尾部，但它们主要是部署路径的稳定性和可测性改造；真正的后端优化要证明 EP/kernel/graph placement 发生了变化，并用 profiling 或 benchmark 支撑。
+
+> 实战出处：`docs/Roadmap.md`（`quant` 与 `trt` 范围切分）；`02_Inference_Analysis/quantization/notes.md`（quant hardening）
+
+## Benchmark / Eval Harness
+
+**是什么**：harness 是把被测对象固定到同一套流程里运行的评估框架。它不是模型、不是量化算法、也不是推理引擎本身，而是负责「加载多个 case → warmup → 正式迭代 → 收集指标 → 输出结果」的测量台。
+
+**为什么 / 何时用**：没有 harness，FP32、INT8 MinMax、INT8 Entropy 很容易在不同图片、不同 warmup、不同线程/EP 状态下被拿来比较，结论不可信。项目里的 `quant::EvalHarness` 输入 `ModelCase{name, model_path}` 和 `EvalConfig{detector,warmup,iters,stats_window}`，对每个模型复用 W16 检测流水线，记录 `active_ep`、fallback reason、检测框数、top score、pre/infer/post/total 分段延迟。
+
+**坑**：harness 只能保证评估流程一致，不自动保证结论完整。单图 harness 只能做框级冒烟/一致性，不能替代 mAP；CPU ORT 包导致 CUDA fallback 时，harness 记录的是 CPU 结果；warmup 必须从统计里排除，否则冷启动、cache、CUDA autotuning 会污染分位数。
+
+> 实战出处：`02_Inference_Analysis/quantization/eval_harness.{hpp,cpp}`；`02_Inference_Analysis/quantization/quant_benchmark.cpp`
 
 ## Profiling 报告方法
 
