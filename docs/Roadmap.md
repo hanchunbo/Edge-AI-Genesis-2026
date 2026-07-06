@@ -85,7 +85,7 @@ CV 与 LLM 都是这个底座上的应用层，**不是二选一**，连接两�
 
 ### Phase 0 — CV 收口（变现最快 + LLM 地基）
 
-#### 交付物 `quant` 🔄 进行中：INT8 量化 + 部署硬化 + Profiling 报告
+#### 交付物 `quant` ✅ 已收口（2026-07-06）：INT8 量化 + 部署硬化 + Profiling 报告
 - **范围**：
   - **量化**：ORT 官方工具对 YOLOv8n 做 PTQ（MinMax / Entropy 两策略）；量化前先用 perf / Nsight 定位瓶颈。
     剪枝/蒸馏作**概念覆盖**（JD 里量化/剪枝/蒸馏/图优化常成套出现）——讲清三者定位差异即可，不动手实现。
@@ -100,7 +100,8 @@ CV 与 LLM 都是这个底座上的应用层，**不是二选一**，连接两�
   - 部署硬化项 before/after 数字（分配次数 / IOBinding 实测收益 / 鲁棒性用例）
   - 模块：`02_Inference_Analysis/quantization/`（命名空间 `quant`）
 - **成功指标**：INT8 推理延迟较 FP32 显著下降，mAP 掉点可量化并解释；能讲清对称/非对称、Per-Channel vs Per-Tensor；能区分量化 vs 剪枝 vs 蒸馏；部署硬化项有 before/after 数字支撑
-- 🎯 **里程碑：CV 部署岗可投**；简历挂「INT8 量化 + Profiling + 部署硬化」
+- **收口结论（2026-07-06）**：CPU 纯推理 INT8 快约 24%（端到端约 22%），coco128 mAP50-95 掉约 1.7 点（0.4454→0.4285）精度可用；MinMax 与 Entropy mAP 等价，选 MinMax 更省内存；GPU 上 CUDA EP 跑 INT8（QDQ）为负优化（慢约 2×），INT8 GPU 加速移交 `trt`；IOBinding CPU/GPU 实测均噪声级，判定不再投入。报告见 `docs/benchmarks/quant_int8_report.md` 与 `quant_yolo_hardening.md`。
+- 🎯 **里程碑达成：CV 部署岗可投**；简历挂「INT8 量化 + Profiling + 部署硬化」
 - ⚡ 同时是 LLM 端侧量化的地基
 
 #### 交付物 `trt` 🔴 TensorRT C++ Engine（FP16 + INT8 Calibrator + GPU 端到端）
