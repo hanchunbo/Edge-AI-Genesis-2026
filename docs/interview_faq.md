@@ -1459,6 +1459,46 @@ HWC 是图片存法，每个像素的通道挨着；CHW 是模型输入常见存
 
 ---
 
+## W14 补充：ONNX/ORT 边界表达与生命周期陷阱（Q56-Q58）
+
+> **来源**：2026-07-06 交互问答自测（Claude 提问、我作答，针对 W14/quant 前置知识），暴露 3 处表达/术语混淆，均已核实修正。
+
+### Q56: "我用 ONNX 做推理"这句话哪里不够精确？
+
+**考察点**：区分模型格式（ONNX）与执行引擎（ORT）的职责，避免面试里被追问出破绽。
+
+**答题角度**（概念正文见主题库 [inference.md — ONNX vs ORT vs 任务](notes/inference.md#onnx-vs-ort-vs-任务)）：
+ONNX 本身不会"做"任何事——它是静态数据（计算图结构 + 权重 + I/O 元数据），躺在磁盘上没有执行能力。真正把输入 tensor 算成输出 tensor 的是运行时，可以是 ORT，也可以是 TensorRT、OpenVINO 等，这些引擎都能吃 ONNX 格式的模型。所以"用 ONNX 做推理"把格式和执行引擎的职责混在一起了，准确说法是"用 ONNX Runtime 做推理"，或者"模型导出成 ONNX 格式，再用 ORT 加载执行"。
+
+**加分回答**：
+> "这是个容易被面试官顺势追问出破绽的点——如果追问『ONNX 支持算子融合吗』『ONNX 能选 EP 吗』，这些其实都是 Runtime 的能力，ONNX 格式自己回答不了。分清楚格式和引擎，是判断一个人是只会调 API 还是真理解推理链路分层的常见提问角度。"
+
+---
+
+### Q57: 为什么 `GlobalEnv()` 必须写在 `AppendExecutionProvider_CUDA` 之前？顺序反了会有什么现象？
+
+**考察点**：Env 初始化顺序依赖 + 宽泛 `catch` 块掩盖根因的工程教训。
+
+**答题角度**（概念正文见主题库 [inference.md — Ort::Env 全局唯一](notes/inference.md#ortenv-全局唯一函数内-static-单例)）：
+`Ort::Env` 构造时会注册进程级默认日志器，而 `AppendExecutionProvider_CUDA` 内部要用这个日志器记录 provider 注册过程。若 Env 还没建就先 append，ORT 内部调用日志接口时找不到已注册的日志器，抛 `"DefaultLogger but none registered"`——跟 CUDA 驱动/硬件是否可用完全无关，纯粹是初始化顺序 bug。
+
+**加分回答**：
+> "更隐蔽的是，这个异常常年被一个宽泛的 `try{...}catch(Ort::Exception&){回退CPU}` 块吞掉——catch 只按类型抓、不看异常内容，于是『日志器没注册』这种和硬件无关的顺序 bug，表现得和『真的没装好 CUDA』一模一样，都是静默回退 CPU，症状上完全无法区分。单测还因为同进程内前序用例已经建过 Env（函数内 static 只构造一次）而侥幸测出全绿，直到独立跑的 demo（第一件事就是构造 CUDA 引擎）才把顺序依赖暴露出来——commit 319d4ae 修的正是这个坑。教训是：宽泛的异常类型 catch 会把不相关的根因一并吞掉，排查回退问题不能只看『回退了』这个表面现象，得看异常的具体 message。"
+
+---
+
+### Q58: 零拷贝场景下，"忘记让 buffer 撑到 Run 返回"是内存泄露吗？`const_cast<float*>` 拿到裸指针后，理论上能不能改这块内存？
+
+**考察点**：区分内存泄露（该释放没释放）与悬空指针/use-after-free（不该释放的提前释放）——方向完全相反的两类资源生命周期错误；以及 `const` 视图的类型系统承诺 vs 底层内存的物理可写性。
+
+**答题角度**（概念正文见主题库 [inference.md — 零拷贝张量输入 + buffer 存活契约](notes/inference.md#零拷贝张量输入--buffer-存活契约)、[cpp-core.md — ABI vs API](notes/cpp-core.md#abi-vs-api)）：
+`CreateTensor` 只借用外部 buffer 的指针，不复制。如果原始 buffer（调用方的 `std::vector<float>`）在 `Run()` 返回前被析构，或者 `resize` 触发扩容搬迁到新地址，`Ort::Value` 内部存的指针就会指向已失效的内存——这是**悬空指针引发的 use-after-free**，跟内存泄露方向相反：内存泄露是"该释放的资源没释放"（越攒越多，最终 OOM），这里是"资源提前释放，但还有人拿着旧指针在用"。另外，`input.data()` 拿到的裸指针在物理上完全可写——`const_cast` 去掉的只是 `std::span<const float>` 这一层类型系统的只读承诺，底层的 `vector<float>` 本身不是真 const 对象；`const_cast` 的"安全"来自行为契约（ORT 内部推理路径验证过不会写这块 buffer），不是"物理上改不了"。
+
+**加分回答**：
+> "use-after-free 表现可能是直接段错误（读到已被系统回收的页），也可能更阴险——不崩溃但读到垃圾数据（堆内存释放后还没被下一次分配覆盖，或被覆写成别的内容），导致推理结果悄悄错了却没有任何报错信号，比崩溃更难排查。`const_cast` 这块也一样，ORT 的 C API 历史上就没设计 const 版本的签名（C ABI 早年没考虑 const-correctness），所以哪怕语义上只读，接口也要求 `float*`——这是很多 C 标准库签名不区分读写 buffer 的同一类历史包袱。"
+
+---
+
 ## 使用建议
 
 1. **每周复习**：完成每周学习后，尝试口头回答相关题目。

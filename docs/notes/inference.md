@@ -285,6 +285,8 @@ std::partial_sort(idx.begin(), idx.begin() + k, idx.end(),
 
 **是什么**：ORT `SessionOptions` 的两个线程旋钮。**IntraOp**（`SetIntraOpNumThreads`）= 单个算子**内部**的并行度，比如一个大 MatMul/Conv 切多线程一起算。**InterOp**（`SetInterOpNumThreads`）= 计算图里**多个算子之间**的并行度，仅当图有并行分支（同时能跑的独立节点）时才有意义。
 
+**记忆**：两个前缀容易搞混，靠熟词记——`intra-` = 内部（联想 `intranet` 内网，公司内部的网）；`inter-` = 之间（联想 `internet` 互联网，网络与网络之间互联）。对应到这里：IntraOp = 算子**内部**怎么切多核，InterOp = 算子**之间**能不能同时跑。
+
 **为什么 / 何时用**：CNN/检测网络是近乎串行的链（一层喂下一层），并行机会几乎全在「单个算子内部」——所以 IntraOp 是主旋钮，InterOp 对 YOLOv8 这种串行图基本无收益。实测 yolov8n CPU batch=1：IntraOp 1→2 线程提速 1.6×、1→4 提速 2.0×（W16 bench）。
 
 **坑**：① **次线性扩展**——加到 CPU 核数不会线性加速，受算子并行度上限和内存带宽限制，过了拐点甚至变慢（线程调度/缓存争用）。② 别盲目把 InterOp 调大期待加速，串行图上它只增开销。③ 0 = 用 ORT 默认（通常 = 物理核数），不是「禁用线程」。④ 线程数要结合部署环境定：边缘多进程共享 CPU 时，单 session 吃满核反而拖累整体。
@@ -299,7 +301,7 @@ std::partial_sort(idx.begin(), idx.begin() + k, idx.end(),
 
 **为什么 / 何时用**：理论上高频小模型推理里「每次 Run 的输出分配 + D2H 拷贝」这类**固定开销**占比可观，绑定复用把它摊掉。但**实测要诚实**：yolov8n CUDA batch=1 多次 run，IOBinding 与 Run 的 P50 在 5.5~6.1ms 间**优劣翻转**，差异进了噪声——因为模型小、且输出仍需拷回 CPU 解码。结论：对这类场景 IOBinding **不是稳定优化项**；真要量化收益得上更大模型，或用 Nsight 逐段归因。batch 越大计算占比越高、收益越被淹没；CPU EP 无 D2H 拷贝更无差。
 
-**坑**：① **持久输出绑定假定输出形状固定**——绑定一次复用，换 batch / 输入尺寸（输出形状变）必须重建 binding，否则 ORT 抛 `OrtValue shape verification failed`（W16 benchmark 踩过：一个 engine 跨 batch=1/4 复用 binding 直接崩，改成每个 batch 独立 engine）。② 不是银弹——计算密集时固定开销占比小，IOBinding 收益进噪声。③ 输入仍可零拷贝绑定，但输入 buffer 每次不同要重绑（`ClearBoundInputs` + `BindInput`）。
+**坑**：① **持久输出绑定假定输出形状固定**——绑定一次复用，换 batch / 输入尺寸（输出形状变）必须重建 binding，否则 ORT 抛 `OrtValue shape verification failed`（W16 benchmark 踩过：一个 engine 跨 batch=1/4 复用 binding 直接崩，改成每个 batch 独立 engine）。② 不是银弹——计算密集时固定开销占比小，IOBinding 收益进噪声。③ **input/output 绑定不对称，别以为两边对称处理**——`BindOutput(name, mem_info)` 传的只是「内存类型描述」（不含具体数据），相当于告诉 ORT「这个输出算完放这种内存，缓冲你自己分配、自己管」，所以绑一次能跨多次 `Run` 一直用；`BindInput(name, value)` 传的是本次具体的 `Ort::Value`（带着这一帧/这一批数据的指针），每次调用数据都变，必须先 `ClearBoundInputs()` 清掉旧绑定、再 `BindInput` 新的，不清空可能残留悬空绑定或造成重复 name 报错。④ 代码里 `RunIoBinding` 只操作 `inputs_[0]`、不像 `Run()` 那样遍历整个 `inputs_` 搭数组——因为这个 Engine 本来就只服务单输入模型（YOLOv8 只有一个输入口），与「ORT Run 的 name 绑定」坑④是同一个前提，不是漏写遍历。
 
 > 实战出处：`docs/benchmarks/w16_yolo_bench.md`（Run vs IOBinding）；机制 `w14_ort_basics/inference_engine.cpp`（`RunIoBinding`，持久 binding + 形状契约）
 
