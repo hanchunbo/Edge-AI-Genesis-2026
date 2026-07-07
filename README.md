@@ -249,6 +249,30 @@ ldconfig -p | grep -E 'cudnn|cudart|cublas' # 确认运行时库在链接器路�
 > `LD_LIBRARY_PATH`。若 CUDA 不可用，引擎会优雅回退 CPU（`InferenceEngine::ActiveEp()`
 > 查实际 EP，`EpFallbackReason()` 查回退原因）。
 
+#### TensorRT 10.16（trt 交付物，本地 GPU 机）
+
+复用上方 CUDA apt 源。**必须锁版本**：不带 `=版本` 会装到 TRT 11 并连带拉 CUDA 13
+（超出 driver 546.30 的 CUDA 12.3 能力上限）。且 apt 不会自动为依赖挑 cuda12.9 构建
+（依赖包的 candidate 也是 cuda13.x），因此全部依赖包都要显式锁版本一次装齐：
+
+```bash
+V=10.16.1.11-1+cuda12.9
+sudo apt-get install -y tensorrt-dev=$V libnvinfer-bin=$V \
+  libnvinfer10=$V libnvinfer-lean10=$V libnvinfer-plugin10=$V \
+  libnvinfer-vc-plugin10=$V libnvinfer-dispatch10=$V libnvonnxparsers10=$V \
+  libnvinfer-dev=$V libnvinfer-lean-dev=$V libnvinfer-dispatch-dev=$V \
+  libnvinfer-plugin-dev=$V libnvinfer-vc-plugin-dev=$V libnvonnxparsers-dev=$V \
+  libnvinfer-headers-dev=$V libnvinfer-safe-headers-dev=$V libnvinfer-headers-plugin-dev=$V \
+  libnvinfer-headers-python-plugin-dev=$V libnvinfer-win-builder-resource10=$V
+dpkg-query -W -f '${Package}\n' | grep -E '^(libnvinfer|libnvonnxparsers|tensorrt)' | xargs sudo apt-mark hold
+# 冒烟（yolov8n.onnx 是动态维度导出，必须给 --shapes，否则 trtexec 兜底 1x3x1x1 直接 FAILED）：
+# /usr/src/tensorrt/bin/trtexec --onnx=<模型> --shapes=images:1x3x640x640 --fp16  期望 PASSED
+```
+
+TRT 10.16 的 cuda12.9 构建按 CUDA minor version compatibility 运行在 12.3 driver 上；
+实测未连带任何 CUDA 包（19 个包全是 libnvinfer*/libnvonnxparsers*/tensorrt-dev），
+`/usr/local/cuda` 仍指向 12.3。
+
 ### 场景一：标准构建（含单元测试）
 
 ```bash
