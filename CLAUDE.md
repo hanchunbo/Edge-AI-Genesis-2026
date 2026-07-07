@@ -5,7 +5,7 @@
 
 ## 当前进度
 
-**交付物 `quant`（Phase 0）✅ 已收口（2026-07-06）——INT8 PTQ（检测头 `/model.22/` 保 FP32 + coco128 校准）+ 部署硬化 + 评估 harness 全部落地：CPU 纯推理 INT8 较 FP32 快约 24%（端到端约 22%），coco128 mAP50-95 掉约 1.7 点（0.4454→0.4285）精度可用；GPU 实测 FP32 CUDA 纯 infer 5.64ms（约 6.7× vs CPU），但 INT8 在 CUDA EP 因 QDQ Memcpy 反而慢约 2×——INT8 的 GPU 加速移交 `trt`（TensorRT INT8 EP）；IOBinding CPU/GPU 实测均噪声级，判定不再投入；quant 无剩余本机遗留，细节见 `02_Inference_Analysis/quantization/notes.md` 与 `docs/benchmarks/quant_*.md`。下一交付物：`trt`（TensorRT C++ Engine，未开始）。W1–W16 全部完成（W16 YOLOv8n 检测 Demo 为 quant 基线），遗留 ResNet18 对比（降级可选）、VPS CPU EP 环境（待定）。**
+**交付物 `quant`（Phase 0）✅ 已收口（2026-07-06）——INT8 PTQ（检测头 `/model.22/` 保 FP32 + coco128 校准）+ 部署硬化 + 评估 harness 全部落地：CPU 纯推理 INT8 较 FP32 快约 24%（端到端约 22%），coco128 mAP50-95 掉约 1.7 点（0.4454→0.4285）精度可用；GPU 实测 FP32 CUDA 纯 infer 5.64ms（约 6.7× vs CPU），但 INT8 在 CUDA EP 因 QDQ Memcpy 反而慢约 2×——INT8 的 GPU 加速移交 `trt`（TensorRT INT8 EP）；IOBinding CPU/GPU 实测均噪声级，判定不再投入；quant 无剩余本机遗留，细节见 `02_Inference_Analysis/quantization/notes.md` 与 `docs/benchmarks/quant_*.md`。当前交付物：`trt`（TensorRT C++ Engine）🟡 M1 进行中——FP16 engine + 四路表骨架，计划见 docs/superpowers/plans/2026-07-07-trt-m1-fp16-engine.md。W1–W16 全部完成（W16 YOLOv8n 检测 Demo 为 quant 基线），遗留 ResNet18 对比（降级可选）、VPS CPU EP 环境（待定）。**
 
 **⚠️ 结构切换（2026-06-30）**：W1–W16 作为**周志存档冻结不动**（仅允许向后兼容加性扩展）；W17 起改走 `docs/Roadmap.md` 的 **Phase + 交付物里程碑** 两层结构——不再按周切分，交付物按内容定大小、各挂一档可投岗位。旧季度手册已归档 `docs/archive/`。
 每开始一个新交付物，必须更新此处进度描述（一句话：当前交付物 + 状态 + 遗留，细节进模块 notes），并同步 `docs/Roadmap.md` 里程碑状态。
