@@ -26,6 +26,7 @@
   - `quant::RollingStats`（P50/P99 口径）→ 目标 `quant_core`
 - 引用的 quant 同机数字（`docs/benchmarks/quant_int8_report.md`，不重测）：CPU EP FP32 纯 infer P50 **40.81ms**、CPU EP INT8(MinMax) **31.31ms**、CUDA EP FP32 **5.64ms**、CUDA EP INT8(QDQ MinMax) **11.49ms**；mAP50-95：FP32 **0.4454** / INT8 **0.4285**
 - mmdc 未全局安装，Mermaid 渲染验证用 `npx -y @mermaid-js/mermaid-cli`
+- **Task 1 执行后补充的事实**：① yolov8n.onnx 是**全动态维度**导出（input `[batch,3,height,width]`、output `[batch,84,anchors]` 全符号维，onnx 直查确认）——engine_builder 必须挂 optimization profile（Task 5 代码已含），TrtEngine 走 profile/context 解析形状（Task 6 代码已含）；② TRT 实装为 19 个包全锁 `10.16.1.11-1+cuda12.9`（两包命令有 unmet deps），无任何 CUDA 连带包；③ ONNX parser 实际库名是**单数** `libnvonnxparser.so.10`（CMake `find_library(... nvonnxparser)` 恰好匹配，无需改）；④ trtexec FP16 GPU Compute Time 均值 2.615ms（Task 8 实测的数量级参照）
 
 ## 每次 commit 前固定动作（所有 Task 通用，不再重复写进步骤）
 
@@ -740,6 +741,32 @@ std::string BuildOrLoadEngine(const BuildConfig& config) {
     builder_config->setFlag(nvinfer1::BuilderFlag::kFP16);
   }
 
+  // W16 的 yolov8n.onnx 是全动态维度导出（batch/height/width 均为符号维，
+  // Task 1 trtexec 实测确认），动态输入必须挂 optimization profile 才能 build。
+  // YAGNI：min=opt=max 全锁 1×3×640×640，engine 等效静态。
+  // profile 由 builder 持有，不需要（也不能）手动释放。
+  nvinfer1::IOptimizationProfile* profile =
+      builder->createOptimizationProfile();
+  if (profile == nullptr) {
+    throw std::runtime_error("[trt] createOptimizationProfile 失败");
+  }
+  const nvinfer1::Dims4 fixed_shape{1, 3, 640, 640};
+  const char* input_name = network->getInput(0)->getName();
+  if (!profile->setDimensions(input_name,
+                              nvinfer1::OptProfileSelector::kMIN,
+                              fixed_shape) ||
+      !profile->setDimensions(input_name,
+                              nvinfer1::OptProfileSelector::kOPT,
+                              fixed_shape) ||
+      !profile->setDimensions(input_name,
+                              nvinfer1::OptProfileSelector::kMAX,
+                              fixed_shape)) {
+    throw std::runtime_error("[trt] profile setDimensions 失败");
+  }
+  if (builder_config->addOptimizationProfile(profile) < 0) {
+    throw std::runtime_error("[trt] addOptimizationProfile 失败");
+  }
+
   std::unique_ptr<nvinfer1::IHostMemory> serialized(
       builder->buildSerializedNetwork(*network, *builder_config));
   if (serialized == nullptr) {
@@ -958,9 +985,27 @@ TrtEngine::TrtEngine(const std::string& engine_path) {
     throw std::runtime_error("[trt] 未找到输入/输出 tensor");
   }
 
-  const nvinfer1::Dims in_dims = engine_->getTensorShape(input_name_.c_str());
+  // engine 由动态 ONNX + 单 profile（min=opt=max）构建：engine 级
+  // getTensorShape 对动态维返回 -1，具体形状要从 profile 取；再经
+  // setInputShape 绑定后，context 级 getTensorShape 才能给出全具体的输出形状。
+  nvinfer1::Dims in_dims = engine_->getTensorShape(input_name_.c_str());
+  for (std::int32_t i = 0; i < in_dims.nbDims; ++i) {
+    if (in_dims.d[i] < 0) {
+      in_dims = engine_->getProfileShape(input_name_.c_str(), 0,
+                                         nvinfer1::OptProfileSelector::kOPT);
+      break;
+    }
+  }
+  if (!context_->setInputShape(input_name_.c_str(), in_dims)) {
+    throw std::runtime_error("[trt] setInputShape 失败");
+  }
   const nvinfer1::Dims out_dims =
-      engine_->getTensorShape(output_name_.c_str());
+      context_->getTensorShape(output_name_.c_str());
+  for (std::int32_t i = 0; i < out_dims.nbDims; ++i) {
+    if (out_dims.d[i] < 0) {
+      throw std::runtime_error("[trt] 输出形状未完全确定（动态维未解析）");
+    }
+  }
   input_count_ = ElementCount(in_dims);
   output_count_ = ElementCount(out_dims);
   output_shape_.assign(out_dims.d, out_dims.d + out_dims.nbDims);
