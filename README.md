@@ -273,6 +273,11 @@ TRT 10.16 的 cuda12.9 构建按 CUDA minor version compatibility 运行在 12.3
 实测未连带任何 CUDA 包（19 个包全是 libnvinfer*/libnvonnxparsers*/tensorrt-dev），
 `/usr/local/cuda` 仍指向 12.3。
 
+`.cu` 编译（M3 预处理 kernel）：nvcc 12.3 官方只支持 g++ ≤ 12.2，需
+`sudo apt-get install -y g++-12` 专供 nvcc（`-ccbin g++-12` / CMake
+`CMAKE_CUDA_HOST_COMPILER=g++-12`）；主工程仍用 g++-15，两者只过 C ABI 边界。
+nvcc 不在 PATH，全路径 `/usr/local/cuda/bin/nvcc`。
+
 ### 场景一：标准构建（含单元测试）
 
 ```bash
