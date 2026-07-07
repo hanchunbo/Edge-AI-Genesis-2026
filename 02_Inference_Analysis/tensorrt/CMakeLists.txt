@@ -28,3 +28,27 @@ find_package(OpenCV REQUIRED COMPONENTS core imgproc imgcodecs)
 set(_TRT_W16_MODELS
   "${CMAKE_SOURCE_DIR}/02_Inference_Analysis/w16_yolo_detector/models")
 set(_TRT_ENGINE_CACHE "${CMAKE_CURRENT_BINARY_DIR}/engine_cache")
+
+# -----------------------------------------------------------------------------
+# trt_core：公共设施 + engine 构建/运行时（随 M1 各 Task 增量加源文件）
+# -----------------------------------------------------------------------------
+add_library(trt_core STATIC
+  trt_common.cpp
+)
+target_include_directories(trt_core PUBLIC
+  ${CMAKE_CURRENT_SOURCE_DIR}
+  ${TRT_INCLUDE_DIR}
+)
+target_link_libraries(trt_core PUBLIC
+  ${TRT_NVINFER_LIB}
+  ${TRT_NVONNXPARSER_LIB}
+  CUDA::cudart
+)
+target_compile_features(trt_core PUBLIC cxx_std_20)
+
+if(BUILD_TESTING)
+  add_executable(trt_common_test trt_common_test.cpp)
+  target_link_libraries(trt_common_test
+    PRIVATE trt_core GTest::gtest_main Threads::Threads)
+  add_test(NAME Trt_CommonTest COMMAND trt_common_test)
+endif()
