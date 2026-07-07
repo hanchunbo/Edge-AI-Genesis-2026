@@ -34,6 +34,7 @@ set(_TRT_ENGINE_CACHE "${CMAKE_CURRENT_BINARY_DIR}/engine_cache")
 # -----------------------------------------------------------------------------
 add_library(trt_core STATIC
   trt_common.cpp
+  engine_builder.cpp
 )
 target_include_directories(trt_core PUBLIC
   ${CMAKE_CURRENT_SOURCE_DIR}
@@ -51,4 +52,13 @@ if(BUILD_TESTING)
   target_link_libraries(trt_common_test
     PRIVATE trt_core GTest::gtest_main Threads::Threads)
   add_test(NAME Trt_CommonTest COMMAND trt_common_test)
+
+  add_executable(trt_engine_test trt_engine_test.cpp)
+  target_link_libraries(trt_engine_test
+    PRIVATE trt_core GTest::gtest_main Threads::Threads)
+  target_compile_definitions(trt_engine_test PRIVATE
+    TRT_MODEL_PATH="${_TRT_W16_MODELS}/yolov8n.onnx"
+    TRT_ENGINE_CACHE_DIR="${_TRT_ENGINE_CACHE}"
+  )
+  add_test(NAME Trt_EngineTest COMMAND trt_engine_test)
 endif()
