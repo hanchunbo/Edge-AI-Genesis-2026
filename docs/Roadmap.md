@@ -104,7 +104,7 @@ CV 与 LLM 都是这个底座上的应用层，**不是二选一**，连接两�
 - 🎯 **里程碑达成：CV 部署岗可投**；简历挂「INT8 量化 + Profiling + 部署硬化」
 - ⚡ 同时是 LLM 端侧量化的地基
 
-#### 交付物 `trt` 🔴 TensorRT C++ Engine（FP16 + INT8 Calibrator + GPU 端到端）
+#### 交付物 `trt` 🟡 TensorRT C++ Engine（FP16 + INT8 Calibrator + GPU 端到端）
 - **范围**：直接调 TRT C++ API（`IBuilder→INetworkDefinition→ICudaEngine→IExecutionContext`）建 engine；实现 `IInt8EntropyCalibrator2`；
   **GPU 端预处理/后处理**（letterbox + decode 上 GPU 或融图，消除 PCIe 往返——W16 实测前后处理占端到端 ~45%）
 - **产出**：
@@ -113,6 +113,7 @@ CV 与 LLM 都是这个底座上的应用层，**不是二选一**，连接两�
   - 模块：`02_Inference_Analysis/tensorrt/`（命名空间 `trt`）
 - **成功指标**：TRT INT8 延迟 < FP16；能讲清 TRT 与 ORT 量化路径差异；端到端（含前后处理）延迟较 W16 CUDA EP 明显下降
 - 🔼 CV 部署强化岗可投；简历升级「多后端 CPU+CUDA+**TensorRT**，含 INT8 + GPU 端到端」
+- **M1 完成（2026-07-07）**：TRT 10.16 + FP16 engine 跑通（2.93ms，vs CUDA EP FP32 -48%）+ 一致性对拍 + 四路表骨架（`docs/benchmarks/trt_engine_report.md`）；M2 INT8 双路线待开始
 
 ### Phase 1 — LLM 端侧基础（主攻起步，做深）
 
