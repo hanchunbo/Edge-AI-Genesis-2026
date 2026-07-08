@@ -75,3 +75,22 @@ if(BUILD_TESTING)
   )
   add_test(NAME Trt_ConsistencyTest COMMAND trt_consistency_test)
 endif()
+
+# -----------------------------------------------------------------------------
+# trt_benchmark：统计口径链 quant_core（RollingStats）。quant_core 缺失（ORT
+# 不在）时跳过——benchmark 本身不用 ORT，但口径统一优先。
+# -----------------------------------------------------------------------------
+if(TARGET quant_core)
+  add_executable(trt_benchmark trt_benchmark.cpp)
+  target_link_libraries(trt_benchmark PRIVATE
+    trt_core quant_core w10_resize_lib ${OpenCV_LIBS})
+  target_compile_definitions(trt_benchmark PRIVATE
+    TRT_MODEL_PATH="${_TRT_W16_MODELS}/yolov8n.onnx"
+    TRT_IMAGE_PATH="${_TRT_W16_MODELS}/test_image.jpg"
+    TRT_ENGINE_CACHE_DIR="${_TRT_ENGINE_CACHE}"
+  )
+  set_target_properties(trt_benchmark PROPERTIES
+    BUILD_RPATH "${ONNXRUNTIME_ROOT}/lib")
+else()
+  message(WARNING "[trt] quant_core 缺失，跳过 trt_benchmark 构建。")
+endif()
