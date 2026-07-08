@@ -62,4 +62,16 @@ if(BUILD_TESTING)
     TRT_ENGINE_CACHE_DIR="${_TRT_ENGINE_CACHE}"
   )
   add_test(NAME Trt_EngineTest COMMAND trt_engine_test)
+
+  add_executable(trt_consistency_test trt_consistency_test.cpp)
+  target_link_libraries(trt_consistency_test
+    PRIVATE trt_core w16_detect_core w10_resize_lib ${OpenCV_LIBS}
+            GTest::gtest_main Threads::Threads)
+  target_compile_definitions(trt_consistency_test PRIVATE
+    TRT_MODEL_PATH="${_TRT_W16_MODELS}/yolov8n.onnx"
+    TRT_IMAGE_PATH="${_TRT_W16_MODELS}/test_image.jpg"
+    TRT_REFERENCE_PATH="${_TRT_W16_MODELS}/reference_detections.txt"
+    TRT_ENGINE_CACHE_DIR="${_TRT_ENGINE_CACHE}"
+  )
+  add_test(NAME Trt_ConsistencyTest COMMAND trt_consistency_test)
 endif()
