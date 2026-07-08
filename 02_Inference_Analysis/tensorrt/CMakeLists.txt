@@ -35,6 +35,7 @@ set(_TRT_ENGINE_CACHE "${CMAKE_CURRENT_BINARY_DIR}/engine_cache")
 add_library(trt_core STATIC
   trt_common.cpp
   engine_builder.cpp
+  trt_engine.cpp
 )
 target_include_directories(trt_core PUBLIC
   ${CMAKE_CURRENT_SOURCE_DIR}
