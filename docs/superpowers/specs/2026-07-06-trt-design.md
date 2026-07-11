@@ -14,7 +14,7 @@ quant 已收口：CPU 纯推理 INT8 较 FP32 快约 24%，但同一 QDQ INT8 �
 2. 讲清 TRT 与 ORT 量化路径差异，且有同机实测数字支撑；
 3. 端到端（含前后处理）延迟较 W16 CUDA EP（FP32 纯 infer 5.64ms 基线）明显下降。
 
-产出：四路对比表（CPU EP / CUDA EP / TRT FP16 / TRT INT8：体积 / 延迟 / mAP）、TRT 优化报告、GPU 端到端流水线延迟拆解（`docs/benchmarks/trt_*.md`）。
+产出：四路对比表（CPU EP / CUDA EP / TRT FP16 / TRT INT8：体积 / 延迟 / mAP）、TRT 优化报告、GPU 端到端流水线延迟拆解（`docs/benchmarks/trt_*.md`）、ORT TensorRT EP 参考对比（补「ORT 委托 TRT」与「原生 TRT API」之间的空白）。
 
 ## 2. 关键决策（已确认）
 
@@ -24,7 +24,7 @@ quant 已收口：CPU 纯推理 INT8 较 FP32 快约 24%，但同一 QDQ INT8 �
 | INT8 路线 | **双路线对比**：隐式（`IInt8EntropyCalibrator2`）+ 显式（quant 产出的 QDQ ONNX） | 既落实 Roadmap 明确列出的 Calibrator C++ 实现，又正面闭环 quant 移交案子（同一 QDQ 模型：CUDA EP 慢 2× vs TRT 显式量化加速）；「TRT vs ORT 量化路径差异」从纸面讲变实测讲。注：Calibrator 在 TRT 10 已 deprecated，本身即是 implicit vs explicit 演进的叙事素材 |
 | GPU 预处理 | **手写融合 CUDA kernel**（letterbox + 归一化 + HWC→CHW 单 kernel） | 全交付物唯一手写 CUDA 背书（其余均为 API 调用），成本约 1 天，为 Phase 3 CUDA 算子方向打底；替代方案 NPP 拼装胶水量相近但叙事变调库 |
 | GPU 后处理 | **EfficientNMS_TRT plugin 融进 engine** | 工业标准做法，D2H 只回传最终几十个框；不手写 GPU NMS（投入产出比低）。插入方式首选 C++ 图手术（`INetworkDefinition` 切出 boxes/scores 两路 tensor + `addPluginV2`），兜底 Python onnx_graphsurgeon 改图 |
-| 里程碑 | **三段式**（见 §4） | 每段结束都有可对外讲的增量，随时可提前收口 |
+| 里程碑 | **三段式**（见 §4；2026-07-11 追加 M1.5 参考小节） | 每段结束都有可对外讲的增量，随时可提前收口 |
 
 ## 3. 模块结构
 
@@ -51,6 +51,13 @@ tensorrt/
 - `engine_builder` + `trt_engine`：C++ Builder 路径（`IBuilder→INetworkDefinition→ICudaEngine→IExecutionContext`）走通，FP16 engine 落盘缓存。
 - 正确性：TRT FP16 检测结果 vs W16 `reference_detections.txt` 容差比对。
 - 基准：TRT FP16 纯 infer vs CUDA EP FP32（5.64ms）；**CPU EP / CUDA EP 两列直接引用 quant 已有同机数字，不重测**。
+
+### M1.5 — ORT TensorRT EP 参考对拍（2026-07-11 追加，M2 前置独立小节）
+
+- **做什么**：`SessionOptions` 挂 `OrtTensorRTProviderOptionsV2`，FP16 精度下与原生 TRT engine（M1 实测 2.93ms）对比纯 infer 延迟，复用 `quant` 的 `rolling_stats` 统计口径。
+- **为什么**：回答「ORT 委托 TRT vs 原生 TRT API」——量化 EP 壳层开销，补 M1 收口时排查发现的叙事空白；是四路表之外的独立小节，不占正式列。
+- **依赖**：本机 GPU 包已含 `libonnxruntime_providers_tensorrt.so`（`third_party/onnxruntime/onnxruntime-linux-x64-gpu-1.26.0/lib/`），免下载；该 so 链接 `libnvinfer.so.10`，与本机 TRT 10.16 在 ABI 层面匹配（2026-07-11 用 strings 核过，仍需冒烟实测确认）。只需 FP32 onnx + FP16 精度，**不依赖 M2 的 quant INT8 生成物**，可在 M2 开工前独立完成。
+- **风险**：ORT 1.26 绑定编译的 TRT 版本需与本机 TRT 10.x 实测兼容，不兼容则如实记录版本不匹配现象，不强凑数字。
 
 ### M2 — INT8 双路线 + mAP 闭环
 
