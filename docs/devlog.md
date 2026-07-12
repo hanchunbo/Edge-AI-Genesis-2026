@@ -12,6 +12,51 @@
 
 ---
 
+## 2026-07-11（quant Entropy 勘误 + KL 校准原理深挖 — 两 INT8 产物字节级相同的根因闭环）
+
+### 操作摘要
+- 主线：排查「MinMax 与 Entropy INT8 的 coco128 mAP 一位不差是否正常」→ 取证发现两个 INT8 ONNX **sha256 字节级相同**（评的是同一个模型）→ 定位 ORT（1.27.0）`quantize_static` 默认参数下 Entropy 校准退化为 MinMax → 四处文档勘误：`quant_int8_report.md`、`quantization/notes.md`、`docs/notes/inference.md` 坑③、`Roadmap.md`（commit `08a3464`）。
+- 同日：trt spec 落位 M1.5（ORT TRT EP 参考对拍，M2 前置独立小节，commit `b670e11`）；CLAUDE.md 新增「理解确认」规则（commit `cfb064e`）——本条的概念深挖即该规则首次实战。
+- 沉淀产物：本条 devlog、`docs/notes/inference.md`（Entropy 段补两种格子 + KL 本质）、`docs/interview_faq.md` Q48 订正 + Q59-Q60 新增、`docs/README.md` 计数同步。
+
+### 实操记录（排查证据链，三级取证）
+- **产物指纹**：`build/.../yolov8n.int8.{minmax,entropy}.onnx` sha256 完全相同（`3d3a99ae…`）——mAP 相同瞬间失去悬念。
+- **小规模复现**：8 张校准图重跑量化脚本，两产物仍字节级相同，排除单次运行偶发。
+- **校准器插桩**：绕过 `quantize_static` 直接跑两个校准器，292 个激活张量 range **逐比特相同**，且值为非对称的真实 min/max——证明 KL 阈值在内部被覆盖。
+- **源码定位（三步连环）**：`EntropyCalibrater` 默认 `num_bins=128 == num_quantized_bins=128` → KL 候选窗口只剩「全范围」1 个；`get_entropy_threshold` 末尾把对称全范围钳回数据真实 min/max；`quantize_static` 的 `extra_options` 不透传 `num_bins`，退化无法用参数修正。
+
+### 今日深讲内容（KL 校准原理，多轮扫盲至通透）
+- **两种格子**：A = 直方图格数（`num_bins`，测量分辨率，自选尺子，TRT 用 2048）；B = 模拟量化格数（`num_quantized_bins`≈128，对称 INT8 单侧级数，客观常数）。候选数 = (A−B)/2 + 1；ORT 默认 128/128 → 1，「打分比赛只有一名选手」。
+- **P/Q 流水线**（对每个候选都执行，极端候选各有一条恰好空转）：P = 真实（窗口 + 窗外值堆两端）；Q = INT8 眼里的样子（窗口并成 B 格再摊平）。窄窗口 P 两端失真（截断罚），宽窗口 Q 中间糊（粗步长罚）。
+- **选择标准**：KL(P‖Q) 打分选最低。玩具例（12 格账本 / B=4）实算：候选① 0.0162 / ③ 0.1110 / ⑤ 0.2525——尾巴稀时最窄窗口赢，"中间必最优"是误解。
+- **KL 本质**：差异度不是相似度（0 = 完全一致）；不对称，站 P 立场问「拿 Q 冒充 P 的信息代价」，按 P 占比加权罚分；学名相对熵，即 Entropy 校准名字的来源。
+
+### 今日暴露的短板 / 困惑（已提成 FAQ Q59-Q60，Q48 同步订正）
+- **指标一位不差当成"可能正常等价"** → 修正：先 `sha256sum` 产物取证，10 秒排除/坐实"同一个模型" → **Q59**
+- **两种格子混淆**：以为直方图 128 格就是 INT8 级数（"INT8 不是 256 吗"）→ A/B 分离 + 对称单侧 ≈128 → **Q60**
+- **A/B 祸根判断答反**（说 B 应更小）→ B 是客观事实动不得（动了模拟失真），A 是自选尺子设小了
+- **P/Q 误以为按候选各改一边** → 两条流水线每个候选都跑，①的合并空转（4→4）、⑤的堆边空转（窗外无值）
+- **KL 以为算相似度** → 差异度 + 不对称"冒充代价" → **Q60**
+
+### 命令备忘
+```bash
+# 对比实验指标完全相同时，第一步先比产物指纹
+sha256sum build/02_Inference_Analysis/quantization/models/yolov8n.int8.{minmax,entropy}.onnx
+```
+
+### 待办
+- trt M1.5：ORT TensorRT EP 参考对拍（spec 已落位，未开工）
+- trt M2 开工前：`cmake --build build-gpu --target quant_yolov8_static` 恢复 INT8 生成物（既有阻塞项）
+- 真正的 Entropy 对比留给 M2 路线 A（TRT `IInt8EntropyCalibrator2`，2048 bins 真搜索）——「同叫 Entropy、一个退化一个真算」是 TRT vs ORT 量化路径差异的新实测素材
+
+### 关联
+- 概念正文：`docs/notes/inference.md`「PTQ / MinMax / Entropy」（含坑③退化机制）
+- 勘误报告：`docs/benchmarks/quant_int8_report.md`
+- 答题视角：`docs/interview_faq.md` Q48（订正）、Q59-Q60
+- 未动 `self_test.md`：其范围为 W1-W13 季度自测，本日内容（quant/KL）超出其覆盖
+
+---
+
 ## 2026-07-04（W16 benchmark 源码精读 — 吞吐/FPS、batch、IOBinding、ORT Run name 绑定）
 
 ### 操作摘要
