@@ -19,7 +19,7 @@
 ## 概念边界速查
 
 - **INT8** 是量化后的数值格式，不等于「量化精度」。真正的精度看 mAP、框级一致性、score 差异等任务指标。
-- **MinMax / Entropy** 是 static PTQ 的 calibration 策略，负责给激活选择量化范围；MinMax 取观测 min/max，Entropy 用 histogram + KL 选择信息损失较小的 clipping 阈值。
+- **MinMax / Entropy** 是 static PTQ 的 calibration 策略，负责给激活选择量化范围；MinMax 取观测 min/max，Entropy 用 histogram + KL 选择信息损失较小的 clipping 阈值。⚠️ ORT `quantize_static` 默认参数下 Entropy 实测退化为 MinMax（本模块两 INT8 产物字节级相同，2026-07-11 勘误），机制见主题库坑 ③。
 - **backbone / 检测头** 是模型结构分工。backbone 提特征且是算力大头，检测头输出框坐标与类别分数；本模块排除 `/model.22/` 是让检测头保 FP32，避免分数被坐标量纲撑大的 scale 压没。
 - **部署硬化** 是让推理路径更稳、更可测：`max_det`、NaN/Inf skip、`reserve`、fallback reason、分段计时、P50/P99、batch consistency。TensorRT、FP16 engine、GPU 端前后处理融图属于后续 `trt` 的后端优化。
 - **harness** 是评估框架，不是模型也不是量化算法；它把多个模型 case 放进同一套 W16 检测流水线，统一 warmup、正式迭代、延迟统计和报告输出。
@@ -116,6 +116,8 @@ FP32/INT8 第一版报告见
 - `reserve_hint` 已覆盖结果等价，但尚未接 allocator 计数，不能单独报告 realloc 改善。
 - ~~INT8 精度失败样本（0 检测框）~~ 已闭环，见上节根因与修复。
 - INT8 精度：单图框级一致性 + coco128 mAP 均已跑通。coco128 mAP50-95 FP32 0.4454
-  → INT8 0.4285（掉约 1.7 点，MinMax=Entropy），`tools/eval_map_coco128.py`（ultralytics
-  `model.val`）。评估是逐张推理不吃内存，与 Entropy 校准的内存墙无关。
+  → INT8 0.4285（掉约 1.7 点；MinMax=Entropy 是因为两产物字节级相同——ORT Entropy
+  校准默认参数退化为 MinMax，2026-07-11 勘误，见 `quant_int8_report.md`），
+  `tools/eval_map_coco128.py`（ultralytics `model.val`）。评估是逐张推理不吃内存，
+  与 Entropy 校准的内存墙无关。
   `quant_int8_report.md` 的延迟/体积/mAP 数字已按头部保 FP32 版本刷新（2026-07-02）。

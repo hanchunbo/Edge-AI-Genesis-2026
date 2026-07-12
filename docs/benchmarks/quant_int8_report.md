@@ -88,7 +88,7 @@ Run vs IOBinding 差异全部落在 ±2% 噪声区间：当前 `use_iobinding=tr
 | INT8 Entropy | 0.5833 | 0.4285 | −0.0170（−3.8%） |
 
 - INT8 mAP50-95 仅掉约 1.7 个点（相对 3.8%），精度损失可接受——**推翻早期整图量化 0 框「精度失败」的结论**，检测头保 FP32 后 INT8 精度可用。
-- MinMax 与 Entropy mAP 完全相同：检测头既保 FP32，backbone 两种激活校准策略对最终 mAP 的影响在 coco128 上无法区分；两者等价时选 MinMax 更省（校准不建直方图、不吃内存）。
+- MinMax 与 Entropy mAP 完全相同（**2026-07-11 勘误**）：原解释「两种校准策略的影响在 coco128 上无法区分」不成立——两个 INT8 产物 **sha256 字节级相同**，评的是同一个模型。根因是 ORT `quantize_static` 默认参数下 Entropy 校准退化为 MinMax（KL 搜索空间坍缩 + min/max 钳制，且 `extra_options` 不透传 `num_bins`，无法用参数修正），机制详见 `docs/notes/inference.md`「PTQ / MinMax / Entropy」坑 ③。选 MinMax 的结论不变、理由更硬：Entropy 多耗直方图内存与校准时间，产物一模一样。
 - 口径边界：coco128 是训练集子集，mAP 绝对值偏乐观，此处只取 FP32 vs INT8 的**相对掉点**，不代表 COCO val 泛化精度。
 
 结论范围：量化工具链、模型体积下降、CPU 延迟下降、单图一致性、coco128 mAP 掉点已全部跑通。

@@ -341,7 +341,7 @@ std::partial_sort(idx.begin(), idx.begin() + k, idx.end(),
 
 **为什么 / 何时用**：PTQ 不重训、成本低，适合先验证端侧延迟/体积收益。YOLOv8n 在 CPU ORT 上实测：整图量化 INT8 纯 infer P50 从约 40ms 降到 18ms、模型 13M→3.8M，但检测头被量化导致 0 框（见坑）；改为检测头保 FP32 后 P50 约 31ms、模型 13M→6.2M——加速/体积收益缩水，换回检测可用。可见 PTQ 的量化范围直接决定精度与加速的权衡。
 
-**坑**：① 校准数据决定激活范围，单张图只能验证工具链、不代表真实分布，不能写成 mAP 结论。② 更隐蔽的坑：整图量化会把 YOLO 检测头也量化，其 (1,84,8400) 输出混合框坐标（0~640）与类别分数（0~1），Concat 后 per-tensor scale≈2.5 把所有分数坍缩到 0，导致单图 0 框——**与校准集大小无关**，修复是排除检测头节点（`/model.22/`）保 FP32。③ Entropy 不是必然比 MinMax 准；本项目 coco128 mAP 上 MinMax/Entropy 数字相同，说明要以任务指标验收，而不是按方法名预设结论。④ 动态 shape 的 YOLO 导出模型在 ORT `quant_pre_process` 里可能 symbolic shape 推导失败，需要跳过 symbolic shape、保留普通 shape inference。
+**坑**：① 校准数据决定激活范围，单张图只能验证工具链、不代表真实分布，不能写成 mAP 结论。② 更隐蔽的坑：整图量化会把 YOLO 检测头也量化，其 (1,84,8400) 输出混合框坐标（0~640）与类别分数（0~1），Concat 后 per-tensor scale≈2.5 把所有分数坍缩到 0，导致单图 0 框——**与校准集大小无关**，修复是排除检测头节点（`/model.22/`）保 FP32。③ **ORT `quantize_static` 的 Entropy 校准在默认参数下会退化成 MinMax**（实测 ORT 1.27.0，quant 交付物两 INT8 产物 sha256 字节级相同，2026-07-11 排查）：`EntropyCalibrater` 默认 `num_bins=128` 与 `num_quantized_bins=128` 相等，而 KL 阈值搜索要求候选窗口至少 `num_quantized_bins` 格宽——128 格直方图里只剩「全范围」1 个候选；选出的对称全范围又被 `get_entropy_threshold` 末尾钳回真实数据 min/max，逐层与 MinMax 逐比特一致。且 `quantize_static` 的 `extra_options` 只透传 symmetric/moving average 等少数键，`num_bins` 传不进去，退化无法用参数修正（对比：TensorRT 同款 KL 校准用 2048 bins 搜 128 levels，有真实搜索空间）。教训：对比实验若指标一位不差，先比产物哈希——优先怀疑「根本是同一个模型」，而不是「方法恰好等价」。④ 动态 shape 的 YOLO 导出模型在 ORT `quant_pre_process` 里可能 symbolic shape 推导失败，需要跳过 symbolic shape、保留普通 shape inference。
 
 > 实战出处：`02_Inference_Analysis/quantization/tools/quantize_yolov8_static.py`；`docs/benchmarks/quant_int8_report.md`
 
