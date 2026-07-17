@@ -12,8 +12,9 @@
   是为 W1–W15 学习存档设计的（新旧 C++ 写法对比叙事），对 W16+ 的领域逻辑代码
   （量化决策、benchmark、TRT API）天然套不上——旗舰格式不适用、轻量要求未强制，
   结果就是没人写。
-- 现状注释密度：W1–W15 演进式风格（冻结）；W16 约 10%（基本无演进式，仅测试
-  文件残留 2 处）；quant 约 1%；trt 约 10%。
+- 现状注释密度：W1–W15 演进式风格（冻结）；W16 约 10%；quant 约 1%；trt 约 10%。
+  W16/quant/trt **零演进式注释**（`grep -rn "Legacy C++\|Pain Point\|Modern C++"` 无命中）
+  ——印证 W16 是新风格的天然起点，演进式无需清理。
 
 ## 2. 关键决策（已确认）
 
@@ -83,7 +84,7 @@ constexpr double kNoisePct = 3.0;
 | 模块 | 规模 | 回填要点 |
 |---|---|---|
 | `02_Inference_Analysis/quantization` | 9 个 C++ 文件 ~900 行 + tools 2 个 py ~300 行 | **重点，从零补**：FP32 保头决策、`kNoisePct` 出处、Entropy 退化坑、ORT 调用顺序约束、IOBinding 结论指针。信息源：模块 notes.md、`docs/benchmarks/quant_*.md`、devlog、git log |
-| `02_Inference_Analysis/w16_yolo_detector` | 12 文件 ~1330 行 | 已有底子：补 hpp 契约事实（所有权/单位/坐标系）、清理 2 处测试文件演进式残留（decode_test.cpp、nms_test.cpp） |
+| `02_Inference_Analysis/w16_yolo_detector` | 12 文件 ~1330 行 | 已有底子（hpp 字段级注释较全）：补类/函数头 brief 覆盖、契约事实（所有权/坐标系/`std::span` 生命周期）、decode 与 NMS 的算法关键步骤 |
 | `02_Inference_Analysis/tensorrt` | 10 文件 ~810 行 | 补函数头覆盖 + TRT 10 API 生命周期、engine 缓存戳约束的坑标签 |
 
 - 每模块一个独立 commit，**不含任何代码逻辑改动**（diff 好审）。
