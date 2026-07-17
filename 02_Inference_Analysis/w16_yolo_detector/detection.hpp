@@ -9,6 +9,7 @@ namespace w16 {
 
 // 单个检测框。坐标语义由生产方约定：解码阶段先产出 letterbox 像素坐标，
 // 坐标反算后变为原图像素坐标（左上 x1,y1 / 右下 x2,y2）。
+/// 单个检测框：原图坐标系下的 xyxy + 置信度 + 类别。
 struct Detection {
   float x1;      // 左上角 x
   float y1;      // 左上角 y

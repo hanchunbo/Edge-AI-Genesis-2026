@@ -12,6 +12,7 @@
 
 namespace w16 {
 
+/// 解码可选项：置信度阈值 + 部署硬化项（NaN/Inf 跳过、候选预留）。
 struct DecodeOptions {
   float conf_thresh = 0.25f;
   bool skip_non_finite = false;
@@ -40,6 +41,9 @@ struct DecodeOptions {
 //
 // out.size() 必须等于 (4 + num_classes) * num_anchors，否则抛
 // std::invalid_argument。
+// @throws std::invalid_argument out.size() 与 (4+num_classes)*num_anchors
+//         不符，或 num_classes/num_anchors/img_w/img_h 非正、reserve_hint
+//         为负、conf_thresh 越界、scale 非正有限数
 [[nodiscard]] std::vector<Detection> DecodeYolov8(
     std::span<const float> out, int num_classes, int num_anchors,
     const DecodeOptions& options, float scale, int pad_left, int pad_top,

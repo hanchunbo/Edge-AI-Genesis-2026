@@ -29,6 +29,7 @@ struct DetectorConfig {
   int max_det = 0;               // NMS 输出上限，0 表示不限制
 };
 
+/// 一次检测的分段耗时（毫秒）。不含文件读取，只覆盖已解码图像的三段。
 struct DetectionTiming {
   double pre_ms = 0.0;
   double infer_ms = 0.0;
@@ -36,6 +37,7 @@ struct DetectionTiming {
   double total_ms = 0.0;
 };
 
+/// 检测结果 + 本次分段耗时。
 struct DetectionResult {
   std::vector<Detection> detections;
   DetectionTiming timing;
@@ -51,6 +53,7 @@ class YOLODetector {
   [[nodiscard]] std::vector<Detection> Detect(const cv::Mat& bgr);
 
   // 从文件路径检测（内部 cv::imread；读取失败抛 std::runtime_error）。
+  // @throws std::runtime_error 图片读取失败
   [[nodiscard]] std::vector<Detection> Detect(const std::string& image_path);
 
   // 带运行时分段计时的检测入口。计时不包含文件读取，只覆盖已解码图像的

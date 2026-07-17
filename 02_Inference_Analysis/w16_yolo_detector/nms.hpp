@@ -27,6 +27,7 @@ struct NmsOptions {
 // 全局降序排列（结果确定，便于对拍）。
 //
 // 入参按值传递：内部需排序，复制一份避免改动调用方数据。
+// @throws std::invalid_argument iou_thresh 越界或 max_det < 0
 [[nodiscard]] std::vector<Detection> Nms(std::vector<Detection> dets,
                                          const NmsOptions& options);
 
