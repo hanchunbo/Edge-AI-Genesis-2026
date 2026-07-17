@@ -46,6 +46,9 @@ trigger: always_on
 - **格式化**：严禁使用 `printf` 或 `std::cout` 拼接字符串。统一使用 `std::format` (C++20) 或 `std::print` (C++23) 进行类型安全的日志输出。
 
 ## 4. 注释规范
-- 仅使用 `//` 进行单行注释，不建议使用 `/* */`。
+- 仅使用 `//` 进行单行注释，不建议使用 `/* */`（Doxygen 文档注释 `///` 属单行注释，允许）。
 - 每个文件开头必须包含版权声明和文件功能描述。
 - 每个类和非平凡函数前必须有功能描述注释。
+- **W16 起**：注释规范以 `CLAUDE.md`「Documentation & Comments」节为准——
+  C++ 用 Doxygen `///` 一句话 brief，坑用 `@pre`/`@warning`/`@note` 标准标签，
+  Python 用 Google 风格 docstring。演进式三段注释仅限 W1–W15 存档模块。
