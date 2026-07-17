@@ -18,10 +18,15 @@
 namespace {
 
 // FP32 高置信框必须在 INT8 结果中找到同类别、高 IoU 的对应框。
-constexpr float kStrongScore = 0.5f;    // 只强约束 FP32 的高置信框
-constexpr float kMinMatchIou = 0.7f;    // 匹配框的最小 IoU
-constexpr float kMaxScoreDiff = 0.15f;  // 匹配框允许的分数偏差
+// 只强约束 FP32 的高置信框：低分框在量化后本就允许抖动，全量比对会假红。
+constexpr float kStrongScore = 0.5f;
+// 匹配框的最小 IoU / 允许的分数偏差：INT8 是有损的，判据是「同一个目标仍被
+// 检出且框基本重合」，不是数值相等。阈值来自修复后实测留的余量，
+// 根因与修复见 notes.md §INT8 0 检测框根因与修复。
+constexpr float kMinMatchIou = 0.7f;
+constexpr float kMaxScoreDiff = 0.15f;
 
+/// 缺产物时跳过：INT8 模型需先跑 quant_yolov8_static 生成。
 void SkipIfMissing(const std::string& path, const char* what) {
   if (!std::filesystem::exists(path)) {
     GTEST_SKIP() << "缺少" << what << "：" << path;
@@ -49,6 +54,9 @@ void SkipIfMissing(const std::string& path, const char* what) {
   return detector.Detect(std::string(QUANT_W16_IMAGE_PATH));
 }
 
+/// 断言 INT8 结果覆盖 FP32 的每个高置信框：同类别、IoU≥kMinMatchIou、
+/// 分数差≤kMaxScoreDiff。
+/// @note 这是检测头保 FP32 修复的回归闸门——修复前 INT8 输出 0 框，本断言红
 void ExpectInt8MatchesFp32(const std::string& int8_model_path) {
   SkipIfMissing(QUANT_W16_MODEL_PATH, "FP32 模型");
   SkipIfMissing(QUANT_W16_IMAGE_PATH, "测试图");

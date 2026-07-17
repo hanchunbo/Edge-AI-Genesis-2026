@@ -10,6 +10,7 @@ namespace quant {
 
 namespace {
 
+/// W16 分段计时 → 滚动统计样本的字段映射。
 StageLatencyMs ToStageLatency(const w16::DetectionTiming& timing) {
   return StageLatencyMs{.pre = timing.pre_ms,
                         .infer = timing.infer_ms,

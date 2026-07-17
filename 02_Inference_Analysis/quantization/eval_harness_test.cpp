@@ -10,6 +10,7 @@
 
 namespace {
 
+/// 缺模型或测试图时跳过用例——CI 与裸克隆环境没有这些产物。
 void SkipIfAssetsMissing() {
   if (!std::filesystem::exists(QUANT_W16_MODEL_PATH) ||
       !std::filesystem::exists(QUANT_W16_IMAGE_PATH)) {

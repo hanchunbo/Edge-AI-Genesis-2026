@@ -21,9 +21,12 @@ namespace {
 
 constexpr int kInput = 640;
 constexpr int kBatch = 4;
+// 同一份输入在 batch=1 与 batch=4 下应逐位可比：差异只可能来自 ORT 内部的
+// 并行归约顺序，故容差取浮点级而非精度级——超出即说明 batch 切片错位。
 constexpr float kScoreTol = 1e-5f;
 constexpr float kCoordTol = 1e-4f;
 
+/// 缺模型或测试图时跳过用例——CI 与裸克隆环境没有这些产物。
 void SkipIfAssetsMissing() {
   if (!std::filesystem::exists(QUANT_W16_MODEL_PATH) ||
       !std::filesystem::exists(QUANT_W16_IMAGE_PATH)) {
@@ -31,6 +34,7 @@ void SkipIfAssetsMissing() {
   }
 }
 
+/// 把单图张量复制 batch 份，拼成 [batch,3,H,W] 输入。
 std::vector<float> TileBatch(const std::vector<float>& one, int batch) {
   std::vector<float> out;
   out.reserve(one.size() * static_cast<std::size_t>(batch));

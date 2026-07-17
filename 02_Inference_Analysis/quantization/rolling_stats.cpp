@@ -14,6 +14,11 @@ namespace quant {
 
 namespace {
 
+/// 用最近秩法（ceil(q*n)）取分位数。
+///
+/// 不做线性插值：插值会造出实际没观测到的延迟值，而基准报告要的是真实发生过的
+/// 样本。代价是小样本下分辨率有限——窗口 128 时 P99 恒等于第 127 个样本。
+/// @note 按值传入 values：内部要排序，不能改动调用方数据
 PercentileStats Percentiles(std::vector<double> values) {
   if (values.empty()) {
     return PercentileStats{};
@@ -21,6 +26,8 @@ PercentileStats Percentiles(std::vector<double> values) {
   std::sort(values.begin(), values.end());
   const auto pick = [&values](double q) {
     const double rank = std::ceil(q * static_cast<double>(values.size()));
+    // 注意：clamp 的下界防 q=0——rank 会是 0，减 1 后下标回绕成巨大值
+    // （size_t 无符号）。当前只传 0.50/0.99 走不到，是给通用契约留的防御。
     const std::size_t idx = std::clamp(static_cast<std::size_t>(rank),
                                        std::size_t{1}, values.size()) -
                             1;

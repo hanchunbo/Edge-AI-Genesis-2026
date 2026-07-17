@@ -21,17 +21,24 @@
 
 namespace {
 
-constexpr int kInput = 640;
-constexpr int kWarmup = 5;
-constexpr int kIters = 20;
+constexpr int kInput = 640;  // YOLOv8n 导出时固定的方形输入边长
+constexpr int kWarmup = 5;   // 丢弃冷启动/CPU cache/CUDA autotuning 的前几次
+constexpr int kIters = 20;   // 每个 (模型×EP×模式) 组合的计时迭代数
+
+// IOBinding 收益的判定阈值（百分比）：低于此值报「噪声区间」而非收益。
+// 3.0 是保守下限，**不是**噪声上界——实测抖动比它大：w16_yolo_bench.md 记过
+// 5.49 vs 5.93（7.4%）的优劣翻转，quant_int8_report.md 的 INT8 翻转达 10~11%。
+// 即超过 3% 也未必是真收益。本表只用于排除明显噪声，结论需多轮交叉验证。
 constexpr double kNoisePct = 3.0;
 
+/// 一次纯 ORT infer 基准的延迟统计。
 struct InferStat {
   double p50_ms = 0.0;
   double p99_ms = 0.0;
   double fps = 0.0;
 };
 
+/// 纯 ORT infer 表格的一行：模型 × 请求/实际 EP × Run|IOBinding 模式。
 struct InferRow {
   std::string model;
   std::string requested_ep;
@@ -43,6 +50,7 @@ struct InferRow {
   std::string fallback_reason;
 };
 
+/// 端到端流水线的一组硬化配置（W16 default vs quant hardened 对照）。
 struct PipelineConfig {
   const char* name;
   bool use_iobinding;
@@ -51,10 +59,12 @@ struct PipelineConfig {
   int max_det;
 };
 
+/// EP 枚举 → 报告用短名。
 [[nodiscard]] const char* EpName(w14::Ep ep) {
   return ep == w14::Ep::kCuda ? "CUDA" : "CPU";
 }
 
+/// 从模型路径取报告用名字；第一个模型固定叫 fp32（约定它是基线）。
 [[nodiscard]] std::string ModelName(const std::string& path,
                                     std::size_t index) {
   if (index == 0) {
@@ -64,6 +74,7 @@ struct PipelineConfig {
   return stem.empty() ? "model_" + std::to_string(index) : stem;
 }
 
+/// 解析命令行：argv[2..] 为模型路径列表，缺省时只跑 W16 的 FP32 基线。
 [[nodiscard]] std::vector<quant::ModelCase> ParseCases(int argc, char** argv) {
   std::vector<quant::ModelCase> cases;
   if (argc <= 2) {
@@ -81,6 +92,7 @@ struct PipelineConfig {
   return cases;
 }
 
+/// 最近秩法分位数（与 RollingStats 同口径，见 rolling_stats.cpp）。
 [[nodiscard]] double Percentile(std::vector<double> values, double q) {
   if (values.empty()) {
     return 0.0;
@@ -93,6 +105,8 @@ struct PipelineConfig {
   return values[idx];
 }
 
+/// 跑一次推理并丢弃输出，仅用于计时。
+/// @throws std::runtime_error ORT 没有返回输出
 void RunOnce(w14::InferenceEngine& engine, const std::vector<float>& input,
              const std::vector<int64_t>& shape, bool use_iobinding) {
   std::vector<Ort::Value> outputs = use_iobinding
@@ -103,6 +117,8 @@ void RunOnce(w14::InferenceEngine& engine, const std::vector<float>& input,
   }
 }
 
+/// 对单个 engine 测纯推理延迟：kWarmup 次预热 + kIters 次计时。
+/// @note 只覆盖 ORT Run 本身，不含预处理/解码——与端到端表分开看
 [[nodiscard]] InferStat BenchInfer(w14::InferenceEngine& engine,
                                    const std::vector<float>& input,
                                    const std::vector<int64_t>& shape,
@@ -127,6 +143,9 @@ void RunOnce(w14::InferenceEngine& engine, const std::vector<float>& input,
                    .fps = 1000.0 / p50};
 }
 
+/// 预处理成 NCHW 输入张量（BGR→RGB + letterbox + /255）。
+/// @note 与 W16 detector 内部同一套变换，此处直接喂 engine 是为了让「纯 ORT
+/// infer」段绕开检测器编排，测的就是推理本身
 [[nodiscard]] std::vector<float> PrepareInput(const cv::Mat& bgr) {
   cv::Mat rgb;
   cv::cvtColor(bgr, rgb, cv::COLOR_BGR2RGB);
@@ -134,6 +153,7 @@ void RunOnce(w14::InferenceEngine& engine, const std::vector<float>& input,
   return w10::LetterboxToTensor(rgb, kInput, kInput, info);
 }
 
+/// 打印 CUDA 被静默回退到 CPU 的行——不打印会让读者把 CPU 数字当 GPU 数字。
 void PrintFallbackNotice(const std::vector<InferRow>& rows) {
   for (const InferRow& row : rows) {
     if (row.requested_ep == "CUDA" && row.active_ep == "CPU" &&
@@ -145,6 +165,10 @@ void PrintFallbackNotice(const std::vector<InferRow>& rows) {
   }
 }
 
+/// 按 (模型, EP) 配对 Run vs IOBinding，打印差异与噪声判定。
+/// @warning 依赖 rows 的排列顺序：每个 (模型×EP) 必须是连续两行、且
+/// Run 在前 IOBinding 在后（见 main 的循环嵌套）。改了 main 的循环顺序，
+/// 这里的配对会静默失配——有 continue 兜底，表现为少打行而不是报错
 void PrintIoBindingDelta(const std::vector<InferRow>& rows) {
   std::printf("\n## Run vs IOBinding 对比\n");
   std::printf(
@@ -250,6 +274,12 @@ int main(int argc, char** argv) {
       "total P50 | total P99 | FPS | dets | top score |\n");
   std::printf("|---|---|---|---|---:|---:|---:|---:|---:|---:|---:|---:|\n");
 
+  // 两组配置的差异即「部署硬化」的全部内容：IOBinding 走 W14 RunIoBinding、
+  // 解码跳过 NaN/Inf、预留候选容量、限制 NMS 输出上限。
+  // max_det=300 对齐 ultralytics 默认；reserve_hint=512
+  // 是本项目的候选预留调参， 与 ultralytics 无关。注意：max_det
+  // 是按分数降序后截断（见 w16 nms.cpp）， 候选超 300
+  // 时会丢低分框——当前测试图框数远低于此，未触发。
   const std::vector<PipelineConfig> pipeline_configs{
       PipelineConfig{.name = "W16 default",
                      .use_iobinding = false,

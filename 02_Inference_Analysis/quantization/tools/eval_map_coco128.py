@@ -10,6 +10,7 @@ from pathlib import Path
 
 
 def parse_args() -> argparse.Namespace:
+    """解析命令行参数。"""
     parser = argparse.ArgumentParser(
         description="Evaluate YOLOv8 ONNX models (FP32/INT8) mAP on coco128."
     )
@@ -25,6 +26,14 @@ def parse_args() -> argparse.Namespace:
 
 
 def main() -> int:
+    """用 ultralytics model.val 在 coco128 上评 mAP。
+
+    Returns:
+        进程退出码，0 表示成功。
+
+    Note:
+        逐张推理，不吃内存——与 quantize_yolov8_static.py 的 Entropy 校准内存墙无关。
+    """
     args = parse_args()
     try:
         from ultralytics import YOLO  # noqa: PLC0415 — 重依赖延迟到运行期导入
