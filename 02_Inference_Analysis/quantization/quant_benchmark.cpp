@@ -19,11 +19,15 @@
 #include <utility>
 #include <vector>
 
+#ifdef QUANT_ENABLE_NVTX
+#include <nvtx3/nvtx3.hpp>
+#endif
+
 namespace {
 
 constexpr int kInput = 640;  // YOLOv8n 导出时固定的方形输入边长
-constexpr int kWarmup = 5;   // 丢弃冷启动/CPU cache/CUDA autotuning 的前几次
-constexpr int kIters = 20;   // 每个 (模型×EP×模式) 组合的计时迭代数
+constexpr int kWarmup = 20;  // 丢弃冷启动/CPU cache/CUDA autotuning 的前几次
+constexpr int kIters = 200;  // 每个 (模型×EP×模式) 组合的计时迭代数
 
 // IOBinding 收益的判定阈值（百分比）：低于此值报「噪声区间」而非收益。
 // 3.0 是保守下限，**不是**噪声上界——实测抖动比它大：w16_yolo_bench.md 记过
@@ -122,19 +126,25 @@ void RunOnce(w14::InferenceEngine& engine, const std::vector<float>& input,
 [[nodiscard]] InferStat BenchInfer(w14::InferenceEngine& engine,
                                    const std::vector<float>& input,
                                    const std::vector<int64_t>& shape,
-                                   bool use_iobinding) {
+                                   bool use_iobinding,
+                                   [[maybe_unused]] const char* trace_name) {
   for (int i = 0; i < kWarmup; ++i) {
     RunOnce(engine, input, shape, use_iobinding);
   }
 
   std::vector<double> latencies;
   latencies.reserve(kIters);
-  for (int i = 0; i < kIters; ++i) {
-    const auto start = std::chrono::steady_clock::now();
-    RunOnce(engine, input, shape, use_iobinding);
-    const auto end = std::chrono::steady_clock::now();
-    latencies.push_back(
-        std::chrono::duration<double, std::milli>(end - start).count());
+  {
+#ifdef QUANT_ENABLE_NVTX
+    const nvtx3::scoped_range trace{trace_name};
+#endif
+    for (int i = 0; i < kIters; ++i) {
+      const auto start = std::chrono::steady_clock::now();
+      RunOnce(engine, input, shape, use_iobinding);
+      const auto end = std::chrono::steady_clock::now();
+      latencies.push_back(
+          std::chrono::duration<double, std::milli>(end - start).count());
+    }
   }
 
   const double p50 = Percentile(latencies, 0.50);
@@ -246,7 +256,11 @@ int main(int argc, char** argv) {
       w14::InferenceEngine engine(model.model_path,
                                   w14::SessionConfig{.ep = requested_ep});
       for (bool use_iobinding : {false, true}) {
-        const InferStat stat = BenchInfer(engine, input, shape, use_iobinding);
+        const std::string trace_name = model.name + "_" +
+                                       EpName(engine.ActiveEp()) + "_" +
+                                       (use_iobinding ? "IOBinding" : "Run");
+        const InferStat stat =
+            BenchInfer(engine, input, shape, use_iobinding, trace_name.c_str());
         InferRow row{
             .model = model.name,
             .requested_ep = EpName(requested_ep),
@@ -306,7 +320,7 @@ int main(int argc, char** argv) {
                 },
             .warmup = kWarmup,
             .iters = kIters,
-            .stats_window = 128,
+            .stats_window = kIters,
         };
         quant::EvalHarness harness(config);
         const std::vector<quant::ModelResult> results =

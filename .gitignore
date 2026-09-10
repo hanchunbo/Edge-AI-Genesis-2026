@@ -44,6 +44,7 @@
 build/
 **/build/
 build-gpu/
+build-quant-profile/
 
 # IDE
 .vscode/*

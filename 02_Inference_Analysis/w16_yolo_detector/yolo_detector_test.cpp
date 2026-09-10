@@ -69,6 +69,9 @@ TEST(W16Detector, MatchesUltralyticsReference) {
 
 TEST(W16Detector, HardenedDeploymentConfigRuns) {
   SkipIfAssetsMissing();
+  if (::testing::Test::IsSkipped()) {
+    return;
+  }
 
   w16::DetectorConfig cfg{
       .input_size = 640,
@@ -91,6 +94,9 @@ TEST(W16Detector, HardenedDeploymentConfigRuns) {
 
 TEST(W16Detector, DetectWithProfileReturnsNonNegativeTiming) {
   SkipIfAssetsMissing();
+  if (::testing::Test::IsSkipped()) {
+    return;
+  }
 
   w16::YOLODetector det(W16_MODEL_PATH,
                         w16::DetectorConfig{.ep = w14::Ep::kCpu});
@@ -106,6 +112,9 @@ TEST(W16Detector, DetectWithProfileReturnsNonNegativeTiming) {
 
 TEST(W16Detector, CudaFallbackReasonReadableWhenCudaUnavailable) {
   SkipIfAssetsMissing();
+  if (::testing::Test::IsSkipped()) {
+    return;
+  }
 
   w16::YOLODetector det(W16_MODEL_PATH,
                         w16::DetectorConfig{.ep = w14::Ep::kCuda});

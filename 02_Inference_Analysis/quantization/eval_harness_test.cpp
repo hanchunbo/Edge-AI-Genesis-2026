@@ -20,6 +20,9 @@ void SkipIfAssetsMissing() {
 
 TEST(QuantEvalHarness, Fp32CaseRunsAndRecordsIters) {
   SkipIfAssetsMissing();
+  if (::testing::Test::IsSkipped()) {
+    return;
+  }
 
   quant::EvalConfig cfg{
       .detector = w16::DetectorConfig{.ep = w14::Ep::kCpu},
@@ -43,6 +46,9 @@ TEST(QuantEvalHarness, Fp32CaseRunsAndRecordsIters) {
 
 TEST(QuantEvalHarness, CudaFallbackReasonReadable) {
   SkipIfAssetsMissing();
+  if (::testing::Test::IsSkipped()) {
+    return;
+  }
 
   quant::EvalConfig cfg{
       .detector = w16::DetectorConfig{.ep = w14::Ep::kCuda},

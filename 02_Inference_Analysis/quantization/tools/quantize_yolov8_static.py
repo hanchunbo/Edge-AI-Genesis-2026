@@ -55,10 +55,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--calib-limit",
         type=int,
-        default=0,
+        default=32,
         help=(
-            "校准图数量上限（0 表示不限）。Entropy 校准会在内存中累积全部中间层"
-            "输出做直方图，低内存环境需限制图数避免 OOM。"
+            "校准图数量上限，默认 32；显式 0 表示不限。"
+            "Entropy 校准仍需按机器内存限制运行。"
         ),
     )
     parser.add_argument(
@@ -69,7 +69,10 @@ def parse_args() -> argparse.Namespace:
             "传空字符串表示整图量化。"
         ),
     )
-    return parser.parse_args()
+    args = parser.parse_args()
+    if args.calib_limit < 0:
+        parser.error("--calib-limit 必须 >= 0")
+    return args
 
 
 def import_runtime_deps():
@@ -259,8 +262,8 @@ def main() -> int:
 
     # 检测头必须留 FP32：YOLOv8 输出张量混合框坐标（0~640）与类别分数（0~1），
     # per-tensor 激活量化的 scale≈640/255≈2.5，会把所有 <2.5 的分数坍缩成 0，
-    # 导致 INT8 模型 0 检测框（与校准集大小无关）。头部算力占比小，保 FP32
-    # 对延迟影响可忽略。
+    # 导致 INT8 模型 0 检测框（与校准集大小无关）。保 FP32 用于恢复检测正确性，
+    # 它对延迟的贡献尚未单独测量。
     nodes_to_exclude: list[str] = []
     if args.exclude_pattern:
         import onnx  # noqa: PLC0415 — 与其余重依赖一致，延迟到运行期导入

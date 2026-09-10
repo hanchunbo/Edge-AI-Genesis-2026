@@ -38,5 +38,7 @@ jobs:
 
       - name: Check code formatting
         run: |
-          find 01_Linux_CPP_Foundations -name "*.cpp" -o -name "*.hpp" \
-            | xargs clang-format-21 --dry-run --Werror
+          git ls-files -z -- \
+            '01_Linux_CPP_Foundations/*.cpp' '01_Linux_CPP_Foundations/*.hpp' \
+            '02_Inference_Analysis/*.cpp' '02_Inference_Analysis/*.hpp' \
+            | xargs -0 --no-run-if-empty clang-format-21 --dry-run --Werror

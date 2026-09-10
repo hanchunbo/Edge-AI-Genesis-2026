@@ -22,7 +22,9 @@ set(_QUANT_W16_MODEL
   "${CMAKE_SOURCE_DIR}/02_Inference_Analysis/w16_yolo_detector/models/yolov8n.onnx")
 set(_QUANT_W16_IMAGE
   "${CMAKE_SOURCE_DIR}/02_Inference_Analysis/w16_yolo_detector/models/test_image.jpg")
-set(_QUANT_MODELS_DIR "${CMAKE_CURRENT_BINARY_DIR}/models")
+set(QUANT_MODELS_DIR "${CMAKE_CURRENT_BINARY_DIR}/models"
+    CACHE PATH "quant INT8 产物目录，可在 CPU/GPU 构建间复用")
+set(_QUANT_MODELS_DIR "${QUANT_MODELS_DIR}")
 set(_QUANT_STATIC_SCRIPT "${CMAKE_CURRENT_SOURCE_DIR}/tools/quantize_yolov8_static.py")
 
 add_library(quant_core STATIC
@@ -43,9 +45,28 @@ target_compile_features(quant_benchmark PRIVATE cxx_std_20)
 set_target_properties(quant_benchmark PROPERTIES
   BUILD_RPATH "${ONNXRUNTIME_ROOT}/lib")
 
+option(QUANT_ENABLE_NVTX "给 quant benchmark 增加 Nsight 分段标记" OFF)
+if(QUANT_ENABLE_NVTX)
+  find_path(QUANT_NVTX_INCLUDE_DIR nvtx3/nvtx3.hpp
+            HINTS /usr/local/cuda/include)
+  if(NOT QUANT_NVTX_INCLUDE_DIR)
+    message(FATAL_ERROR
+      "需要 NVTX3 头文件；QUANT_NVTX_INCLUDE_DIR 应指向包含 nvtx3 的 include 目录")
+  endif()
+  target_include_directories(quant_benchmark PRIVATE "${QUANT_NVTX_INCLUDE_DIR}")
+  target_compile_definitions(quant_benchmark PRIVATE QUANT_ENABLE_NVTX=1)
+  target_link_libraries(quant_benchmark PRIVATE ${CMAKE_DL_LIBS})
+endif()
+
 # 校准集优先 coco128（ultralytics 默认数据目录）；缺失时回退单张测试图，
 # 仅用于验证工具链闭环，不作为正式校准结论。
-set(_QUANT_CALIB_DIR "$ENV{HOME}/code/datasets/coco128/images/train2017")
+set(QUANT_CALIB_DIR "$ENV{HOME}/code/datasets/coco128/images/train2017"
+    CACHE PATH "quant 校准集目录，缺失时回退 W16 测试图")
+set(_QUANT_CALIB_DIR "${QUANT_CALIB_DIR}")
+set(QUANT_CALIB_LIMIT "32" CACHE STRING "quant 校准图数量，0 表示不限")
+if(NOT "${QUANT_CALIB_LIMIT}" MATCHES "^[0-9]+$")
+  message(FATAL_ERROR "QUANT_CALIB_LIMIT 必须为非负整数")
+endif()
 if(EXISTS "${_QUANT_CALIB_DIR}")
   set(_QUANT_CALIB_ARGS --calib-dir "${_QUANT_CALIB_DIR}")
 else()
@@ -57,6 +78,7 @@ if(Python3_Interpreter_FOUND)
     COMMAND ${Python3_EXECUTABLE} "${_QUANT_STATIC_SCRIPT}"
             --model "${_QUANT_W16_MODEL}"
             ${_QUANT_CALIB_ARGS}
+            --calib-limit "${QUANT_CALIB_LIMIT}"
             --output-dir "${_QUANT_MODELS_DIR}"
     COMMENT "[quant] 生成 YOLOv8n ORT static INT8 QDQ 模型（检测头保 FP32）"
     USES_TERMINAL)
@@ -69,6 +91,13 @@ else()
 endif()
 
 if(BUILD_TESTING)
+  if(Python3_Interpreter_FOUND)
+    add_test(NAME Quant_ArgsTest
+      COMMAND "${Python3_EXECUTABLE}" -m unittest discover
+              -s "${CMAKE_CURRENT_SOURCE_DIR}/tools"
+              -p test_quantize_args.py -v)
+  endif()
+
   add_executable(quant_rolling_stats_test rolling_stats_test.cpp)
   target_link_libraries(quant_rolling_stats_test
     PRIVATE quant_core GTest::gtest_main Threads::Threads)

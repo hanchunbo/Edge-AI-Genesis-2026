@@ -61,6 +61,9 @@ void ExpectInt8MatchesFp32(const std::string& int8_model_path) {
   SkipIfMissing(QUANT_W16_MODEL_PATH, "FP32 模型");
   SkipIfMissing(QUANT_W16_IMAGE_PATH, "测试图");
   SkipIfMissing(int8_model_path, "INT8 模型（先跑 quant_yolov8_static 生成）");
+  if (::testing::Test::IsSkipped()) {
+    return;
+  }
 
   const std::vector<w16::Detection> fp32 = DetectCpu(QUANT_W16_MODEL_PATH);
   const std::vector<w16::Detection> int8 = DetectCpu(int8_model_path);

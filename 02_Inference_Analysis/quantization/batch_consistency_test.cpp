@@ -72,6 +72,9 @@ void ExpectSameDetections(const std::vector<w16::Detection>& expected,
 
 TEST(QuantBatchConsistency, BatchFourSlicesMatchBatchOne) {
   SkipIfAssetsMissing();
+  if (::testing::Test::IsSkipped()) {
+    return;
+  }
 
   const cv::Mat bgr = cv::imread(QUANT_W16_IMAGE_PATH, cv::IMREAD_COLOR);
   ASSERT_FALSE(bgr.empty());
