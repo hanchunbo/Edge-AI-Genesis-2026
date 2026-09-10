@@ -5,7 +5,9 @@
 
 ## 当前进度
 
-**交付物 `quant`（Phase 0）✅ 已收口（2026-07-06）——INT8 PTQ（检测头 `/model.22/` 保 FP32 + coco128 校准）+ 部署硬化 + 评估 harness 全部落地：CPU 纯推理 INT8 较 FP32 快约 24%（端到端约 22%），coco128 mAP50-95 掉约 1.7 点（0.4454→0.4285）精度可用；GPU 实测 FP32 CUDA 纯 infer 5.64ms（约 6.7× vs CPU），但 INT8 在 CUDA EP 因 QDQ Memcpy 反而慢约 2×——INT8 的 GPU 加速移交 `trt`（TensorRT INT8 EP）；IOBinding CPU/GPU 实测均噪声级，判定不再投入；quant 无剩余本机遗留，细节见 `02_Inference_Analysis/quantization/notes.md` 与 `docs/benchmarks/quant_*.md`。当前交付物：`trt`（TensorRT C++ Engine）🟡 M1 完成（2026-07-07）——TRT 10.16 环境 + FP16 engine（C++ Builder 路径 + 缓存戳 + 动态维度 profile）+ 一致性对拍 5/5 通过 + FP16 纯 infer 2.93ms（vs CUDA EP FP32 5.64ms，-48%），四路表骨架见 docs/benchmarks/trt_engine_report.md；M1.5（ORT TRT EP 参考对拍，2026-07-11 追加）与 M2（INT8 双路线 + mAP 闭环）未开始。W1–W16 全部完成（W16 YOLOv8n 检测 Demo 为 quant 基线），遗留 ResNet18 对比（降级可选）、VPS CPU EP 环境（待定）。**
+**交付物 `quant`（Phase 0）核心完成：INT8 PTQ、部署硬化、评估 harness 与 coco128 精度评估已落地；2026-09-10 已修测试跳过逻辑、默认 32 图校准及模型目录复用，准备了默认关闭的 NVTX 标记。GPU profiling 仍待补：当前会话 GPU 访问被操作系统阻止，未生成新 trace。完整 IOBinding 与分配计数未验收，真正 Entropy 对比及 GPU INT8 加速移交 TRT。CI 仅扩格式覆盖，完整 ORT 构建/模型回归另列后续。详见 quant notes 与收尾计划。**
+
+**当前交付物：`trt`（TensorRT C++ Engine）🟡 M1 完成（2026-07-07）——TRT 10.16 环境 + FP16 engine（C++ Builder 路径 + 缓存戳 + 动态维度 profile）+ 一致性对拍 5/5 通过 + FP16 纯 infer 2.93ms（vs CUDA EP FP32 5.64ms，-48%），四路表骨架见 docs/benchmarks/trt_engine_report.md；M1.5（ORT TRT EP 参考对拍，2026-07-11 追加）与 M2（INT8 双路线 + mAP 闭环）未开始。W1–W16 全部完成（W16 YOLOv8n 检测 Demo 为 quant 基线），遗留 ResNet18 对比（降级可选）、VPS CPU EP 环境（待定）。**
 
 **⚠️ 结构切换（2026-06-30）**：W1–W16 作为**周志存档冻结不动**（仅允许向后兼容加性扩展）；W17 起改走 `docs/Roadmap.md` 的 **Phase + 交付物里程碑** 两层结构——不再按周切分，交付物按内容定大小、各挂一档可投岗位。旧季度手册已归档 `docs/archive/`。
 每开始一个新交付物，必须更新此处进度描述（一句话：当前交付物 + 状态 + 遗留，细节进模块 notes），并同步 `docs/Roadmap.md` 里程碑状态。
@@ -176,5 +178,5 @@
 ## CI（持续集成）
 
 GitHub Actions（`.github/workflows/ci.yml`）在向 `main` 推送或发起 PR 时自动触发，包含两个检查：
-1. **build-and-test**：cmake 配置 → 编译 → ctest 跑所有测试
-2. **format-check**：对所有 `.cpp`/`.hpp` 文件执行 `clang-format-21 --dry-run --Werror`（版本与本地必须严格一致），格式不对则失败
+1. **build-and-test**：cmake 配置 → 编译 → ctest。当前仍用 g++-13 且未准备 ORT，quant 可能未被构建；完整推理模块 CI 另列后续。
+2. **format-check**：对 `01_Linux_CPP_Foundations/`、`02_Inference_Analysis/` 中受版本控制的 `.cpp`/`.hpp` 文件执行 `clang-format-21 --dry-run --Werror`（版本与本地必须严格一致），格式不对则失败

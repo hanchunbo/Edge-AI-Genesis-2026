@@ -44,7 +44,7 @@
 
 | 阶段 | 交付物 | 核心主题 | 关键技术 | 状态 |
 |------|--------|----------|----------|------|
-| **Phase 0** | `quant` / `trt` | CV 收口（变现 + LLM 地基） | INT8 量化、Profiling、**部署硬化**、TensorRT C++（FP16 + INT8 Calibrator + GPU 端到端） | ✅ `quant` 已收口 · 🔄 下一站 `trt` |
+| **Phase 0** | `quant` / `trt` | CV 收口（变现 + LLM 地基） | INT8 量化、Profiling、**部署硬化**、TensorRT C++（FP16 + INT8 Calibrator + GPU 端到端） | `quant` 核心完成，GPU profiling 待补 · `trt` M1 完成 |
 | **Phase 1** | `llm` | LLM 端侧基础（主攻起步） | llama.cpp、KV Cache、GGUF、Transformer 推理 | ⬜ |
 | **Phase 2** | `vllm` / `deploy` | LLM 服务化 + 工程交付 | **vLLM 部署**、OpenAI 兼容 API、PagedAttention、SSE 流式、Docker 容器化 | ⬜ |
 | Phase 3 | 弹性 | 弹性深化池（按面试反馈补） | 昇腾 CANN/MindIE、TensorRT-LLM、SGLang/TGI、ARM/RKNN、CUDA 算子 | ⬜ |
@@ -180,16 +180,58 @@ python tools/export_yolov8n.py && python tools/gen_reference.py
 . .venv/bin/activate
 pip install onnxruntime onnx opencv-python numpy
 cmake -S . -B build -G Ninja -DPython3_EXECUTABLE="$PWD/.venv/bin/python"
-cmake --build build --target quant_yolov8_static
+systemd-run --user --scope -p MemoryMax=5G -p MemorySwapMax=4G \
+  cmake --build build --target quant_yolov8_static
 ```
 
-默认校准样本使用 `02_Inference_Analysis/w16_yolo_detector/models/test_image.jpg`，
-因此需先完成 W16 的模型/图片导出。如果 build 目录是在创建 `.venv` 前配置的，必须按上面的
-`-DPython3_EXECUTABLE=...` 重新配置一次，否则 CMake 可能继续使用旧 Python。手动查看参数：
+默认优先使用 `$HOME/code/datasets/coco128/images/train2017`，最多校准 **32 张图**；目录
+不存在时回退 W16 的 `models/test_image.jpg`。单图模式只验证工具链，不能用于复述历史
+coco128 精度结论。需先完成 W16 的模型/图片导出。`QUANT_CALIB_DIR`、
+`QUANT_CALIB_LIMIT`、`QUANT_MODELS_DIR` 可通过 CMake `-D` 覆盖；限制为 0 表示显式不限量，
+负数会被拒绝。32 张图不是内存上限：上面的 systemd 内存约束针对本机 WSL，其他环境须按
+可用内存限制进程，不在 CMake 中强制依赖 systemd。被终止时先降低校准图数。
+
+如果 build 目录是在创建 `.venv` 前配置的，必须按上面的 `-DPython3_EXECUTABLE=...`
+重新配置，否则 CMake 可能继续使用旧 Python。手动运行时也明确校准数量：
 
 ```bash
 python3 02_Inference_Analysis/quantization/tools/quantize_yolov8_static.py --help
+systemd-run --user --scope -p MemoryMax=5G -p MemorySwapMax=4G \
+  .venv/bin/python 02_Inference_Analysis/quantization/tools/quantize_yolov8_static.py \
+  --model 02_Inference_Analysis/w16_yolo_detector/models/yolov8n.onnx \
+  --calib-dir "$HOME/code/datasets/coco128/images/train2017" --calib-limit 32
 ```
+
+CPU/GPU 构建可读取同一份已验证的 ONNX，无需为了创建第二个 build 目录重复校准：
+
+```bash
+cmake -S . -B build-gpu -G Ninja -DCMAKE_CXX_COMPILER=g++-15 \
+  -DONNXRUNTIME_ROOT="$PWD/third_party/onnxruntime/onnxruntime-linux-x64-gpu-1.26.0" \
+  -DQUANT_MODELS_DIR="$PWD/build/02_Inference_Analysis/quantization/models"
+cmake --build build-gpu --target quant_int8_consistency_test -j2
+ctest --test-dir build-gpu -R '^Quant_Int8ConsistencyTest$' --output-on-failure
+```
+
+该一致性测试仍使用 CPU EP。缺模型时本地可跳过；正式验收必须确认两个用例实际通过，
+不能把 skip 算作精度验证。现有 MinMax/Entropy 两产物字节相同，原因见
+[量化报告勘误](docs/benchmarks/quant_int8_report.md)。
+
+#### quant 可选：NVTX 标记与 Nsight 采集
+
+`QUANT_ENABLE_NVTX` 默认关闭，普通构建不需要 NVTX/Nsight。为了验证标记版编译，
+本轮仅在 `build/quant-tools/` 解压 [NVIDIA NVTX v3.2.2](https://github.com/NVIDIA/NVTX/tree/v3.2.2)，
+没有安装 Nsight，也没有修改系统 CUDA。可复现的头文件准备命令：
+
+```bash
+mkdir -p build/quant-tools
+curl --fail --location https://codeload.github.com/NVIDIA/NVTX/tar.gz/refs/tags/v3.2.2 \
+  -o build/quant-tools/nvtx-v3.2.2.tar.gz
+echo '76b875507d2501c9431d79e272ae5b6d4131bd0ffa7a7d3b79ac261d35609f7c  build/quant-tools/nvtx-v3.2.2.tar.gz' | sha256sum -c -
+tar -xzf build/quant-tools/nvtx-v3.2.2.tar.gz -C build/quant-tools
+```
+
+标记版构建、采集命令及未完成项见 [quant 模块笔记](02_Inference_Analysis/quantization/notes.md#profiling-入口与采集边界)。
+2026-09-10 当前会话被操作系统阻止 GPU 访问，尚无新 GPU trace；历史 GPU 数字保留原日期。
 
 #### W14.5 可选：CUDA EP（GPU 推理，WSL2 + RTX 30 系实测）
 

@@ -3,6 +3,10 @@
 > 日期：2026-07-02
 > 命令：`./build/02_Inference_Analysis/quantization/quant_benchmark`
 
+> 历史基线：下表保留 2026-07-02 的 CPU fallback 环境与 warmup=5/iters=20。
+> 后续 GPU 量化对比已记录在 [INT8 报告](quant_int8_report.md)。
+> 2026-09-10 增加 NVTX 入口并将新采样改为 20/200；当前会话 GPU 访问受阻，尚无新 trace 或 GPU 硬化 before/after 表。
+
 ## 环境
 
 - 构建：CMake 默认 `Release`，GCC 15，Ninja。
@@ -45,7 +49,7 @@ CPU 实际路径下，hardened 配置相对 W16 default 的 total P50 从 47.18m
 
 - `skip_non_finite`：单测覆盖 3 个候选中含 NaN 坐标和 Inf score 的异常候选，开启后仅保留 1 个合法候选。
 - `max_det`：单测覆盖 `max_det=0` 不限制、`max_det=2` 在全局 score 降序后截断。
-- `reserve_hint`：结果等价测试已覆盖；当前未接自定义 allocator，暂未记录 realloc 次数。
+- `reserve_hint`：结果等价测试已覆盖；每帧仍新建 vector，预留容量只减少容量不足时的扩容。未测分配次数，不能声称消除了逐帧分配。
 - batch consistency：`Quant_BatchConsistencyTest` 覆盖 batch=4 每个输出切片与 batch=1 的框数、类别、score、xyxy 一致。
 
 ## Profiling 边界
@@ -54,6 +58,6 @@ CPU 实际路径下，hardened 配置相对 W16 default 的 total P50 从 47.18m
 
 后续差距：
 
-- 输入输出双绑 + buffer 池尚未实现；当前 `use_iobinding=true` 只复用 W14 已有 IOBinding 路径，不能写成完整双绑。
-- 需要在 GPU ORT 包环境重跑 CPU/CUDA 对比。
-- 若要量化 allocator 层收益，需要新增分配计数或自定义 allocator 采样。
+- 输入输出双绑 + buffer 池尚未实现，当前决定暂不投入；现有路径的结果不能证明完整方案无收益。
+- GPU FP32/INT8 对比已有历史实测；本报告的 GPU default/hardened 对比与 Nsight 归因仍待补。
+- 分配次数未验收；仅当后续剖析显示 decode/分配值得投入时再开展单项测量，本轮不增加 allocator 或内存池。

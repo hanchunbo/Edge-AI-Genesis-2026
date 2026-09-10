@@ -1,6 +1,7 @@
 # Quantization — YOLO 部署硬化与 INT8 评估 Harness
 
-> Phase 0 交付物 `quant` 的第一阶段：复用 W16 YOLOv8n baseline，补部署硬化、运行时统计、batch consistency 与 profiling baseline。INT8 PTQ 在第二阶段接入。
+> Phase 0 交付物 `quant`：INT8 PTQ、部署硬化、评估 harness 与 coco128 精度评估已完成。
+> 2026-09-10 修正测试/复现入口并准备 NVTX 标记；当前会话 GPU 访问受阻，真实 GPU profiling 仍未完成。
 
 通用概念见主题库：
 
@@ -64,19 +65,20 @@ quantization/
 
 ```bash
 cmake -S . -B build -G Ninja
-cmake --build build --target quant_rolling_stats_test quant_eval_harness_test quant_batch_consistency_test quant_benchmark
+cmake --build build --target quant_rolling_stats_test quant_eval_harness_test quant_batch_consistency_test quant_int8_consistency_test quant_benchmark
 ctest --test-dir build -R "Quant_" --output-on-failure
 ./build/02_Inference_Analysis/quantization/quant_benchmark
 ```
 
-当前 CPU ORT 包环境下，`quant_benchmark` 会显式打印 CUDA fallback reason；这不是失败，而是本机没有 GPU ORT provider 的真实状态。第一阶段实测见
+使用 CPU ORT 包时，`quant_benchmark` 会显式打印 CUDA fallback reason；GPU 包也可能因当前会话访问限制而回退，需以“实际 EP”和 reason 为准。第一阶段历史实测见
 [`docs/benchmarks/quant_yolo_hardening.md`](../../docs/benchmarks/quant_yolo_hardening.md)。
 
 ## INT8 PTQ
 
 ```bash
 cmake -S . -B build -G Ninja -DPython3_EXECUTABLE="$PWD/.venv/bin/python"
-cmake --build build --target quant_yolov8_static
+systemd-run --user --scope -p MemoryMax=5G -p MemorySwapMax=4G \
+  cmake --build build --target quant_yolov8_static
 ./build/02_Inference_Analysis/quantization/quant_benchmark \
   02_Inference_Analysis/w16_yolo_detector/models/test_image.jpg \
   02_Inference_Analysis/w16_yolo_detector/models/yolov8n.onnx \
@@ -87,6 +89,16 @@ cmake --build build --target quant_yolov8_static
 FP32/INT8 第一版报告见
 [`docs/benchmarks/quant_int8_report.md`](../../docs/benchmarks/quant_int8_report.md)（已按头部保 FP32 版本重跑刷新，2026-07-02）。
 
+默认校准最多 32 图，优先 `QUANT_CALIB_DIR` 指定的 coco128 目录，缺目录时回退单图工具链验证。
+`QUANT_CALIB_LIMIT=0` 表示显式不限量；32 图限制不能替代进程内存约束。
+`QUANT_MODELS_DIR` 默认在各 build 的模块目录下，GPU 构建可将它指向现有 CPU build 的产物目录，
+无需重复校准。完整命令见 [README](../../README.md#quant-额外依赖ort-static-int8-ptq第二阶段量化)。
+
+2026-09-10 修复了测试辅助函数 skip 后调用者仍继续加载模型的问题：全部缺模型/图时，
+9 个依赖产物的用例正确跳过；仅缺 INT8 时，2 个一致性用例正确跳过。有模型时原 32 个
+W16/Quant GTest 用例通过，新增 4 个 Python 参数用例通过。`build-gpu` 复用现有模型后，
+两项 INT8 一致性用例也实际通过；它们指定 CPU EP，不是 GPU 可用性证明。
+
 ### INT8 0 检测框根因与修复（2026-07-02 闭环）
 
 - **症状**：首版 INT8 模型（MinMax/Entropy）单图评估输出 0 检测框，top score 恰为 0.0000。
@@ -95,7 +107,7 @@ FP32/INT8 第一版报告见
   所有 <2.5 的分数只能取 0，全部类别分数坍缩，**与校准集大小无关**（校准图即评估图也复现）。
   证据：INT8 输出仅 256 个离散值，`output0_DequantizeLinear` scale=2.499。
 - **修复**：`quantize_yolov8_static.py` 默认 `--exclude-pattern "/model.22/"`，检测头
-  154 节点保 FP32（backbone 才是算力大头）；校准集从单图扩为 coco128（`--calib-dir`，
+  154 节点保 FP32；校准集从单图扩为 coco128（`--calib-dir`，
   `--calib-limit 32`）。
 - **代价**：模型体积 3.9M → 6.5M（压缩率 29% → 50%），头部 FP32 换检测可用。
 - **验证**：`Quant_Int8ConsistencyTest`——FP32 高置信框（score≥0.5）必须在 INT8 结果中
@@ -109,11 +121,13 @@ FP32/INT8 第一版报告见
 
 - `use_iobinding=true` 走 W14 `RunIoBinding`：已做**输出持久绑定** + **输入零拷贝借用**。
   Run vs IOBinding 在 **CPU 与 GPU（CUDA EP）实测均为噪声级**（GPU 用 `build-gpu` 实测：FP32
-  5.64/5.67ms、INT8 两模型优劣翻转），印证 W16 结论。完整双绑（device buffer/pinned/异步 D2H）
-  对 yolov8n 小模型 + 输出需拷回 CPU 解码的场景无稳定收益，CPU/GPU 都不再投入。
-- INT8 GPU：CUDA EP 上 INT8（QDQ）因插入大量 Memcpy + 检测头 FP32 类型边界，反而比 FP32 慢约 2×
-  （FP32 5.64ms vs INT8 ~11ms）；INT8 的 GPU 加速需 TensorRT INT8 EP，见 `quant_int8_report.md` GPU 节。
-- `reserve_hint` 已覆盖结果等价，但尚未接 allocator 计数，不能单独报告 realloc 改善。
+  5.64/5.67ms、INT8 两模型优劣翻转）。现有路径未展示稳定收益，因此暂不投入完整双绑
+  （device buffer/pinned/异步 D2H）；完整方案尚未实现，其收益未知。
+- INT8 GPU：历史 CUDA EP 测量中 INT8（QDQ）比 FP32 慢约 2×（5.64ms vs ~11ms）。
+  日志中额外 Memcpy 节点是调查线索，拷贝、计算、转换和同步各自贡献未验证；后续由 TRT
+  验证 GPU INT8 加速，见 `quant_int8_report.md` GPU 节。
+- `reserve_hint` 已覆盖结果等价，但每帧仍新建 vector，未测分配次数；不能声称消除了逐帧分配。
+  仅在后续剖析显示 decode/分配值得投入时，再做 reserve=0/512 的单项测量，本轮不引入 allocator 或内存池。
 - ~~INT8 精度失败样本（0 检测框）~~ 已闭环，见上节根因与修复。
 - INT8 精度：单图框级一致性 + coco128 mAP 均已跑通。coco128 mAP50-95 FP32 0.4454
   → INT8 0.4285（掉约 1.7 点；MinMax=Entropy 是因为两产物字节级相同——ORT Entropy
@@ -121,3 +135,56 @@ FP32/INT8 第一版报告见
   `tools/eval_map_coco128.py`（ultralytics `model.val`）。评估是逐张推理不吃内存，
   与 Entropy 校准的内存墙无关。
   `quant_int8_report.md` 的延迟/体积/mAP 数字已按头部保 FP32 版本刷新（2026-07-02）。
+
+## Profiling 入口与采集边界
+
+普通 benchmark 默认关闭 NVTX，现用 warmup=20、iters=200，harness 统计窗口也为 200。
+可选标记只包围纯推理的正式测量循环，排除模型创建和预热；标签包含模型名、实际 EP 与
+Run/IOBinding 模式。历史 warmup=5/iters=20 的数字不改写为新配置结果。
+
+按 README 准备 NVTX v3.2.2 头文件后，可单独构建：
+
+```bash
+cmake -S . -B build-quant-profile -G Ninja -DCMAKE_CXX_COMPILER=g++-15 \
+  -DCMAKE_BUILD_TYPE=Release -DQUANT_ENABLE_NVTX=ON \
+  -DQUANT_NVTX_INCLUDE_DIR="$PWD/build/quant-tools/NVTX-3.2.2/c/include" \
+  -DONNXRUNTIME_ROOT="$PWD/third_party/onnxruntime/onnxruntime-linux-x64-gpu-1.26.0"
+cmake --build build-quant-profile --target quant_benchmark -j2
+```
+
+已验证 NVTX 关闭/开启两种构建均成功。**未完成 GPU 采集**：2026-09-10 当前会话
+`nvidia-smi` 返回 `GPU access blocked by the operating system`（退出码 255），
+`cuInit(0)` 返回 100。未安装 Nsight CLI，未生成 `.nsys-rep`，没有新的 GPU 性能结论；
+这不否定历史 RTX 3060 实测，也不表示模型加载修正失败。
+
+在 GPU 可访问且按 [NVIDIA 官方指南](https://docs.nvidia.com/nsight-systems/UserGuide/index.html#installing-the-cli-on-your-target)
+准备好 `nsys` 的会话中，先检查工具版本和 GPU，再执行采集。原始数据目录应使用新目录，
+避免覆盖已有采集：
+
+```bash
+nvidia-smi
+nsys --version
+mkdir -p build/quant-closeout-evidence
+nsys profile --trace=cuda,nvtx,osrt --sample=none --cpuctxsw=none \
+  --output=build/quant-closeout-evidence/quant \
+  ./build-quant-profile/02_Inference_Analysis/quantization/quant_benchmark \
+  02_Inference_Analysis/w16_yolo_detector/models/test_image.jpg \
+  02_Inference_Analysis/w16_yolo_detector/models/yolov8n.onnx \
+  build/02_Inference_Analysis/quantization/models/yolov8n.int8.minmax.onnx
+nsys stats --report cuda_gpu_trace --format csv \
+  build/quant-closeout-evidence/quant.nsys-rep \
+  > build/quant-closeout-evidence/cuda-trace.csv
+```
+
+验收必须按 `fp32_CUDA_Run`、`yolov8n.int8.minmax_CUDA_Run` 及各自 IOBinding 区间归因。
+记录计算、H2D/D2H/D2D 拷贝与同步；不能把全进程汇总分配给单一模型，也不能将并行事件时长
+直接相加当作墙钟占比。性能对比使用无 profiler 的 5 轮原始输出，trace 只作归因，随后再补
+GPU default/hardened 表。完整检查步骤见 [执行计划](../../docs/superpowers/plans/2026-09-10-quant-closeout.md)。
+
+## CI 独立后续项
+
+本轮格式检查已扩到 `01_Linux_CPP_Foundations/` 与 `02_Inference_Analysis/` 的受版本控制
+C++ 文件。构建工作流仍使用 g++-13，未准备 ORT；不能认为 quant 已被自动编译/精度验收。
+完整 CI 改造单独安排：固定 GCC 15/Ninja/CMake 环境、准备 CPU ORT、显式构建并检查 quant
+测试清单，再区分无模型 skip 检查和有模型的真实一致性检查。无需每次 CI 重跑 Entropy 或配置
+GPU runner，此项不阻塞 TRT 的本地开发。
