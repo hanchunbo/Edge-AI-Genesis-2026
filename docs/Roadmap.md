@@ -85,9 +85,9 @@ CV 与 LLM 都是这个底座上的应用层，**不是二选一**，连接两�
 
 ### Phase 0 — CV 收口（变现最快 + LLM 地基）
 
-#### 交付物 `quant` 🟡 核心完成，GPU profiling 待补（2026-09-10 校正）：INT8 量化 + 部署硬化
+#### 交付物 `quant` 🟡 核心与 GPU profiling 完成，退出异常待查（2026-09-10）：INT8 量化 + 部署硬化
 - **范围**：
-  - **量化**：ORT 官方工具对 YOLOv8n 做 PTQ，保留 MinMax / Entropy 接口；现有两产物字节相同，真正的策略对比移交 TRT M2。原要求“量化前先用 perf / Nsight 定位瓶颈”未执行，当前补做对照 profiling，不能改写历史顺序。
+  - **量化**：ORT 官方工具对 YOLOv8n 做 PTQ，保留 MinMax / Entropy 接口；现有两产物字节相同，真正的策略对比移交 TRT M2。原要求“量化前先用 perf / Nsight 定位瓶颈”未执行，2026-09-10 已补做对照 profiling，不能改写历史顺序。
     剪枝/蒸馏作**概念覆盖**（JD 里量化/剪枝/蒸馏/图优化常成套出现）——讲清三者定位差异即可，不动手实现。
   - **部署硬化**（承接 W16 评估出的部署形态缺口，均为小改高 ROI 项）：
     decode 预留容量（`reserve`，减少容量不足时的扩容；每帧仍新建 vector，未测分配次数）、复用 W14 现有 IOBinding 路径，
@@ -97,13 +97,13 @@ CV 与 LLM 都是这个底座上的应用层，**不是二选一**，连接两�
     > GPU 端预处理/后处理融图、FP16 路径属后端优化，归 `trt` 交付物，不在此（避免与 TRT engine 割裂）。
 - **产出**：
   - 量化前后 **体积 / 延迟 / mAP 对比报告**（`docs/benchmarks/`）
-  - 已有分段计时；Nsight 瓶颈归因报告待补（当前会话 GPU 访问受阻，入口已准备）
-  - 已有整体硬化 before/after、现有 IOBinding 对比与鲁棒性用例；分配次数未验收，GPU 硬化 before/after 待补
+  - 已有分段计时、五轮基准、Nsight 设备时间线与 ORT 节点分配，见 [瓶颈报告](benchmarks/quant_profiling_report.md)
+  - 已有整体硬化 before/after、现有 IOBinding 对比与鲁棒性用例；GPU 硬化 before/after 已补；分配次数未验收
   - 模块：`02_Inference_Analysis/quantization/`（命名空间 `quant`）
 - **成功指标与边界**：CPU INT8 延迟较 FP32 下降，mAP 掉点可量化并解释；能讲清对称/非对称、Per-Channel vs Per-Tensor，区分量化 vs 剪枝 vs 蒸馏。已测整体硬化效果不能归因于某一项 reserve；未测分配次数和完整 IOBinding 不计入已完成范围。
 - **收口结论（2026-07-06）**：CPU 纯推理 INT8 快约 24%（端到端约 22%），coco128 mAP50-95 掉约 1.7 点（0.4454→0.4285）精度可用；MinMax 与 Entropy 产物实为同一模型（ORT Entropy 校准默认参数退化为 MinMax，2026-07-11 勘误，见 `quant_int8_report.md`），选 MinMax 更省内存；GPU 上 CUDA EP 跑 INT8（QDQ）为负优化（慢约 2×），INT8 GPU 加速移交 `trt`；IOBinding CPU/GPU 实测均噪声级，判定不再投入。报告见 `docs/benchmarks/quant_int8_report.md` 与 `quant_yolo_hardening.md`。
-- **2026-09-10 收尾**：修正缺产物时的测试控制流、默认 32 图校准与模型目录复用，增加默认关闭的 NVTX 标记。真实 GPU profiling 仍受当前会话 GPU 访问限制；CI 完整 ORT 构建/模型回归列为独立工程任务，不阻塞 TRT。执行记录见 `docs/superpowers/plans/2026-09-10-quant-closeout.md`。
-- 🎯 **已完成成果的表述**：「INT8 量化 + 部署硬化 + 分段计时」；在产生 trace 与归因报告前，不声称完成 perf/Nsight 瓶颈定位。
+- **2026-09-10 收尾**：修正缺产物时的测试控制流、默认 32 图校准与模型目录复用，增加默认关闭的 NVTX 标记。切换执行权限并安装 Nsight 2025.1.3、处理 WSL 时间戳后完成设备采集：GPU Run 的 FP32/INT8 为 5.73/12.38 ms，kernel 325/843，额外 H2D 仅 17,728 字节，主要新增转换与小调用。一次退出堆损坏待查（`docs/tech-debt.md`）；CI 完整 ORT 构建/模型回归仍为独立工程任务。执行记录见 `docs/superpowers/plans/2026-09-10-quant-closeout.md`。
+- 🎯 **已完成成果的表述**：「INT8 量化 + 部署硬化 + Nsight/ORT 性能归因」；不声称已实现 GPU INT8 加速、完整 IOBinding 或长期稳定性验收。
 - ⚡ 同时是 LLM 端侧量化的地基
 
 #### 交付物 `trt` 🟡 TensorRT C++ Engine（FP16 + INT8 Calibrator + GPU 端到端）

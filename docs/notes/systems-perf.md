@@ -83,6 +83,15 @@
 
 **坑**：工具缺失时要直说，不能补脑。若没有 perf/Nsight，就只能说“C++ harness 分段显示 infer 占主导”，不能说“瓶颈是某个 kernel”。若没有 allocator 计数，就不能把 `reserve_hint` 写成已证明减少 realloc。
 
+
+**事件归因口径**：CUDA API 的 host 时间、GPU kernel/DMA 时间与墙钟是三种量。
+按 NVTX 区间内发起 API 的 correlation ID 归属设备事件，排除预热；并行事件需要先合并时间区间，
+不能直接相加算占比。`cudaMemcpyAsync` 的 host 耗时可能含 staging/等待，不等于设备传输时间；
+拷贝次数变多也不等于字节量显著增加。各阶段 P50 相加不等于总耗时 P50。
+
+**WSL 验收**：采集器退出 0 仍可能没有 GPU 设备事件；应检查 kernel/memcpy 表和对应 NVTX 区间。
+本项目的时间戳处理、重复基准与失败轮次排除规则见 [quant profiling](../benchmarks/quant_profiling_report.md)。
+
 > 实战出处：`docs/benchmarks/quant_yolo_hardening.md`
 
 ## fallback / Debug / skip 的结论边界

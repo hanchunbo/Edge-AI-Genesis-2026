@@ -5,7 +5,7 @@
 
 > 历史基线：下表保留 2026-07-02 的 CPU fallback 环境与 warmup=5/iters=20。
 > 后续 GPU 量化对比已记录在 [INT8 报告](quant_int8_report.md)。
-> 2026-09-10 增加 NVTX 入口并将新采样改为 20/200；当前会话 GPU 访问受阻，尚无新 trace 或 GPU 硬化 before/after 表。
+> 2026-09-10 增加 NVTX 入口并将新采样改为 20/200；后续已补齐 GPU trace 与硬化 before/after，见文末新报告链接，历史表保留。
 
 ## 环境
 
@@ -59,5 +59,14 @@ CPU 实际路径下，hardened 配置相对 W16 default 的 total P50 从 47.18m
 后续差距：
 
 - 输入输出双绑 + buffer 池尚未实现，当前决定暂不投入；现有路径的结果不能证明完整方案无收益。
-- GPU FP32/INT8 对比已有历史实测；本报告的 GPU default/hardened 对比与 Nsight 归因仍待补。
+- GPU FP32/INT8 对比已有历史实测；新的 GPU default/hardened 对比与 Nsight 归因已在 `quant_profiling_report.md` 补齐。
 - 分配次数未验收；仅当后续剖析显示 decode/分配值得投入时再开展单项测量，本轮不增加 allocator 或内存池。
+
+
+## 2026-09-10 后续：GPU profiling 已补齐
+
+切换执行权限后 GPU 可用；使用 Nsight 2025.1.3 和 WSL 时间戳处理，完成五轮无采集器基准、
+GPU kernel / memcpy 时间线与 ORT 节点分配。新配置下 GPU Run 的 FP32/INT8 P50 中位数为
+5.73/12.38 ms。64 个卷积仍用 float，INT8 额外增加转换 kernel 和小调用；不能简单归因为传输字节量。
+新 GPU 硬化 before/after、完整证据及一次未修复的退出异常见
+[性能瓶颈报告](quant_profiling_report.md)。上面的历史延迟与 mAP 保留原日期，本次未重跑 mAP。

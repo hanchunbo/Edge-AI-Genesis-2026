@@ -8,7 +8,7 @@
 
 **Tech Stack:** GCC 15、Ninja、CMake、Google Test 1.15.2、Python 标准库、ORT C++ 1.26.0、Nsight Systems、NVTX3。
 
-**状态：** 用户已授权执行。2026-09-10 已完成测试/复现修正、文档同步、NVTX 可选构建与 CI 格式覆盖；真实 GPU 采集受当前会话访问限制，仍未完成。
+**状态：** 用户已授权执行。2026-09-10 已完成测试/复现修正、文档同步、NVTX 可选构建与 CI 格式覆盖；后续切换执行权限并安装 Nsight 后已完成真实 GPU 采集与归因；新增一次退出堆损坏问题另列技术债。
 
 ---
 
@@ -344,7 +344,7 @@ subprocess.run(['cmake', '--build', 'build-quant-profile', '--target',
                 'quant_benchmark', '-j2'], check=True)
 ```
 
-- [ ] **先运行无 profiler 的基准，再采 trace。** 正常版重编后执行 5 轮，保存每轮原始输出；只使用 FP32 和 MinMax 两个不同模型。
+- [x] **先运行无 profiler 的基准，再采 trace。** 正常版重编后执行 5 轮，保存每轮原始输出；只使用 FP32 和 MinMax 两个不同模型。
 
 ```bash
 mkdir -p build/quant-closeout-evidence
@@ -367,7 +367,7 @@ nsys stats --report cuda_gpu_trace --format csv \
   > build/quant-closeout-evidence/cuda-trace.csv
 ```
 
-- [ ] **验收与报告。** 新报告必须满足：
+- [x] **验收与报告。** 新报告必须满足：
   1. 记录提交、GPU/驱动/ORT/Nsight 版本、模型哈希、线程设置、预热/样本数、实际 EP；CUDA 回退时不能写 GPU 对比结论。
   2. Nsight 时间线中可分辨 `fp32_CUDA_Run`、`yolov8n.int8.minmax_CUDA_Run`，以及各自 IOBinding 区间；区间只包含预热后的 200 次推理。
   3. 按标记区间分别统计计算、H2D/D2H/D2D 拷贝次数/字节/持续时间及同步等待。不能把整个进程的汇总数字分配给某一个模型。
@@ -428,3 +428,19 @@ git ls-files -z -- \
 
 恢复采集的必要条件是 GPU 可访问且有可用的 Nsight CLI；满足后执行任务 4 剩余两步，
 再更新状态。完整 IOBinding、allocator 计数与完整 CI 集成仍按批准的范围取舍处理。
+
+
+## 后续执行：2026-09-10 GPU profiling
+
+用户切换执行权限后，`/dev/dxg` 可见、CUDA 初始化成功；并明确授权直接安装所需性能工具。
+本轮按任务 4 的范围执行 Nsight Systems 与 ORT 节点分配分析，未安装 perf / Nsight Compute。
+
+- 安装与验收：2024.6.2 首次 trace 无设备事件；升级至 2025.1.3 后默认配置仍缺失，按 NVIDIA WSL 方案设置 `CuptiUseRawGpuTimestamps=false` 后恢复。完整采集的 kernel / memcpy 表均非空，8 个 NVTX 区间可见；四个 CUDA 区间每个覆盖 200 次正式推理。
+- 无 profiler：6 次尝试中 5 次正常退出，1 次在全部表格输出后 SIGABRT（`corrupted double-linked list`）；失败轮独立保留并排除，不宣称已修复。
+- 结果：CPU Run FP32/INT8 47.67/35.62 ms；CUDA Run 5.73/12.38 ms（五轮 P50 的中位数）。GPU kernel 325→843，新增 473 个 Q/DQ kernel，卷积仍用 float。H2D 多 45 次却只增 17,728 字节，数据量不是主要解释；设备计算与 host 调用都有额外负担。
+- 归因：按 NVTX 中发起 API 的 correlation ID 匹配 GPU 事件，核对边界与事件总数；分别记录设备时间、API host 时间及墙钟，不相加求占比。ORT 25 次运行后取最后 5 次核对分配：64 个 CUDA float Conv、45 个 CPU 偏置反量化节点。
+- 回归：GPU 构建 9 个 CTest 目标通过；38 个 C++ 用例通过，2 个因 CUDA 可用而不适用的 fallback 用例跳过，4 个 Python 参数测试通过。真实 CUDA 推理用例通过；该短回归不关闭退出异常。
+- 交付报告：`docs/benchmarks/quant_profiling_report.md`；静态图在 `docs/benchmarks/assets/quant_profile_summary.png`。原始目录 `build/quant-closeout-evidence/20260910-nsys/`，仓库外备份 `/home/dev/code/quant-profiling-artifacts/20260910-nsys/`。
+- 下一步：GPU 优化优先按 TRT M1.5/M2 验证 QDQ 融合及真实 INT8 层；完整 IOBinding、allocator、mAP 重测未实施。退出异常在长期运行/发布前另行定位。
+
+上面的“未完成 GPU profiling”表格是首次受限会话的历史记录，由本节与新报告更新当前状态。

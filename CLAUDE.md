@@ -5,7 +5,7 @@
 
 ## 当前进度
 
-**交付物 `quant`（Phase 0）核心完成：INT8 PTQ、部署硬化、评估 harness 与 coco128 精度评估已落地；2026-09-10 已修测试跳过逻辑、默认 32 图校准及模型目录复用，准备了默认关闭的 NVTX 标记。GPU profiling 仍待补：当前会话 GPU 访问被操作系统阻止，未生成新 trace。完整 IOBinding 与分配计数未验收，真正 Entropy 对比及 GPU INT8 加速移交 TRT。CI 仅扩格式覆盖，完整 ORT 构建/模型回归另列后续。详见 quant notes 与收尾计划。**
+**交付物 `quant`（Phase 0）核心完成：INT8 PTQ、部署硬化、评估 harness 与 coco128 精度评估已落地；2026-09-10 已修测试跳过逻辑、默认 32 图校准及模型目录复用，准备了默认关闭的 NVTX 标记。已补齐五轮基准、Nsight 设备时间线与 ORT 算子分配证据：CUDA INT8 多出转换 kernel 和小调用，详见 quant_profiling_report.md。一次退出时堆损坏待定位。完整 IOBinding 与分配计数未验收，真正 Entropy 对比及 GPU INT8 加速移交 TRT。CI 仅扩格式覆盖，完整 ORT 构建/模型回归另列后续。详见 quant notes 与收尾计划。**
 
 **当前交付物：`trt`（TensorRT C++ Engine）🟡 M1 完成（2026-07-07）——TRT 10.16 环境 + FP16 engine（C++ Builder 路径 + 缓存戳 + 动态维度 profile）+ 一致性对拍 5/5 通过 + FP16 纯 infer 2.93ms（vs CUDA EP FP32 5.64ms，-48%），四路表骨架见 docs/benchmarks/trt_engine_report.md；M1.5（ORT TRT EP 参考对拍，2026-07-11 追加）与 M2（INT8 双路线 + mAP 闭环）未开始。W1–W16 全部完成（W16 YOLOv8n 检测 Demo 为 quant 基线），遗留 ResNet18 对比（降级可选）、VPS CPU EP 环境（待定）。**
 

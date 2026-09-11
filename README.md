@@ -44,7 +44,7 @@
 
 | 阶段 | 交付物 | 核心主题 | 关键技术 | 状态 |
 |------|--------|----------|----------|------|
-| **Phase 0** | `quant` / `trt` | CV 收口（变现 + LLM 地基） | INT8 量化、Profiling、**部署硬化**、TensorRT C++（FP16 + INT8 Calibrator + GPU 端到端） | `quant` 核心完成，GPU profiling 待补 · `trt` M1 完成 |
+| **Phase 0** | `quant` / `trt` | CV 收口（变现 + LLM 地基） | INT8 量化、Profiling、**部署硬化**、TensorRT C++（FP16 + INT8 Calibrator + GPU 端到端） | `quant` 核心与 GPU profiling 完成，退出异常待查 · `trt` M1 完成 |
 | **Phase 1** | `llm` | LLM 端侧基础（主攻起步） | llama.cpp、KV Cache、GGUF、Transformer 推理 | ⬜ |
 | **Phase 2** | `vllm` / `deploy` | LLM 服务化 + 工程交付 | **vLLM 部署**、OpenAI 兼容 API、PagedAttention、SSE 流式、Docker 容器化 | ⬜ |
 | Phase 3 | 弹性 | 弹性深化池（按面试反馈补） | 昇腾 CANN/MindIE、TensorRT-LLM、SGLang/TGI、ARM/RKNN、CUDA 算子 | ⬜ |
@@ -218,9 +218,8 @@ ctest --test-dir build-gpu -R '^Quant_Int8ConsistencyTest$' --output-on-failure
 
 #### quant 可选：NVTX 标记与 Nsight 采集
 
-`QUANT_ENABLE_NVTX` 默认关闭，普通构建不需要 NVTX/Nsight。为了验证标记版编译，
-本轮仅在 `build/quant-tools/` 解压 [NVIDIA NVTX v3.2.2](https://github.com/NVIDIA/NVTX/tree/v3.2.2)，
-没有安装 Nsight，也没有修改系统 CUDA。可复现的头文件准备命令：
+`QUANT_ENABLE_NVTX` 默认关闭，普通构建不需要 NVTX/Nsight。标记版使用
+[NVIDIA NVTX v3.2.2](https://github.com/NVIDIA/NVTX/tree/v3.2.2) 头文件：
 
 ```bash
 mkdir -p build/quant-tools
@@ -230,8 +229,42 @@ echo '76b875507d2501c9431d79e272ae5b6d4131bd0ffa7a7d3b79ac261d35609f7c  build/qu
 tar -xzf build/quant-tools/nvtx-v3.2.2.tar.gz -C build/quant-tools
 ```
 
-标记版构建、采集命令及未完成项见 [quant 模块笔记](02_Inference_Analysis/quantization/notes.md#profiling-入口与采集边界)。
-2026-09-10 当前会话被操作系统阻止 GPU 访问，尚无新 GPU trace；历史 GPU 数字保留原日期。
+2026-09-10 补装 Nsight Systems **2025.1.3.140**：从 NVIDIA 官方仓库下载固定版本，
+校验 SHA-256 后解压至用户目录，直接运行 CLI。此方式不安装 `.deb` 的 GUI 依赖，
+不改变 CUDA、cuDNN 或 Windows 显卡驱动；也不会获得 root 权限。
+
+```bash
+curl --fail --location \
+  https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2404/x86_64/nsight-systems-2025.1.3_2025.1.3.140-1_amd64.deb \
+  -o build/quant-tools/nsight-systems-2025.1.3.deb
+echo '77290633afb63a119d53a9f11e2c64cfcc2c3b79a2fb5b4b4e673e1de1dd6836  build/quant-tools/nsight-systems-2025.1.3.deb' | sha256sum -c -
+mkdir -p "$HOME/.local/opt/nsight-systems-2025.1.3" "$HOME/.local/bin"
+dpkg-deb -x build/quant-tools/nsight-systems-2025.1.3.deb "$HOME/.local/opt/nsight-systems-2025.1.3"
+ln -s "$HOME/.local/opt/nsight-systems-2025.1.3/opt/nvidia/nsight-systems/2025.1.3/target-linux-x64/nsys" "$HOME/.local/bin/nsys"
+"$HOME/.local/bin/nsys" --version
+"$HOME/.local/bin/nsys" status --environment
+```
+
+本机 WSL 还需要 CUPTI 转换 GPU 时间戳：只升级 Nsight 后仍无设备事件，按
+[NVIDIA 的 WSL 处理说明](https://forums.developer.nvidia.com/t/nsys-doesnt-show-cuda-kernel-and-memory-data/315536/9)
+在 `nsys -z` 输出的配置文件中设置 `CuptiUseRawGpuTimestamps=false` 后，短采集才出现
+kernel / memcpy 表。若配置已存在，保留其他内容，只修改该项；本机原先没有此文件：
+
+```bash
+mkdir -p "$HOME/.config/NVIDIA Corporation"
+echo 'CuptiUseRawGpuTimestamps=false' >> "$HOME/.config/NVIDIA Corporation/nsys-config.ini"
+```
+
+该设置使用 CUPTI 时间戳转换，精度边界见 NVIDIA 说明；仅 `nsys` 退出码为 0 不足以证明
+GPU trace 完整，还要检查导出的 SQLite 中有非空 `CUPTI_ACTIVITY_KIND_KERNEL` 与
+`CUPTI_ACTIVITY_KIND_MEMCPY`。本机首次 2024.6.2 采集只有 host API，已保留为失败验收记录。
+
+本机进程树采样环境检查通过；系统级采样检查未通过，本轮不使用系统级采样，
+也不调整内核权限。分析先使用 CUDA/NVTX/OSRT trace，`perf` 与 Nsight Compute 按需另装。
+
+标记版构建与采集命令见 [quant 模块笔记](02_Inference_Analysis/quantization/notes.md#profiling-入口与采集边界)。
+2026-09-10 切换执行权限后 GPU 可用，已完成五轮基准、Nsight 设备 trace 与 ORT 分配分析。
+结论、WSL 采集处理和一次退出异常见 [性能瓶颈报告](docs/benchmarks/quant_profiling_report.md)；历史 GPU 数字保留原日期。
 
 #### W14.5 可选：CUDA EP（GPU 推理，WSL2 + RTX 30 系实测）
 

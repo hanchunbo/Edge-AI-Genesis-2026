@@ -106,6 +106,15 @@ INT8 纯推理 P50 约为 FP32 的 76%，CPU 上快约 24%。检测头保 FP32 �
 
 本报告的延迟和 mAP 是历史实测，本轮未重跑量化或 mAP。模型目录已支持 CPU/GPU 构建复用，
 校准默认限制 32 图，缺产物测试会真正跳过。新 benchmark 使用 warmup=20、iters=200，
-不能把上表数字标成新配置的测量结果。当前会话 `nvidia-smi` 报 GPU 访问被操作系统阻止，
+不能把上表数字标成新配置的测量结果。当日最初的受限会话 `nvidia-smi` 报 GPU 访问被操作系统阻止，
 `cuInit(0)` 返回 100；没有生成新 GPU trace。采集入口与待测内容见
 [quant notes](../../02_Inference_Analysis/quantization/notes.md#profiling-入口与采集边界)。
+
+
+## 2026-09-10 后续：GPU profiling 已补齐
+
+切换执行权限后 GPU 可用；使用 Nsight 2025.1.3 和 WSL 时间戳处理，完成五轮无采集器基准、
+GPU kernel / memcpy 时间线与 ORT 节点分配。新配置下 GPU Run 的 FP32/INT8 P50 中位数为
+5.73/12.38 ms。64 个卷积仍用 float，INT8 额外增加转换 kernel 和小调用；不能简单归因为传输字节量。
+新 GPU 硬化 before/after、完整证据及一次未修复的退出异常见
+[性能瓶颈报告](quant_profiling_report.md)。上面的历史延迟与 mAP 保留原日期，本次未重跑 mAP。

@@ -1,7 +1,7 @@
 # Quantization — YOLO 部署硬化与 INT8 评估 Harness
 
 > Phase 0 交付物 `quant`：INT8 PTQ、部署硬化、评估 harness 与 coco128 精度评估已完成。
-> 2026-09-10 修正测试/复现入口并准备 NVTX 标记；当前会话 GPU 访问受阻，真实 GPU profiling 仍未完成。
+> 2026-09-10 修正测试/复现入口并补齐五轮基准、Nsight 设备 trace 与 ORT 分配证据；一次退出堆损坏待查。
 
 通用概念见主题库：
 
@@ -124,8 +124,9 @@ W16/Quant GTest 用例通过，新增 4 个 Python 参数用例通过。`build-g
   5.64/5.67ms、INT8 两模型优劣翻转）。现有路径未展示稳定收益，因此暂不投入完整双绑
   （device buffer/pinned/异步 D2H）；完整方案尚未实现，其收益未知。
 - INT8 GPU：历史 CUDA EP 测量中 INT8（QDQ）比 FP32 慢约 2×（5.64ms vs ~11ms）。
-  日志中额外 Memcpy 节点是调查线索，拷贝、计算、转换和同步各自贡献未验证；后续由 TRT
-  验证 GPU INT8 加速，见 `quant_int8_report.md` GPU 节。
+  2026-09-10 已补分析：卷积仍用 float，增加 473 个 GPU Q/DQ kernel 与 45 次偏置小拷贝；
+  设备拷贝耗时相近，不能简单归因于带宽。现有 IOBinding 未减少这些工作；后续由 TRT 验证
+  实际 INT8 加速，见 [新报告](../../docs/benchmarks/quant_profiling_report.md)。
 - `reserve_hint` 已覆盖结果等价，但每帧仍新建 vector，未测分配次数；不能声称消除了逐帧分配。
   仅在后续剖析显示 decode/分配值得投入时，再做 reserve=0/512 的单项测量，本轮不引入 allocator 或内存池。
 - ~~INT8 精度失败样本（0 检测框）~~ 已闭环，见上节根因与修复。
@@ -152,10 +153,12 @@ cmake -S . -B build-quant-profile -G Ninja -DCMAKE_CXX_COMPILER=g++-15 \
 cmake --build build-quant-profile --target quant_benchmark -j2
 ```
 
-已验证 NVTX 关闭/开启两种构建均成功。**未完成 GPU 采集**：2026-09-10 当前会话
-`nvidia-smi` 返回 `GPU access blocked by the operating system`（退出码 255），
-`cuInit(0)` 返回 100。未安装 Nsight CLI，未生成 `.nsys-rep`，没有新的 GPU 性能结论；
-这不否定历史 RTX 3060 实测，也不表示模型加载修正失败。
+已验证 NVTX 关闭/开启两种构建均成功。2026-09-10 初始受限会话缺少 `/dev/dxg`，
+切换执行权限后 CUDA 初始化和真实推理通过；随后安装 Nsight 2025.1.3，并按 README
+设置 WSL 的 CUPTI 时间戳转换，已生成包含 kernel / memcpy 的 `.nsys-rep` 与 SQLite。
+五轮基准、分区统计、ORT 节点分配、GPU 硬化 before/after 和边界统一见
+[性能瓶颈报告](../../docs/benchmarks/quant_profiling_report.md)。本次未重跑 mAP。
+一次额外基准尝试在退出时发生堆损坏，已排除并保留日志，尚未定位/修复。
 
 在 GPU 可访问且按 [NVIDIA 官方指南](https://docs.nvidia.com/nsight-systems/UserGuide/index.html#installing-the-cli-on-your-target)
 准备好 `nsys` 的会话中，先检查工具版本和 GPU，再执行采集。原始数据目录应使用新目录，
