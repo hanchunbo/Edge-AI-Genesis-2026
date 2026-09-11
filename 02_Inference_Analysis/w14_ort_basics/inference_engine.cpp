@@ -54,12 +54,13 @@ InferenceEngine::InferenceEngine(const std::string& model_path,
     throw std::runtime_error("[W14] 模型文件不存在: " + model_path);
   }
 
-  // 必须先初始化全局 Ort::Env（它在构造时注册进程级默认日志器），
+  // 必须先取得已初始化的 Ort::Env（构造时注册进程级默认日志器），
   // 再 AppendExecutionProvider_CUDA。append 内部会用默认日志器，若此时
   // Env 尚未创建，会抛 "DefaultLogger but none has been registered"，
   // 导致 CUDA 可用却被误判失败、回退 CPU。该 bug 只在进程内首次构造时复现：
   // 单测因前序用例已建过 Env 而侥幸通过，是典型的顺序依赖假绿。
-  Ort::Env& env = GlobalEnv();
+  // 显式 Env 由入口管理，必须避免再初始化 static Env 并延后最后一次释放。
+  Ort::Env& env = cfg.env ? *cfg.env : GlobalEnv();
 
   // CUDA 路径：try 必须包住「append + Session 创建」整体——失败既可能发生在
   // AppendExecutionProvider_CUDA，也可能发生在 Session 创建阶段（provider .so

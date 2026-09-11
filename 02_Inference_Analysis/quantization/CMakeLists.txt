@@ -91,6 +91,16 @@ else()
 endif()
 
 if(BUILD_TESTING)
+  add_executable(quant_runtime_lifetime_test runtime_lifetime_test.cpp)
+  target_link_libraries(quant_runtime_lifetime_test PRIVATE quant_core)
+  target_compile_definitions(quant_runtime_lifetime_test PRIVATE
+    QUANT_W16_MODEL_PATH="${_QUANT_W16_MODEL}"
+    QUANT_W16_IMAGE_PATH="${_QUANT_W16_IMAGE}")
+  set_target_properties(quant_runtime_lifetime_test PROPERTIES
+    BUILD_RPATH "${ONNXRUNTIME_ROOT}/lib")
+  add_test(NAME Quant_RuntimeLifetimeTest COMMAND quant_runtime_lifetime_test)
+  set_tests_properties(Quant_RuntimeLifetimeTest PROPERTIES SKIP_RETURN_CODE 77)
+
   if(Python3_Interpreter_FOUND)
     add_test(NAME Quant_ArgsTest
       COMMAND "${Python3_EXECUTABLE}" -m unittest discover

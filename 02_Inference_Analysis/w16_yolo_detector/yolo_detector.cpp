@@ -31,7 +31,8 @@ YOLODetector::YOLODetector(const std::string& model_path, DetectorConfig cfg)
     : engine_(model_path,
               w14::SessionConfig{.ep = cfg.ep,
                                  .intra_op_threads = cfg.intra_op_threads,
-                                 .inter_op_threads = cfg.inter_op_threads}),
+                                 .inter_op_threads = cfg.inter_op_threads,
+                                 .env = cfg.env}),
       cfg_(cfg) {}
 
 std::vector<Detection> YOLODetector::Detect(const cv::Mat& bgr) {

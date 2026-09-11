@@ -44,7 +44,7 @@
 
 | 阶段 | 交付物 | 核心主题 | 关键技术 | 状态 |
 |------|--------|----------|----------|------|
-| **Phase 0** | `quant` / `trt` | CV 收口（变现 + LLM 地基） | INT8 量化、Profiling、**部署硬化**、TensorRT C++（FP16 + INT8 Calibrator + GPU 端到端） | `quant` 核心与 GPU profiling 完成，退出异常待查 · `trt` M1 完成 |
+| **Phase 0** | `quant` / `trt` | CV 收口（变现 + LLM 地基） | INT8 量化、Profiling、**部署硬化**、TensorRT C++（FP16 + INT8 Calibrator + GPU 端到端） | `quant` 核心与 GPU profiling 完成，入口退出 UAF 已修复 · `trt` M1 完成 |
 | **Phase 1** | `llm` | LLM 端侧基础（主攻起步） | llama.cpp、KV Cache、GGUF、Transformer 推理 | ⬜ |
 | **Phase 2** | `vllm` / `deploy` | LLM 服务化 + 工程交付 | **vLLM 部署**、OpenAI 兼容 API、PagedAttention、SSE 流式、Docker 容器化 | ⬜ |
 | Phase 3 | 弹性 | 弹性深化池（按面试反馈补） | 昇腾 CANN/MindIE、TensorRT-LLM、SGLang/TGI、ARM/RKNN、CUDA 算子 | ⬜ |
@@ -134,6 +134,39 @@ cd Edge-AI-Genesis-2026
 
 > GTest 源码已随仓库内置于 `third_party/v1.15.2.zip`，FetchContent 直接读取本地 zip，
 > configure / build / ctest **全程无需网络**，内网环境开箱即用。
+
+#### 可选：退出内存错误诊断工具
+
+2026-09-11 为 quant 退出问题安装 GDB 15.1、Valgrind 3.22 与匹配当前 glibc 的
+调试符号。本次未升级 glibc、ORT 或 CUDA。一般环境先检查版本和安装预览：
+
+```bash
+dpkg-query -W libc6
+apt-cache policy libc6-dbg
+sudo apt-get install --simulate --no-install-recommends gdb valgrind libc6-dbg
+```
+
+本机 glibc 为 `2.39-0ubuntu8.8`，源中候选调试包已变为 `8.9`，为保持排查环境
+一致，实际使用对应版本包；下面 URL 仅适用于该 glibc 版本：
+
+```bash
+mkdir -p build/quant-tools
+curl -fL https://archive.ubuntu.com/ubuntu/pool/main/g/glibc/libc6-dbg_2.39-0ubuntu8.8_amd64.deb \
+  -o build/quant-tools/libc6-dbg_2.39-0ubuntu8.8_amd64.deb
+sudo apt-get install -y --no-install-recommends gdb
+sudo apt-get install -y --no-install-recommends \
+  "$PWD/build/quant-tools/libc6-dbg_2.39-0ubuntu8.8_amd64.deb" valgrind
+gdb --version
+valgrind --version
+```
+
+用途与原始栈读法见 [退出修复报告](docs/benchmarks/quant_runtime_lifetime.md)。
+
+文档图验证使用 Mermaid CLI 11.16.0（`npx -p @mermaid-js/mermaid-cli@11.16.0 mmdc`）。
+2026-09-11 复用已缓存的 CLI，补装 Puppeteer 对应的 Chrome Headless Shell
+150.0.7871.24；无浏览器的环境可在该 CLI 的 npm 环境中运行
+`puppeteer browsers install chrome-headless-shell`，再通过 `mmdc -p puppeteer.json`
+指定下载后的 `executablePath`。这仅用于渲染文档图，不是推理构建依赖。
 
 #### W14+ 额外依赖：ONNX Runtime（CPU 包，Q2 起需要）
 
@@ -264,7 +297,8 @@ GPU trace 完整，还要检查导出的 SQLite 中有非空 `CUPTI_ACTIVITY_KIN
 
 标记版构建与采集命令见 [quant 模块笔记](02_Inference_Analysis/quantization/notes.md#profiling-入口与采集边界)。
 2026-09-10 切换执行权限后 GPU 可用，已完成五轮基准、Nsight 设备 trace 与 ORT 分配分析。
-结论、WSL 采集处理和一次退出异常见 [性能瓶颈报告](docs/benchmarks/quant_profiling_report.md)；历史 GPU 数字保留原日期。
+结论与 WSL 采集处理见 [性能瓶颈报告](docs/benchmarks/quant_profiling_report.md)；
+退出 UAF 的后续修复见 [生命周期报告](docs/benchmarks/quant_runtime_lifetime.md)。历史 GPU 数字保留原日期。
 
 #### W14.5 可选：CUDA EP（GPU 推理，WSL2 + RTX 30 系实测）
 
@@ -389,6 +423,12 @@ cmake --build build -j$(nproc)
 ```
 
 ### 调试专用（ASAN / TSAN）
+
+本机 CUDA + ASAN 初次运行报 CUDA error 2；设置
+`ASAN_OPTIONS=protect_shadow_gap=0` 后可初始化 CUDA，参见
+[NVIDIA 说明](https://developer.nvidia.com/docs/drive/drive-os/7.0.3/public/drive-os-tensorrt-developer-guide/troubleshooting.html#issues-with-cuda-and-address-sanitizer)。
+这只处理工具兼容性，不是退出 UAF 的修复。预编译 ORT/CUDA 库未被 ASAN 插桩，
+其内部访问错误仍可能漏报；本次以 Valgrind 修复前后对照作为主要证据。
 
 ```bash
 # 内存越界 / use-after-free 检测

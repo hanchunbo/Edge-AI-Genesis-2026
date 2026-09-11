@@ -302,3 +302,11 @@ ORT 在 `third_party/` 下，不在系统 lib 路径里。
    日志器，必须在 append 前先创建 `Ort::Env`（GlobalEnv）注册日志器。否则进程内首次
    构造 CUDA 引擎会抛 "DefaultLogger but none registered" → CUDA 可用却误回退 CPU。
    单测因前序用例已建 Env 而侥幸通过，是 demo 单次构造暴露的真相（commit 319d4ae 修）。
+
+## 2026-09-11 加性扩展：入口管理 Env
+
+`SessionConfig` 末尾新增可选的 `Ort::Env* env`，供 quant 借用入口持有的运行环境。
+默认 `nullptr` 保留原调用方式；调用者必须让 Env 比相关会话和输出活得更久。
+本次只迁移 quant 入口，历史 W14/W16 默认入口尚未迁移；旧 static Env 与 CUDA
+注册表的退出顺序仍有风险。概念见 [主题库](../../docs/notes/inference.md#ortenv-共享与退出顺序)，
+修复与验证见 [quant 报告](../../docs/benchmarks/quant_runtime_lifetime.md)。

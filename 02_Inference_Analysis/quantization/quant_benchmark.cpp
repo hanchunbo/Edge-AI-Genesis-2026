@@ -207,6 +207,8 @@ void PrintIoBindingDelta(const std::vector<InferRow>& rows) {
 }  // namespace
 
 int main(int argc, char** argv) {
+  // 所有 session/输出先销毁，再释放 Env；避免晚于 CUDA 注册表静态析构。
+  Ort::Env env(ORT_LOGGING_LEVEL_WARNING, "EdgeAI-Quant");
   const std::string image_path = argc > 1 ? argv[1] : QUANT_W16_IMAGE_PATH;
   const cv::Mat bgr = cv::imread(image_path, cv::IMREAD_COLOR);
   if (bgr.empty()) {
@@ -253,8 +255,9 @@ int main(int argc, char** argv) {
   std::vector<InferRow> infer_rows;
   for (const quant::ModelCase& model : cases) {
     for (w14::Ep requested_ep : {w14::Ep::kCpu, w14::Ep::kCuda}) {
-      w14::InferenceEngine engine(model.model_path,
-                                  w14::SessionConfig{.ep = requested_ep});
+      w14::InferenceEngine engine(
+          model.model_path,
+          w14::SessionConfig{.ep = requested_ep, .env = &env});
       for (bool use_iobinding : {false, true}) {
         const std::string trace_name = model.name + "_" +
                                        EpName(engine.ActiveEp()) + "_" +
@@ -317,6 +320,7 @@ int main(int argc, char** argv) {
                     .skip_non_finite = pipeline.skip_non_finite,
                     .reserve_hint = pipeline.reserve_hint,
                     .max_det = pipeline.max_det,
+                    .env = &env,
                 },
             .warmup = kWarmup,
             .iters = kIters,

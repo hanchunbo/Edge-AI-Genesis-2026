@@ -25,6 +25,9 @@ struct SessionConfig {
   Ep ep = Ep::kCpu;
   int intra_op_threads = 0;
   int inter_op_threads = 0;
+  // 可选借用运行时；调用方必须让 Env 比所有相关会话及输出活得更久。
+  // nullptr 保持旧 GlobalEnv 路径；quant 用入口局部 Env 控制退出顺序。
+  Ort::Env* env = nullptr;
 };
 
 // InferenceEngine 封装一个 ONNX 模型推理会话。
@@ -35,7 +38,7 @@ struct SessionConfig {
 //   - 错误模型：任何加载/查询失败抛 std::runtime_error，带上下文。
 //   - 零拷贝：Run() 接受 std::span，直接借用调用方 buffer 创建 Ort::Value，
 //             不做 memcpy；调用方负责保证 buffer 在 Run 返回前存活。
-//   - 单一 Env：所有 Engine 共用一个 Ort::Env（见 GlobalEnv()）。
+//   - 共享 Env：调用方可统一提供运行时；未指定时走旧 GlobalEnv()。
 class InferenceEngine {
  public:
   // I/O 节点的静态元数据，构造时一次性查出来缓存。
@@ -83,9 +86,10 @@ class InferenceEngine {
   [[nodiscard]] std::vector<Ort::Value> RunIoBinding(
       std::span<const float> input, std::span<const int64_t> shape);
 
-  // 进程级 Env：函数内 static 保证唯一 + 线程安全初始化。
-  // 为什么必须全局唯一：Env 持有日志器 + 内部线程池等进程级资源，
-  // 多份会重复分配且日志交错；测试代码也用它的地址做"单例"断言。
+  // 旧进程级 Env：函数内 static 保证唯一 + 线程安全初始化。
+  // CUDA 动态库的静态析构顺序可能使其释放过晚；新入口宜借用局部 Env。
+  // 此接口为历史调用方保留；测试代码也用它的地址做"单例"断言。
+  // 共享运行环境并不要求 C++ 包装对象为 static，生命周期概念见主题库。
   static Ort::Env& GlobalEnv();
 
  private:

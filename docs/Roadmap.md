@@ -85,7 +85,7 @@ CV 与 LLM 都是这个底座上的应用层，**不是二选一**，连接两�
 
 ### Phase 0 — CV 收口（变现最快 + LLM 地基）
 
-#### 交付物 `quant` 🟡 核心与 GPU profiling 完成，退出异常待查（2026-09-10）：INT8 量化 + 部署硬化
+#### 交付物 `quant` 🟡 核心与 GPU profiling 完成，入口退出 UAF 已修复（2026-09-11）：INT8 量化 + 部署硬化
 - **范围**：
   - **量化**：ORT 官方工具对 YOLOv8n 做 PTQ，保留 MinMax / Entropy 接口；现有两产物字节相同，真正的策略对比移交 TRT M2。原要求“量化前先用 perf / Nsight 定位瓶颈”未执行，2026-09-10 已补做对照 profiling，不能改写历史顺序。
     剪枝/蒸馏作**概念覆盖**（JD 里量化/剪枝/蒸馏/图优化常成套出现）——讲清三者定位差异即可，不动手实现。
@@ -103,6 +103,7 @@ CV 与 LLM 都是这个底座上的应用层，**不是二选一**，连接两�
 - **成功指标与边界**：CPU INT8 延迟较 FP32 下降，mAP 掉点可量化并解释；能讲清对称/非对称、Per-Channel vs Per-Tensor，区分量化 vs 剪枝 vs 蒸馏。已测整体硬化效果不能归因于某一项 reserve；未测分配次数和完整 IOBinding 不计入已完成范围。
 - **收口结论（2026-07-06）**：CPU 纯推理 INT8 快约 24%（端到端约 22%），coco128 mAP50-95 掉约 1.7 点（0.4454→0.4285）精度可用；MinMax 与 Entropy 产物实为同一模型（ORT Entropy 校准默认参数退化为 MinMax，2026-07-11 勘误，见 `quant_int8_report.md`），选 MinMax 更省内存；GPU 上 CUDA EP 跑 INT8（QDQ）为负优化（慢约 2×），INT8 GPU 加速移交 `trt`；IOBinding CPU/GPU 实测均噪声级，判定不再投入。报告见 `docs/benchmarks/quant_int8_report.md` 与 `quant_yolo_hardening.md`。
 - **2026-09-10 收尾**：修正缺产物时的测试控制流、默认 32 图校准与模型目录复用，增加默认关闭的 NVTX 标记。切换执行权限并安装 Nsight 2025.1.3、处理 WSL 时间戳后完成设备采集：GPU Run 的 FP32/INT8 为 5.73/12.38 ms，kernel 325/843，额外 H2D 仅 17,728 字节，主要新增转换与小调用。一次退出堆损坏待查（`docs/tech-debt.md`）；CI 完整 ORT 构建/模型回归仍为独立工程任务。执行记录见 `docs/superpowers/plans/2026-09-10-quant-closeout.md`。
+- **2026-09-11 稳定性修复**：Valgrind 定位到 static Env 晚于 CUDA 注册表析构，退出时再次访问已释放控制块。quant 入口显式持有并透传局部 Env，目标 UAF 上下文 2→0；三轮完整 GPU 基准正常退出，相关 10 个 CTest 目标通过。原始 SIGABRT 未再次捕获；旧 W14/W16 默认入口迁移仍列技术债。见 [生命周期报告](benchmarks/quant_runtime_lifetime.md)。
 - 🎯 **已完成成果的表述**：「INT8 量化 + 部署硬化 + Nsight/ORT 性能归因」；不声称已实现 GPU INT8 加速、完整 IOBinding 或长期稳定性验收。
 - ⚡ 同时是 LLM 端侧量化的地基
 

@@ -1,12 +1,13 @@
 # 待处理的工程问题
 
-## GPU 基准退出时偶发堆损坏（2026-09-10）
+## quant 退出 UAF 已修复，历史入口迁移待处理（2026-09-11）
 
-- **状态**：待定位；长期运行或发布前处理。
+- **状态**：quant benchmark 与 quant eval 测试的显式 Env 路径已修复；历史默认入口迁移仍待处理。
 - **触发记录**：运行 quant FP32/INT8 × CPU/CUDA × Run/IOBinding 的完整基准，一次尝试在输出全部表格后 SIGABRT，glibc 报 `corrupted double-linked list`。
-- **已知边界**：6 次无 profiler 尝试中 5 次正常退出、1 次异常；随后 Nsight 全量采集与独立 ORT probe 正常退出。不能用这些成功覆盖失败，也未确定是项目代码还是 ORT/cuDNN 等依赖的问题。
+- **定位**：Valgrind 在仅初始化 CUDA provider 时稳定发现退出 UAF。ORT 1.26.0 的 static Env 晚于 CUDA 注册表析构，Shutdown 再次 reset 注册表，访问并修改已释放的控制块。quant 已通过局部 Env 提前执行清理，修复前后目标上下文 2→0。
+- **验证与边界**：三轮完整基准正常退出，10 个相关 CTest 目标通过。原来具体的 glibc SIGABRT 未再次出现；本次消除已复现的内存缺陷，不排除其他原因。Valgrind 剩余 WSL 驱动映射读报告单独保留，不能称全部内存检查零错误。详见 [生命周期报告](benchmarks/quant_runtime_lifetime.md)。
 - **原始证据**：`build/quant-closeout-evidence/20260910-nsys/benchmark-3-aborted.log`，随 [profiling 报告](benchmarks/quant_profiling_report.md) 的证据包保存。
-- **下一步**：在相同模型哈希与依赖版本下缩小到 session 创建/销毁、Run/IOBinding 的生命周期复现，获取退出栈或 ASAN 证据，再决定修复位置；不要直接更换驱动或用提前退出隐藏析构错误。
+- **遗留**：W14/W16 历史入口与未传 `env` 的调用方仍走兼容的 `GlobalEnv()`，可能触发同一顺序问题。后续逐入口迁移，并对 CUDA 初始化及进程退出做同样的内存对照；新的 quant harness 调用方须传入由入口持有的 Env。
 
 ## 完整 ORT CI
 

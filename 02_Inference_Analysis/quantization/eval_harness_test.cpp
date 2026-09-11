@@ -24,8 +24,9 @@ TEST(QuantEvalHarness, Fp32CaseRunsAndRecordsIters) {
     return;
   }
 
+  Ort::Env env(ORT_LOGGING_LEVEL_WARNING, "quant_eval_test");
   quant::EvalConfig cfg{
-      .detector = w16::DetectorConfig{.ep = w14::Ep::kCpu},
+      .detector = w16::DetectorConfig{.ep = w14::Ep::kCpu, .env = &env},
       .warmup = 1,
       .iters = 2,
       .stats_window = 8,
@@ -50,8 +51,9 @@ TEST(QuantEvalHarness, CudaFallbackReasonReadable) {
     return;
   }
 
+  Ort::Env env(ORT_LOGGING_LEVEL_WARNING, "quant_eval_test");
   quant::EvalConfig cfg{
-      .detector = w16::DetectorConfig{.ep = w14::Ep::kCuda},
+      .detector = w16::DetectorConfig{.ep = w14::Ep::kCuda, .env = &env},
       .warmup = 0,
       .iters = 1,
       .stats_window = 4,

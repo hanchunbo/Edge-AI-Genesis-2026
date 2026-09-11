@@ -223,3 +223,11 @@ W16 原始 benchmark 仍代表当时 demo 状态；部署硬化后的新评估�
 
 - **W17**：把 W14–W16 整合为 `inference_engine` 库 + 单测；导出 ResNet18（YOLO 已在 W16 导出）。
 - **W18**：对本周 YOLO 程序做专业 Profiling（Nsight/Roofline），与 W16 的工程快测互补。
+
+## 2026-09-11 加性扩展：入口管理 Env
+
+`DetectorConfig` 末尾新增可选的 `Ort::Env* env`，供 quant 借用入口持有的运行环境。
+默认 `nullptr` 保留原调用方式；调用者必须让 Env 比相关会话和输出活得更久。
+本次只迁移 quant 入口，历史 W14/W16 默认入口尚未迁移；旧 static Env 与 CUDA
+注册表的退出顺序仍有风险。概念见 [主题库](../../docs/notes/inference.md#ortenv-共享与退出顺序)，
+修复与验证见 [quant 报告](../../docs/benchmarks/quant_runtime_lifetime.md)。

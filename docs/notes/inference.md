@@ -8,7 +8,7 @@
 - [ONNX vs ORT vs 任务](#onnx-vs-ort-vs-任务)
 - [shape / tensor / Ort::Value 三者关系](#shape--tensor--ortvalue-三者关系)
 - [Env / Session / Engine 三者角色](#env--session--engine-三者角色)
-- [Ort::Env 全局唯一（函数内 static 单例）](#ortenv-全局唯一函数内-static-单例)
+- [Ort::Env 共享与退出顺序](#ortenv-共享与退出顺序)
 - [零拷贝张量输入 + buffer 存活契约](#零拷贝张量输入--buffer-存活契约)
 - [MemoryInfo 与 CPU 内存 / GPU 显存 / Host→Device](#memoryinfo-与-cpu-内存--gpu-显存--hostdevice)
 - [I/O 元数据构造期一次性缓存](#io-元数据构造期一次性缓存)
@@ -74,9 +74,25 @@
 
 ---
 
-## Ort::Env 全局唯一（函数内 static 单例）
+<a id="ortenv-全局唯一函数内-static-单例"></a>
 
-**是什么**：用「静态成员函数 + 函数内静态局部变量」叠出单例，保证全进程只有一个 `Ort::Env`：
+## Ort::Env 共享与退出顺序
+
+**是什么**：`Ort::Env` 是运行环境的 C++ RAII 包装。多个 Session 可以共享一个 Env；
+共享不要求包装对象一定是 `static`。入口持有局部 Env，再向会话传引用或借用指针，
+可以明确规定清理顺序：**输出和会话 → Env → 共享库静态对象**。
+
+```cpp
+int main() {
+  Ort::Env env(ORT_LOGGING_LEVEL_WARNING, "app");
+  w14::InferenceEngine engine(model_path, w14::SessionConfig{.env = &env});
+  // engine 及在此之后创建的输出先销毁，env 随后销毁。
+}
+```
+
+**为什么 / 何时用**：动态加载的后端也会注册静态析构。函数内 static 虽然保证
+C++11 起的线程安全初始化，却不保证它与后来加载的 CUDA 后端按依赖顺序清理。
+W14 历史实现如下，保留给旧调用方使用：
 
 ```cpp
 Ort::Env& InferenceEngine::GlobalEnv() {   // 静态成员函数：不依赖对象，类名:: 直接调
@@ -85,11 +101,19 @@ Ort::Env& InferenceEngine::GlobalEnv() {   // 静态成员函数：不依赖对�
 }
 ```
 
-**为什么 / 何时用**：Env 持有进程级资源，多份并存会重复分配数百 KB、日志交错混乱。函数内 static（C++11+）保证线程安全 + 仅初始化一次 + 程序退出自动析构，比全局变量安全、比手写单例精简。验证：`&GlobalEnv() == &GlobalEnv()` 地址相等。
+**坑**：
 
-**坑**：**必须在 `AppendExecutionProvider_CUDA` 之前先建 Env**——Env 构造时注册进程级默认日志器，而 append CUDA 内部要用这个日志器。若 Env 未建就 append，抛 "DefaultLogger but none registered" → CUDA 可用却误回退 CPU。单测因前序用例已建 Env 而侥幸通过（顺序依赖假绿），demo 单次构造才暴露真相。
+- 必须在 `AppendExecutionProvider_CUDA` 之前先建 Env，保证默认日志器已注册；
+  否则可能抛出 "DefaultLogger but none registered" 并误回退 CPU。
+- 也必须让最后一个 Env 在后端静态状态仍有效时释放。ORT 1.26.0 CUDA EP 中，
+  先创建 static Env、后加载 CUDA provider，可在退出时先销毁注册表，随后 Env 的
+  provider 清理又访问注册表已释放的控制块。初始化顺序正确不代表析构顺序正确。
+- 仅在 `main` 多建一个局部 Env、引擎仍调用 `GlobalEnv()` 不够。ORT 的底层环境
+  由引用计数共享，旧 static 包装仍可把最后释放拖到进程退出阶段。
+- 借用指针不延长 Env 的寿命；调用者必须确保所有相关会话、绑定和输出先销毁。
 
 > 实战出处：`02_Inference_Analysis/w14_ort_basics/notes.md`（设计决策 1 + W14.5 坑 2，commit 319d4ae）
+> 退出顺序对照：[quant 修复报告](../benchmarks/quant_runtime_lifetime.md)；[模块用法](../../02_Inference_Analysis/quantization/notes.md#运行时生命周期2026-09-11)
 > 关联：[static 四种用法](cpp-core.md#static-的四种用法)
 
 ---

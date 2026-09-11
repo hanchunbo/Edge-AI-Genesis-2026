@@ -27,6 +27,8 @@ struct DetectorConfig {
   bool skip_non_finite = false;  // true 时解码跳过 NaN/Inf 候选
   int reserve_hint = 0;          // 解码候选预留容量，0 表示不预留
   int max_det = 0;               // NMS 输出上限，0 表示不限制
+  // 可选借用运行时，必须比检测器存活更久；由入口统一管理销毁顺序。
+  Ort::Env* env = nullptr;
 };
 
 /// 一次检测的分段耗时（毫秒）。不含文件读取，只覆盖已解码图像的三段。

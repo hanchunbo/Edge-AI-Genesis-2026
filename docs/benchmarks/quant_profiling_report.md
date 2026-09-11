@@ -7,7 +7,8 @@
 没有得到整数卷积的收益。不能把约 2.16 倍的延迟简单归因于传输字节量。**
 GPU kernel 数 325→843；H2D 虽然多 45 次，但只增加 17,728 字节/次推理。
 现有 IOBinding 没有减少这些工作。后续优先验证 TensorRT 对 QDQ 的融合与实际精度层类型；
-退出时偶发的堆损坏另列稳定性问题，尚未修复。
+退出时偶发的堆损坏在当日另列稳定性问题。2026-09-11 已定位并修复 quant 入口的
+退出 UAF，验证边界见 [后续报告](quant_runtime_lifetime.md)；本报告保留 09-10 的测量语境。
 
 ![GPU 延迟与 kernel 数对照](assets/quant_profile_summary.png)
 
@@ -180,7 +181,8 @@ INT8 增加了 kernel launch 与小块 pageable 拷贝的主机调用负担。`c
    拷贝，也没有消除图内部偏置小拷贝。完整 device buffer / pinned memory 的收益仍需单独对照。
 3. **暂不做 allocator / reserve 扩展。** post 约 0.8 ms，尚无分配次数与函数采样证据；整体硬化表不足以支持单项归因。
 
-独立稳定性事项：一次退出时的堆损坏必须在长期运行或发布前定位，见 [技术债](../tech-debt.md)。
+独立稳定性事项：当日一次退出堆损坏触发后续排查。2026-09-11 的 quant 入口 UAF 修复见
+[生命周期报告](quant_runtime_lifetime.md)，旧默认入口迁移仍见 [技术债](../tech-debt.md)。
 当前不知道是项目代码还是依赖库造成，不能依据测试通过将其关闭。
 
 ## 验证、原始数据与复现

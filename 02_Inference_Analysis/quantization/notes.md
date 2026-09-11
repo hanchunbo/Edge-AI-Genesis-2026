@@ -1,7 +1,7 @@
 # Quantization — YOLO 部署硬化与 INT8 评估 Harness
 
 > Phase 0 交付物 `quant`：INT8 PTQ、部署硬化、评估 harness 与 coco128 精度评估已完成。
-> 2026-09-10 修正测试/复现入口并补齐五轮基准、Nsight 设备 trace 与 ORT 分配证据；一次退出堆损坏待查。
+> 2026-09-10 补齐五轮基准、Nsight 设备 trace 与 ORT 分配证据；2026-09-11 已修复 quant 入口退出 UAF，旧默认入口迁移另列遗留。
 
 通用概念见主题库：
 
@@ -137,6 +137,39 @@ W16/Quant GTest 用例通过，新增 4 个 Python 参数用例通过。`build-g
   与 Entropy 校准的内存墙无关。
   `quant_int8_report.md` 的延迟/体积/mAP 数字已按头部保 FP32 版本刷新（2026-07-02）。
 
+## 运行时生命周期（2026-09-11）
+
+quant benchmark 在 `main` 开头创建局部 `Ort::Env`，向纯推理的 `SessionConfig`
+以及流水线的 `EvalConfig.detector.env` 传递同一指针。检测器继续透传给引擎；
+quant eval 测试也显式持有 Env，避免 CPU 用例初始化旧 static Env 后影响 CUDA 用例。
+通用概念见 [主题库](../../docs/notes/inference.md#ortenv-共享与退出顺序)。
+
+```mermaid
+sequenceDiagram
+  participant Main as quant main
+  participant Env as 局部 Ort::Env
+  participant Session as 引擎与检测会话
+  participant CUDA as CUDA provider 注册表
+  Main->>Env: 创建运行环境
+  Main->>Session: 传入借用的 Env
+  Session->>CUDA: 按需初始化 provider
+  Main->>Session: 推理、处理输出
+  Main->>Session: 销毁输出与会话
+  Main->>Env: 离开作用域，销毁 Env
+  Env->>CUDA: Shutdown 清理有效注册表
+  Note over Main,CUDA: main 返回后才进入进程静态析构
+```
+
+`Quant_RuntimeLifetimeTest` 默认执行真实 CPU 推理、IOBinding、单图检测和 harness，
+以独立进程覆盖正常退出。`--cuda-registry` 模式只构造引擎/检测器，再初始化 CUDA
+注册表，供 Valgrind 快速对照清理顺序；这个诊断模式不执行神经网络推理。
+缺资产返回 77，CTest 标为跳过；CUDA 诊断模式还会检查 ORT 是否包含 CUDA EP。
+
+三轮完整 GPU 基准均正常退出，相关 10 个 CTest 目标通过。Valgrind 目标退出 UAF
+上下文从 2 降为 0，其他 WSL 驱动映射读报告保留。原具体 SIGABRT 未再次捕获，
+也未完成长期运行验证。旧 W14/W16 默认入口仍走兼容的 static Env，另列技术债；
+详细证据与复现命令见 [生命周期报告](../../docs/benchmarks/quant_runtime_lifetime.md)。
+
 ## Profiling 入口与采集边界
 
 普通 benchmark 默认关闭 NVTX，现用 warmup=20、iters=200，harness 统计窗口也为 200。
@@ -158,7 +191,8 @@ cmake --build build-quant-profile --target quant_benchmark -j2
 设置 WSL 的 CUPTI 时间戳转换，已生成包含 kernel / memcpy 的 `.nsys-rep` 与 SQLite。
 五轮基准、分区统计、ORT 节点分配、GPU 硬化 before/after 和边界统一见
 [性能瓶颈报告](../../docs/benchmarks/quant_profiling_report.md)。本次未重跑 mAP。
-一次额外基准尝试在退出时发生堆损坏，已排除并保留日志，尚未定位/修复。
+当日一次额外基准尝试在退出时发生堆损坏，已排除并保留日志；后续定位与修复见
+[生命周期报告](../../docs/benchmarks/quant_runtime_lifetime.md)，历史性能表保持原日期。
 
 在 GPU 可访问且按 [NVIDIA 官方指南](https://docs.nvidia.com/nsight-systems/UserGuide/index.html#installing-the-cli-on-your-target)
 准备好 `nsys` 的会话中，先检查工具版本和 GPU，再执行采集。原始数据目录应使用新目录，
