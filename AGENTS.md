@@ -21,8 +21,9 @@
 
 ## Architecture（目录结构）
 
-- `01_Linux_CPP_Foundations/` — C++20/23 系统编程（当前活跃，W1-W8 已完成，W9 进行中）
-- `02_Inference_Analysis/`、`03_Hardware_Acceleration/`、`04_System_Integration/` — 规划中
+- `01_Linux_CPP_Foundations/` — C++20/23 系统编程（W1–W13 存档，已完成）
+- `02_Inference_Analysis/` — 推理部署（W14–W16 存档 + 前向模块 `quantization/`、`tensorrt/`）
+- `03_Hardware_Acceleration/`、`04_System_Integration/` — 规划中
 
 **模块命名**：各模块有独立 `CMakeLists.txt`，从根目录 `add_subdirectory` 引入，使用独立命名空间。
 - **W1–W16（存档）**：周次命名 `wXX_topic/`（如 `w9_opencv_optimized/`），命名空间 `w1`…`w16`，**冻结不改**。
