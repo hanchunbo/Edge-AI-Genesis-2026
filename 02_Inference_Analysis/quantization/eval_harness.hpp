@@ -39,6 +39,8 @@ struct ModelResult {
   std::string ep_fallback_reason;
 
   /// 最后一次迭代的检测概况，仅用于 sanity check（确认模型没输出 0 框）。
+  /// @note 一致性测试只覆盖 CPU EP 一格；跑分表有 模型×EP×模式 共 8 格，
+  /// 靠这两个字段逐格排除「fps 好看其实是模型在空转」
   /// @warning 不是精度指标——INT8 精度看 mAP（tools/eval_map_coco128.py）与
   /// Quant_Int8ConsistencyTest 的框级比对
   std::size_t detection_count = 0;
