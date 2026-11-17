@@ -109,7 +109,7 @@ CV 与 LLM 都是这个底座上的应用层，**不是二选一**，连接两�
 
 #### 交付物 `trt` 🟡 TensorRT C++ Engine（FP16 + INT8 Calibrator + GPU 端到端）
 - **范围**：直接调 TRT C++ API（`IBuilder→INetworkDefinition→ICudaEngine→IExecutionContext`）建 engine；实现 `IInt8EntropyCalibrator2`；
-  **GPU 端预处理/后处理**（letterbox + decode 上 GPU 或融图，消除 PCIe 往返——W16 实测前后处理占端到端 ~45%）
+  **GPU 端预处理/后处理**（letterbox + decode 上 GPU 或融图，消除 PCIe 往返——W16 CUDA EP 实测前后处理占端到端 ~22%；换 TRT FP16（纯 infer 2.93ms）后推算升至 ~44%，未实测；2026-11-16 勘误，原误写「W16 实测 ~45%」）
 - **产出**：
   - **四路对比表**：CPU EP / CUDA EP / TRT FP16 / TRT INT8（体积 / 延迟 / mAP）
   - TRT 优化报告 + GPU 端到端流水线延迟拆解
