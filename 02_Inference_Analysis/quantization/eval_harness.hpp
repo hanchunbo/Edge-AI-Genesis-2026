@@ -57,6 +57,7 @@ class EvalHarness {
 
   /// 逐个模型跑 warmup + iters 次计时迭代。
   /// @return 与 cases 等长且同序的结果
+  /// @throws std::runtime_error image_path 读取失败
   [[nodiscard]] std::vector<ModelResult> Run(
       const std::vector<ModelCase>& cases, const std::string& image_path) const;
 

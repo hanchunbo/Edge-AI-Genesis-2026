@@ -4,6 +4,7 @@
 
 #include "eval_harness.hpp"
 
+#include <opencv2/imgcodecs.hpp>
 #include <stdexcept>
 
 namespace quant {
@@ -34,6 +35,14 @@ EvalHarness::EvalHarness(EvalConfig config) : config_(config) {
 
 std::vector<ModelResult> EvalHarness::Run(const std::vector<ModelCase>& cases,
                                           const std::string& image_path) const {
+  // 只解码一次：分段计时在 DetectWithProfile(Mat) 内部才开始、本就不含 imread，
+  // 逐轮重读主要是白耗解码时间。
+  // 口径影响见 notes.md §Profiling 入口与采集边界。
+  const cv::Mat bgr = cv::imread(image_path, cv::IMREAD_COLOR);
+  if (bgr.empty()) {
+    throw std::runtime_error("EvalHarness: 图片读取失败: " + image_path);
+  }
+
   std::vector<ModelResult> results;
   results.reserve(cases.size());
 
@@ -44,7 +53,7 @@ std::vector<ModelResult> EvalHarness::Run(const std::vector<ModelCase>& cases,
     // static_cast<void>：DetectWithProfile 标了 [[nodiscard]]，这里只要副作用、
     // 不要返回值，显式转 void 表明「有意丢弃」，否则 -Wunused-result 会报警告。
     for (int i = 0; i < config_.warmup; ++i) {
-      static_cast<void>(detector.DetectWithProfile(image_path));
+      static_cast<void>(detector.DetectWithProfile(bgr));
     }
 
     RollingStats rolling(static_cast<std::size_t>(config_.stats_window));
@@ -54,7 +63,7 @@ std::vector<ModelResult> EvalHarness::Run(const std::vector<ModelCase>& cases,
     // 「全部坍缩成 0 框」这种全有或全无的故障，不受该抖动影响
     w16::DetectionResult last;
     for (int i = 0; i < config_.iters; ++i) {
-      last = detector.DetectWithProfile(image_path);
+      last = detector.DetectWithProfile(bgr);
       rolling.Add(ToStageLatency(last.timing));
     }
 
