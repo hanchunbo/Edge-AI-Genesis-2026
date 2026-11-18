@@ -14,7 +14,7 @@
 
 ## Build（构建速查）
 
-编译 / 测试 / 格式检查命令见 `README.md` Quick Start 节（含离线/ASAN/TSAN 场景）；
+最小构建见 `README.md` 快速开始；完整依赖、推理后端与离线/覆盖率/ASAN/TSAN 场景见 `docs/setup.md`；
 工具链约束见 C++ Standards 节（必须 Ninja）与 Commit Checklist 节（必须 clang-format-21）。
 
 > 查目标名：`cmake --build build --target help 2>/dev/null | grep "w[0-9]"`
@@ -142,7 +142,7 @@
 
 2. **文档进度同步**：确认 `README.md`、`docs/Roadmap.md`、`docs/tech-debt.md`、模块 `notes.md` 进度与代码一致，**不符则先更新再 commit**。
 
-3. **环境依赖同步**：若本次开发安装了新工具（编译器、调试器、覆盖率工具等），必须同步更新 `README.md` 的「前提条件」安装命令。目的：VPS 上积累的隐式环境依赖若不记录，换机器（如 WSL、CI）时会批量复现已解决的问题。
+3. **环境依赖同步**：若本次开发安装了新工具（编译器、调试器、覆盖率工具等），必须同步更新 `docs/setup.md` 的安装命令。目的：VPS 上积累的隐式环境依赖若不记录，换机器（如 WSL、CI）时会批量复现已解决的问题。
 
 4. **commit author**：格式为 `hanchunbo <hanchunbo@users.noreply.github.com>`
 

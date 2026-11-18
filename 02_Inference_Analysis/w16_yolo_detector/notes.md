@@ -144,7 +144,7 @@ ctest --test-dir build -R "W16_" --output-on-failure   # 3 个全绿
 ## 编译运行命令
 
 ```bash
-# 准备模型与对拍基准（一次性，需 venv：见 README 前提条件）
+# 准备模型与对拍基准（一次性，需 venv：见 docs/setup.md）
 . .venv/bin/activate
 cd 02_Inference_Analysis/w16_yolo_detector
 python tools/export_yolov8n.py   # 导出 onnx + 标签 + 测试图

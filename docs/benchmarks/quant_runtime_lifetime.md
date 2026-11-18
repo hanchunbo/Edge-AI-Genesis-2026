@@ -118,8 +118,8 @@ print("全部上下文:", len(errors), "Env 退出 UAF:", len(target))
 CUDA、缺模型而跳过，或缺符号而匹配不到，当作修复通过。先确认旧逻辑的阳性对照。
 
 GDB/Valgrind 与匹配 glibc 调试符号的安装方法见
-[README](../../README.md#可选退出内存错误诊断工具)。ASAN 的 CUDA 兼容设置和覆盖边界见
-[调试章节](../../README.md#调试专用asan--tsan)。
+[环境指南](../setup.md#可选退出内存错误诊断工具)。ASAN 的 CUDA 兼容设置和覆盖边界见
+[调试章节](../setup.md#调试专用asan--tsan)。
 
 ## 证据位置
 

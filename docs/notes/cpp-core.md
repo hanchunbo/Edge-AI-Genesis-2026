@@ -35,7 +35,7 @@
 - 经典叠用：「② 静态成员函数提供不依赖对象的全局访问入口 + ③ 函数内静态变量保证唯一/懒加载/线程安全」= 单例。
 
 > 实战出处：`02_Inference_Analysis/w14_ort_basics/inference_engine.cpp`（`GlobalEnv()` 同时用 ②+③）
-> 关联：[Ort::Env 全局唯一](inference.md#ortenv-全局唯一函数内-static-单例)
+> 关联：[Ort::Env 全局唯一](inference.md#ortenv-共享与退出顺序)
 
 ---
 

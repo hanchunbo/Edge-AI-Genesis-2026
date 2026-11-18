@@ -92,7 +92,7 @@ FP32/INT8 第一版报告见
 默认校准最多 32 图，优先 `QUANT_CALIB_DIR` 指定的 coco128 目录，缺目录时回退单图工具链验证。
 `QUANT_CALIB_LIMIT=0` 表示显式不限量；32 图限制不能替代进程内存约束。
 `QUANT_MODELS_DIR` 默认在各 build 的模块目录下，GPU 构建可将它指向现有 CPU build 的产物目录，
-无需重复校准。完整命令见 [README](../../README.md#quant-额外依赖ort-static-int8-ptq第二阶段量化)。
+无需重复校准。完整命令见 [环境指南](../../docs/setup.md#quant-额外依赖ort-static-int8-ptq第二阶段量化)。
 
 2026-09-10 修复了测试辅助函数 skip 后调用者仍继续加载模型的问题：全部缺模型/图时，
 9 个依赖产物的用例正确跳过；仅缺 INT8 时，2 个一致性用例正确跳过。有模型时原 32 个
