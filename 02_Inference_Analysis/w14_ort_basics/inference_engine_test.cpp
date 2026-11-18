@@ -29,7 +29,7 @@ class InferenceEngineModelTest : public ::testing::Test {
   void SetUp() override {
     if (!std::filesystem::exists(kModelPath)) {
       GTEST_SKIP() << "模型未下载，跳过：" << kModelPath
-                   << "（下载方式见 README.md「W14+ 额外依赖」节）";
+                   << "（下载方式见 docs/setup.md「ONNX Runtime」节）";
     }
   }
 };

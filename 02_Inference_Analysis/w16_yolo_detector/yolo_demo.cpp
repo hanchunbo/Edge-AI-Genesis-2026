@@ -32,7 +32,11 @@ int main(int argc, char** argv) {
 
   std::vector<std::string> labels = LoadLabels(labels_path);
 
-  w16::YOLODetector det(model_path);
+  // 注意：Env 由入口持有、先于检测器声明（后析构），不走 static GlobalEnv()；
+  // 否则退出时 static Env 晚于 CUDA provider 注册表析构，触发释放后访问
+  // （见 docs/benchmarks/quant_runtime_lifetime.md）。
+  Ort::Env env(ORT_LOGGING_LEVEL_WARNING, "EdgeAI-W16");
+  w16::YOLODetector det(model_path, w16::DetectorConfig{.env = &env});
   cv::Mat bgr = cv::imread(image_path, cv::IMREAD_COLOR);
   if (bgr.empty()) {
     std::fprintf(stderr, "图片读取失败: %s\n", image_path.c_str());

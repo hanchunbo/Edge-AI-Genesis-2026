@@ -17,7 +17,7 @@ GPU kernel 数 325→843；H2D 虽然多 45 次，但只增加 17,728 字节/次
 - 代码基线：`50173287ab8901b62fad6ea3d999a7b449d28d6b`；GCC 15、Ninja、Release、ORT GPU 1.26.0。
 - GPU：RTX 3060 Laptop GPU，6144 MiB；Windows 驱动 546.30；CUDA toolkit 12.3.107；cuDNN 9.23.1.3。
 - CPU：i5-12500H，WSL 可见 16 个逻辑处理器；Ubuntu 24.04.4，WSL2 kernel 6.6.87.2，内存约 7.8 GiB。
-- Nsight Systems 2025.1.3.140，NVTX 3.2.2；安装命令及包 SHA-256 见 [README](../../README.md#quant-可选nvtx-标记与-nsight-采集)。本轮未安装 perf / Nsight Compute。
+- Nsight Systems 2025.1.3.140，NVTX 3.2.2；安装命令及包 SHA-256 见 [环境指南](../setup.md#quant-可选nvtx-标记与-nsight-采集)。本轮未安装 perf / Nsight Compute。
 - 固定同一测试图，输入 `[1,3,640,640]`；每组预热 20 次，测量 200 次；ORT intra/inter threads=0（默认），图优化 `ORT_ENABLE_ALL`。
 - 性能数据来自 **5 个正常退出、无 profiler 的独立进程**；每轮沿用相同固定顺序。表中 P50/P99 是“各轮分位数的中位数”，不是将 1000 帧混合后的分位数；范围表示 5 轮 P50 的最小/最大值，不是置信区间。
 - NVTX 只覆盖预热后的纯推理循环，每个区间 200 次。Nsight 采集 `cuda,nvtx,osrt`，关闭 CPU 采样和上下文切换；trace 用于分析事件及等待，不用于替代无 profiler 的延迟。
@@ -182,7 +182,7 @@ INT8 增加了 kernel launch 与小块 pageable 拷贝的主机调用负担。`c
 3. **暂不做 allocator / reserve 扩展。** post 约 0.8 ms，尚无分配次数与函数采样证据；整体硬化表不足以支持单项归因。
 
 独立稳定性事项：当日一次退出堆损坏触发后续排查。2026-09-11 的 quant 入口 UAF 修复见
-[生命周期报告](quant_runtime_lifetime.md)，旧默认入口迁移仍见 [技术债](../tech-debt.md)。
+[生命周期报告](quant_runtime_lifetime.md)，W14/W16 演示入口已于 2026-11-18 迁移，剩余单元测试见 [技术债](../tech-debt.md)。
 当前不知道是项目代码还是依赖库造成，不能依据测试通过将其关闭。
 
 ## 验证、原始数据与复现

@@ -1,7 +1,7 @@
 # Quantization — YOLO 部署硬化与 INT8 评估 Harness
 
 > Phase 0 交付物 `quant`：INT8 PTQ、部署硬化、评估 harness 与 coco128 精度评估已完成。
-> 2026-09-10 补齐五轮基准、Nsight 设备 trace 与 ORT 分配证据；2026-09-11 已修复 quant 入口退出 UAF，旧默认入口迁移另列遗留。
+> 2026-09-10 补齐五轮基准、Nsight 设备 trace 与 ORT 分配证据；2026-09-11 已修复 quant 入口退出 UAF；2026-11-18 W14/W16 演示入口同样迁移，仅单元测试另列遗留。
 
 通用概念见主题库：
 
@@ -92,7 +92,7 @@ FP32/INT8 第一版报告见
 默认校准最多 32 图，优先 `QUANT_CALIB_DIR` 指定的 coco128 目录，缺目录时回退单图工具链验证。
 `QUANT_CALIB_LIMIT=0` 表示显式不限量；32 图限制不能替代进程内存约束。
 `QUANT_MODELS_DIR` 默认在各 build 的模块目录下，GPU 构建可将它指向现有 CPU build 的产物目录，
-无需重复校准。完整命令见 [README](../../README.md#quant-额外依赖ort-static-int8-ptq第二阶段量化)。
+无需重复校准。完整命令见 [环境指南](../../docs/setup.md#quant-额外依赖ort-static-int8-ptq第二阶段量化)。
 
 2026-09-10 修复了测试辅助函数 skip 后调用者仍继续加载模型的问题：全部缺模型/图时，
 9 个依赖产物的用例正确跳过；仅缺 INT8 时，2 个一致性用例正确跳过。有模型时原 32 个
@@ -221,7 +221,7 @@ nsys stats --report cuda_gpu_trace --format csv \
 验收必须按 `fp32_CUDA_Run`、`yolov8n.int8.minmax_CUDA_Run` 及各自 IOBinding 区间归因。
 记录计算、H2D/D2H/D2D 拷贝与同步；不能把全进程汇总分配给单一模型，也不能将并行事件时长
 直接相加当作墙钟占比。性能对比使用无 profiler 的 5 轮原始输出，trace 只作归因，随后再补
-GPU default/hardened 表。完整检查步骤见 [执行计划](../../docs/superpowers/plans/2026-09-10-quant-closeout.md)。
+GPU default/hardened 表。
 
 ## CI 独立后续项
 

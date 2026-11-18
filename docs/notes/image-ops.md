@@ -12,7 +12,7 @@
 - [HWC ↔ CHW 内存布局](#hwc--chw-内存布局)
 - [silent 预处理 bug（错了不报错只偏结果）](#silent-预处理-bug错了不报错只偏结果)
 - [Letterbox + 坐标反算（检测预处理范式）](#letterbox--坐标反算检测预处理范式)
-- [图像坐标系（y 轴朝下）+ cxcywh↔xyxy + clamp 夹边界](#图像坐标系y-轴朝下--cxcywhxyxy--clamp-夹边界)
+- [图像坐标系（y 轴朝下）+ cxcywh↔xyxy + clamp 夹边界](#图像坐标系y-轴朝下-cxcywhxyxy--clamp-夹边界)
 - [cv::imwrite 相对路径落在 CWD（找不到输出文件）](#cvimwrite-相对路径落在-cwd找不到输出文件)
 
 ---

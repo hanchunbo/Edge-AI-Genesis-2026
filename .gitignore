@@ -77,3 +77,15 @@ w16_output.jpg
 # quant: ultralytics model.val 评估产物（可由 tools/eval_map_coco128.py 重新生成，不入库）
 runs/
 02_Inference_Analysis/quantization/tools/__pycache__/
+
+# 本地私有：AI 工具配置与学习过程记录（仅本机使用，不入公开仓）
+/CLAUDE.md
+/AGENTS.md
+/.agent/
+/.claude/
+/.codex/
+/.claudeignore
+/docs/superpowers/
+/docs/devlog.md
+/docs/self_test.md
+/docs/archive/

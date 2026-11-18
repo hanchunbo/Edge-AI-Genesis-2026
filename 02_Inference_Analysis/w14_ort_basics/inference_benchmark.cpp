@@ -73,7 +73,13 @@ int main(int argc, char** argv) {
   }
 
   try {
-    w14::InferenceEngine engine(model_path, ep);
+    // 注意：Env 由入口持有、先于 engine 声明（后析构），不走 static
+    // GlobalEnv()； 否则退出时 static Env 晚于 CUDA provider
+    // 注册表析构，触发释放后访问
+    // （见 docs/benchmarks/quant_runtime_lifetime.md）。
+    Ort::Env env(ORT_LOGGING_LEVEL_WARNING, "EdgeAI-W14");
+    w14::InferenceEngine engine(model_path,
+                                w14::SessionConfig{.ep = ep, .env = &env});
     const char* ep_name = engine.ActiveEp() == w14::Ep::kCuda ? "CUDA" : "CPU";
     std::cout << std::format("[W14.5] 实际 EP: {}\n", ep_name);
     if (!engine.EpFallbackReason().empty()) {

@@ -1,6 +1,5 @@
 # trt — TensorRT C++ Engine（M1：FP16 跑通）
 
-上游 spec：`docs/superpowers/specs/2026-07-06-trt-design.md`
 四路对比报告：`docs/benchmarks/trt_engine_report.md`
 
 ## 数据流（M1/M2 形态：前后处理在 CPU，测纯 infer）

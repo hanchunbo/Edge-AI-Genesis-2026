@@ -4,7 +4,7 @@
 # W14 ONNX Runtime C++ 基础闭环
 # =============================================================================
 # 接入 ONNX Runtime 1.26 预编译包（third_party/onnxruntime/...）。
-# 当前为 CPU EP 单环境（B 路径），CUDA EP 推到 W14 末或 W15 起手补。
+# 默认接 CPU 包；CUDA EP 改接 GPU 包即可（W14.5 加入，见 docs/setup.md）。
 # =============================================================================
 
 find_package(Threads REQUIRED)
@@ -16,7 +16,7 @@ find_package(Threads REQUIRED)
 # 可通过 -DONNXRUNTIME_ROOT=<path> 覆盖（例如指向系统安装、其他版本）。
 #
 # 不入库说明：包体 ~22MB，已在 .gitignore 排除 third_party/onnxruntime/。
-# 下载方式：见 README.md「前提条件」节。
+# 下载方式：见 docs/setup.md「ONNX Runtime」节。
 if(NOT DEFINED ONNXRUNTIME_ROOT)
   set(ONNXRUNTIME_ROOT
       "${CMAKE_SOURCE_DIR}/third_party/onnxruntime/onnxruntime-linux-x64-1.26.0"
@@ -30,7 +30,7 @@ if(NOT EXISTS "${_W14_ORT_INCLUDE}/onnxruntime_cxx_api.h"
     OR NOT EXISTS "${_W14_ORT_LIB}")
   message(WARNING
     "[W14] 未找到 ONNX Runtime 预编译包：${ONNXRUNTIME_ROOT}\n"
-    "      跳过 W14 目标构建。下载方式见 README.md「前提条件」节。")
+    "      跳过 W14 目标构建。下载方式见 docs/setup.md「ONNX Runtime」节。")
   return()
 endif()
 
@@ -93,7 +93,7 @@ set_target_properties(w14_inference_benchmark PROPERTIES
 # -----------------------------------------------------------------------------
 # 单元测试：w14_inference_engine_test
 # -----------------------------------------------------------------------------
-# 步骤 5 实装；BUILD_TESTING 关闭或测试源文件仍为骨架时跳过。
+# BUILD_TESTING 关闭时跳过。
 if(BUILD_TESTING)
   add_executable(w14_inference_engine_test
     inference_engine_test.cpp

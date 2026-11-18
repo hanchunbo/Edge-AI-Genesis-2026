@@ -590,7 +590,7 @@ genhtml filtered.info --output-directory coverage_report
 
 ## Q1 自测复盘补充题（Q27-Q32）
 
-> **来源**：2026-05-18 Q1 自测会话暴露 4 个红色短板（Q27-Q30）；2026-05-20 Session 2 续讲 W5 与 `std::expected` 深化（Q31-Q32）。详见 [self_test.md](self_test.md) 与 [devlog.md](devlog.md)，作为对 Q1-Q26 的补充。
+> **来源**：2026-05-18 Q1 自测会话暴露 4 个红色短板（Q27-Q30）；2026-05-20 Session 2 续讲 W5 与 `std::expected` 深化（Q31-Q32）。作为对 Q1-Q26 的补充。
 
 ---
 
@@ -1303,7 +1303,7 @@ W9 实测 1080P，V3 mdspan：
 
 **考察点**：图像坐标系与数学坐标系的差异——CV 里反复出现的坑。
 
-**答题角度**（概念正文见主题库 [image-ops.md — 图像坐标系（y 轴朝下）](notes/image-ops.md#图像坐标系y-轴朝下--cxcywhxyxy--clamp-夹边界)）：
+**答题角度**（概念正文见主题库 [image-ops.md — 图像坐标系（y 轴朝下）](notes/image-ops.md#图像坐标系y-轴朝下-cxcywhxyxy--clamp-夹边界)）：
 图像坐标系原点在**左上角**、**y 向下增大**（与数学课 y 向上相反，因为图片从上到下逐行存）。所以「上边缘」y **更小** → 左上角 `y = cy - h/2`（减法）。x 的左右与直觉一致（左减右加），唯独 y 的上下翻转。规律记成「左上角 = 两个都取小（都减），右下角 = 两个都取大（都加）」。
 
 **加分回答**：
@@ -1479,7 +1479,7 @@ ONNX 本身不会"做"任何事——它是静态数据（计算图结构 + 权�
 
 **考察点**：Env 初始化顺序依赖 + 宽泛 `catch` 块掩盖根因的工程教训。
 
-**答题角度**（概念正文见主题库 [inference.md — Ort::Env 全局唯一](notes/inference.md#ortenv-全局唯一函数内-static-单例)）：
+**答题角度**（概念正文见主题库 [inference.md — Ort::Env 全局唯一](notes/inference.md#ortenv-共享与退出顺序)）：
 `Ort::Env` 构造时会注册进程级默认日志器，而 `AppendExecutionProvider_CUDA` 内部要用这个日志器记录 provider 注册过程。若 Env 还没建就先 append，ORT 内部调用日志接口时找不到已注册的日志器，抛 `"DefaultLogger but none registered"`——跟 CUDA 驱动/硬件是否可用完全无关，纯粹是初始化顺序 bug。
 
 **加分回答**：
