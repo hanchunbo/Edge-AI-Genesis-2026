@@ -6,7 +6,7 @@
 
 ## 1. 背景与目标
 
-quant 已收口：CPU 纯推理 INT8 较 FP32 快约 24%，但同一 QDQ INT8 模型在 CUDA EP 上因 QDQ Memcpy 反而慢约 2×，INT8 的 GPU 加速移交本交付物。W16 实测前后处理占端到端约 45%，是 engine 之外最大的收益来源。
+quant 已收口：CPU 纯推理 INT8 较 FP32 快约 24%，但同一 QDQ INT8 模型在 CUDA EP 上因 QDQ Memcpy 反而慢约 2×，INT8 的 GPU 加速移交本交付物。W16 实测前后处理占端到端约 22%（CUDA EP：pre 1.75 + post 0.59 = 2.34ms / 10.59ms）；engine 换成 TRT FP16（纯 infer 2.93ms）后，同样的 CPU 前后处理推算将占约 44%（2.34 / (2.34 + 2.93)，未实测；W16 中端到端 infer 高于纯 infer（8.26 vs 5.5ms），实际占比可能更低），是 engine 之外最大的收益来源。（2026-11-16 勘误：原写「W16 实测约 45%」，与 W16 报告的 ~22% 不符。）
 
 目标（对齐 Roadmap 成功指标）：
 

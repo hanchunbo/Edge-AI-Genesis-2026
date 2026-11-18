@@ -3,11 +3,27 @@
 ### —— 边缘端 AI 推理的 C++20/23 高性能工程实践
 
 [![C++](https://img.shields.io/badge/C++-20/23-blue.svg?logo=c%2B%2B)](https://isocpp.org/)
-[![TensorRT](https://img.shields.io/badge/TensorRT-8.x-green.svg?logo=nvidia)](https://developer.nvidia.com/tensorrt)
+[![TensorRT](https://img.shields.io/badge/TensorRT-10.16-green.svg?logo=nvidia)](https://developer.nvidia.com/tensorrt)
 [![ONNX](https://img.shields.io/badge/ONNX-Runtime-purple.svg)](https://onnxruntime.ai/)
 [![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 > **项目定位**：一套面向边缘端 AI 推理的 **C++20/23** 高性能工程实践。围绕现代 C++ 工程能力与系统级性能优化，逐周攻克端侧推理的性能瓶颈，沉淀可复现、可演示的工程化作品集。
+
+---
+
+## 作品主线：YOLOv8n C++ 推理部署
+
+> 从推理引擎到 TensorRT 的一条端到端 C++ 部署链路，每一步都有对拍或基准数据。
+> 实测机器：i5-12500H + RTX 3060 Laptop（WSL2），ONNX Runtime 1.26、CUDA 12.3、TensorRT 10.16。
+
+| 步骤 | 模块 | 做了什么 | 关键结果 |
+|------|------|----------|----------|
+| ① 推理引擎 | [`w14_ort_basics/`](02_Inference_Analysis/w14_ort_basics/) | ORT C++ API 的 RAII 封装：`std::span` 零拷贝输入、CPU / CUDA EP 切换与显式回退、IOBinding | 后续检测、量化、TRT 对拍共用的引擎层 |
+| ② YOLOv8n 检测 | [`w16_yolo_detector/`](02_Inference_Analysis/w16_yolo_detector/) | Letterbox（复用 [W10 手写算子](01_Linux_CPP_Foundations/w10_resize/)）+ 输出头解码 + 手写逐类 NMS + 坐标反算；NMS / 解码拆成不依赖 ORT 的纯 C++ 库单独测试 | 逐框 score 与 ultralytics 对齐到 **<0.001**；纯推理 CPU 44ms → CUDA 5.9ms（约 7×），端到端 **94 FPS**（[基准](docs/benchmarks/w16_yolo_bench.md)） |
+| ③ INT8 量化 + 部署硬化 | [`quantization/`](02_Inference_Analysis/quantization/) | ORT 静态 PTQ、coco128 mAP 评估 harness、分段 P50/P99 埋点、NaN/Inf 与 `max_det` 鲁棒性；Nsight + ORT 节点分配做性能归因；Valgrind 定位并修复入口退出期 UAF | CPU 纯推理快约 **24%**，mAP50-95 0.4454 → 0.4285（−0.017）；CUDA EP 上 INT8 反而慢约 2×，Nsight 显示 kernel 数 325 → 843，GPU INT8 移交 TRT（[量化报告](docs/benchmarks/quant_int8_report.md) · [瓶颈报告](docs/benchmarks/quant_profiling_report.md)） |
+| ④ TensorRT | [`tensorrt/`](02_Inference_Analysis/tensorrt/) | 直接调 TRT C++ API 建 FP16 engine（缓存戳 + 动态维度 profile）、RAII GPU 缓冲、复用 ② 的前后处理做一致性对拍 | FP16 纯推理 **2.93ms**，比 CUDA EP FP32（5.64ms）快 48%（[报告](docs/benchmarks/trt_engine_report.md)） |
+
+> 尚未完成：TRT INT8（Calibrator + mAP 闭环）与 GPU 端前后处理。数据口径与测量方法见各报告。
 
 ---
 
@@ -28,28 +44,28 @@
 
 ## 进度与路线图
 
-> 单一执行主线见 [docs/Roadmap.md](./docs/Roadmap.md)（W1→W21 全程）。下表为镜像总览。
-> **2026-06-27 重构**：W16 后作废季度结构，改走「求职最短路径主线」——CV 收口 2 周 → LLM 主攻做深，边做边投。
+> 单一执行主线见 [docs/Roadmap.md](./docs/Roadmap.md)。下表为镜像总览。
+> **2026-06-27 重构**：W16 后作废季度结构，改走 Phase + 交付物主线——CV 收口 → LLM 主攻做深。
 
 ### 已完成（W1–W16）
 
 | 阶段 | 周次 | 核心主题 | 关键技术 | 状态 |
 |------|------|----------|----------|------|
 | 基石（原 Q1） | W1–W13 | 工程基石与高性能体系 | jthread/stop_token、mmap、`std::span`/`mdspan`、CMake、OpenCV 底层算子 | ✅ |
-| 推理（原 Q2 前段） | W14–W16 | ONNX Runtime 推理闭环 | ORT C++ API、前后处理、YOLOv8n 检测、CUDA EP（单帧 ~7.5×） | ✅ |
+| 推理（原 Q2 前段） | W14–W16 | ONNX Runtime 推理闭环 | ORT C++ API、前后处理、YOLOv8n 检测、CUDA EP（YOLOv8n 单帧纯推理约 7×） | ✅ |
 
 逐周一行一周明细见 [docs/Roadmap.md「已完成里程碑」](./docs/Roadmap.md)；阶段手册见 [docs/archive/Q1.md](./docs/archive/Q1.md)、[docs/archive/Q2.md](./docs/archive/Q2.md)。
 
-### 主线（W17 起 · 求职最短路径 · Phase + 交付物里程碑，不再按周切分）
+### 主线（W17 起 · Phase + 交付物里程碑，不再按周切分）
 
 | 阶段 | 交付物 | 核心主题 | 关键技术 | 状态 |
 |------|--------|----------|----------|------|
-| **Phase 0** | `quant` / `trt` | CV 收口（变现 + LLM 地基） | INT8 量化、Profiling、**部署硬化**、TensorRT C++（FP16 + INT8 Calibrator + GPU 端到端） | `quant` 核心与 GPU profiling 完成，入口退出 UAF 已修复 · `trt` M1 完成 |
+| **Phase 0** | `quant` / `trt` | CV 收口（完整部署链路 + LLM 地基） | INT8 量化、Profiling、**部署硬化**、TensorRT C++（FP16 + INT8 Calibrator + GPU 端到端） | `quant` 核心与 GPU profiling 完成，入口退出 UAF 已修复 · `trt` M1 完成 |
 | **Phase 1** | `llm` | LLM 端侧基础（主攻起步） | llama.cpp、KV Cache、GGUF、Transformer 推理 | ⬜ |
 | **Phase 2** | `vllm` / `deploy` | LLM 服务化 + 工程交付 | **vLLM 部署**、OpenAI 兼容 API、PagedAttention、SSE 流式、Docker 容器化 | ⬜ |
-| Phase 3 | 弹性 | 弹性深化池（按面试反馈补） | 昇腾 CANN/MindIE、TensorRT-LLM、SGLang/TGI、ARM/RKNN、CUDA 算子 | ⬜ |
+| Phase 3 | 弹性 | 弹性深化池（按实际需求补） | 昇腾 CANN/MindIE、TensorRT-LLM、SGLang/TGI、ARM/RKNN、CUDA 算子 | ⬜ |
 
-完整执行手册（硬条件反推、投递里程碑阶梯、砍掉清单）见 [docs/Roadmap.md](./docs/Roadmap.md)。
+完整执行手册（交付物→硬条件、迭代节奏、砍掉清单）见 [docs/Roadmap.md](./docs/Roadmap.md)。
 
 ---
 
@@ -62,39 +78,38 @@
 
 ---
 
-## 动态时间分配框架
-
-> 适用于全年 Q2-Q4 执行阶段，所有季度文档均内置高价值任务地图。
-
-**标签体系**：🔴 **核心**（必须掌握）· 🟡 **加分**（拓展深度）· 🟢 **弹性**（视时间决定深度）
-
-| 场景 | 触发条件 | 行动规则 |
-|------|---------|---------|
-| 当周拖延 | 进度 < 80% | 从下一个 🟢 周借时间，不往前压 🔴 |
-| 关键节点未达标 | W16 未出 Demo / W18 未出报告 | 砍最近的 🟡 周，保 🔴 |
-| ARM 硬件不可用 | 无树莓派/Android | W31-W32 降为 5h 调研，节省时间给 W27-W28 |
-
-**核心原则**：🔴 的时间只能加，不能减；🟢 的时间是全局调度的"水库"。
-
----
-
 ## 项目结构
 
 ```
 Edge-AI-Genesis-2026/
-├── 01_Linux_CPP_Foundations/    # Q1 实战代码库 (C++20/23)
+├── 01_Linux_CPP_Foundations/    # C++20/23 系统编程基石（W1–W13）
 │   ├── w1_memory_safety/        # RAII + Concepts + std::expected
 │   ├── w2_move_semantics/       # 移动语义 + std::span
 │   ├── w3_filesystem/           # std::format + string_view
 │   ├── w4_threading/            # counting_semaphore
 │   ├── w5_thread_pool/          # jthread + stop_token + alignas(64)
 │   ├── w6_mmap_loader/          # mmap + std::span + std::expected
-│   └── w7_cmake_engineering/    # CMake lib/app/tests 三层结构 + C++20 模块
-├── 02_Inference_Analysis/       # Q2 模型分析与性能报表
-├── 03_Hardware_Acceleration/    # Q3 核心加速框架源码
-├── 04_System_Integration/       # Q4 完整系统集成方案
-└── docs/                        # 详细执行手册与基准测试
+│   ├── w7_cmake_engineering/    # CMake lib/app/tests 三层结构 + C++20 模块
+│   ├── w8_testing/              # GTest + lcov 覆盖率
+│   ├── w9_opencv_optimized/     # OpenCV 像素级操作 + std::mdspan
+│   ├── w10_resize/              # 手写 Resize / Letterbox 算子
+│   ├── w11_debugging/           # gdb / valgrind / perf / 火焰图
+│   └── w13_image_pipeline/      # 多线程图像预处理引擎（W12 为复盘周，无代码目录）
+├── 02_Inference_Analysis/       # 推理部署
+│   ├── w14_ort_basics/          # ORT 推理引擎（RAII + CPU/CUDA EP + IOBinding）
+│   ├── w15_classify_pipeline/   # MobileNetV2 分类端到端闭环
+│   ├── w16_yolo_detector/       # YOLOv8n 检测（解码 + NMS + 对拍）
+│   ├── quantization/            # INT8 PTQ + 部署硬化 + 性能归因（交付物 quant）
+│   └── tensorrt/                # TensorRT C++ FP16 engine（交付物 trt）
+├── docs/
+│   ├── Roadmap.md               # 唯一执行主线
+│   ├── benchmarks/              # 基准与量化 / TRT 报告
+│   ├── notes/                   # 主题知识库
+│   └── interview_faq.md         # 问答自测题库
+└── third_party/                 # GTest 源码包、mdspan；ORT / TRT 需另装（见下文）
 ```
+
+> **命名约定**：W1–W16 按周次命名，作为周志存档冻结；W17 起按主题命名（如 `quantization/`、`tensorrt/`），后续交付物同样按主题新建目录。
 
 ---
 
