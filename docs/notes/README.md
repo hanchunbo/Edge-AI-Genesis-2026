@@ -1,7 +1,6 @@
 # docs/notes —— 主题知识库（概念详解 / 速查）
 
 > **定位**：可复用概念按**主题**收纳，作为复习唯一正文。解决「知识点散落在周笔记、跨 week 找」的痛点。
-> 设计见 `docs/superpowers/specs/2026-06-15-notes-knowledge-base-design.md`（方案甲）。
 >
 > 三份跨周文档分工：
 > - `docs/cpp20_23_cheatsheet.md` = 语法速记（怎么写）

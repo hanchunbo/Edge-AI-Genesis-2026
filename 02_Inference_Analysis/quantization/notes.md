@@ -221,7 +221,7 @@ nsys stats --report cuda_gpu_trace --format csv \
 验收必须按 `fp32_CUDA_Run`、`yolov8n.int8.minmax_CUDA_Run` 及各自 IOBinding 区间归因。
 记录计算、H2D/D2H/D2D 拷贝与同步；不能把全进程汇总分配给单一模型，也不能将并行事件时长
 直接相加当作墙钟占比。性能对比使用无 profiler 的 5 轮原始输出，trace 只作归因，随后再补
-GPU default/hardened 表。完整检查步骤见 [执行计划](../../docs/superpowers/plans/2026-09-10-quant-closeout.md)。
+GPU default/hardened 表。
 
 ## CI 独立后续项
 
