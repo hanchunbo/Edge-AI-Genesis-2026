@@ -13,3 +13,7 @@
 
 现有 CI 仍用 GCC 13，未准备 ORT；仅扩展格式检查不等于建立推理回归。
 后续固定 GCC 15/Ninja/ORT 环境，并分别验证无产物 skip 与有产物真实断言。
+
+2026-11-18：`ubuntu-latest` 切到 26.04 后，系统 OpenCV 4.10 与 g++-13 链接失败
+（`__cxa_call_terminate@CXXABI_1.3.15`），build-and-test 暂时固定 `ubuntu-24.04`。
+升级到 GCC 15 时一并解除固定。
