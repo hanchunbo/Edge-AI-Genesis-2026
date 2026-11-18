@@ -16,7 +16,7 @@ endif()
 find_package(OpenCV REQUIRED COMPONENTS core imgproc imgcodecs)
 find_package(Threads REQUIRED)
 
-# 库目标：w15_classify_lib（后续任务逐步加入 postprocess.cpp / classifier.cpp）
+# 库目标：w15_classify_lib（预处理 + 后处理 + 分类器编排）
 add_library(w15_classify_lib STATIC
   preprocess.cpp
   postprocess.cpp
