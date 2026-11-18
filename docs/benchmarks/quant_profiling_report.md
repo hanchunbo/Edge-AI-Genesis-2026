@@ -182,7 +182,7 @@ INT8 增加了 kernel launch 与小块 pageable 拷贝的主机调用负担。`c
 3. **暂不做 allocator / reserve 扩展。** post 约 0.8 ms，尚无分配次数与函数采样证据；整体硬化表不足以支持单项归因。
 
 独立稳定性事项：当日一次退出堆损坏触发后续排查。2026-09-11 的 quant 入口 UAF 修复见
-[生命周期报告](quant_runtime_lifetime.md)，旧默认入口迁移仍见 [技术债](../tech-debt.md)。
+[生命周期报告](quant_runtime_lifetime.md)，W14/W16 演示入口已于 2026-11-18 迁移，剩余单元测试见 [技术债](../tech-debt.md)。
 当前不知道是项目代码还是依赖库造成，不能依据测试通过将其关闭。
 
 ## 验证、原始数据与复现

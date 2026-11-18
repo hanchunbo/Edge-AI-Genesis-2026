@@ -1,7 +1,7 @@
 # Quantization — YOLO 部署硬化与 INT8 评估 Harness
 
 > Phase 0 交付物 `quant`：INT8 PTQ、部署硬化、评估 harness 与 coco128 精度评估已完成。
-> 2026-09-10 补齐五轮基准、Nsight 设备 trace 与 ORT 分配证据；2026-09-11 已修复 quant 入口退出 UAF，旧默认入口迁移另列遗留。
+> 2026-09-10 补齐五轮基准、Nsight 设备 trace 与 ORT 分配证据；2026-09-11 已修复 quant 入口退出 UAF；2026-11-18 W14/W16 演示入口同样迁移，仅单元测试另列遗留。
 
 通用概念见主题库：
 

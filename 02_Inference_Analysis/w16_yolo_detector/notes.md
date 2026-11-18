@@ -231,3 +231,5 @@ W16 原始 benchmark 仍代表当时 demo 状态；部署硬化后的新评估�
 本次只迁移 quant 入口，历史 W14/W16 默认入口尚未迁移；旧 static Env 与 CUDA
 注册表的退出顺序仍有风险。概念见 [主题库](../../docs/notes/inference.md#ortenv-共享与退出顺序)，
 修复与验证见 [quant 报告](../../docs/benchmarks/quant_runtime_lifetime.md)。
+
+> 2026-11-18：本模块的 demo / benchmark 入口已改为入口持有 Env（Valgrind 目标 UAF 2→0，见 [报告「后续」节](../../docs/benchmarks/quant_runtime_lifetime.md#后续w14w16-入口迁移2026-11-18)）；单元测试仍走 `GlobalEnv()`，见 [技术债](../../docs/tech-debt.md)。

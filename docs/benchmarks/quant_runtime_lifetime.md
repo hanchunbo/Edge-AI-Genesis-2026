@@ -54,7 +54,7 @@ Linux CUDA provider 禁用实际 `dlclose` 也不能避开前面的 `Shutdown()`
   创建/销毁引擎与检测器，再初始化 CUDA 注册表，专门用于 Valgrind 退出回归。
 
 新配置默认 `nullptr`，保留旧调用方式。**未迁移的 W14/W16 历史入口仍可能走同一
-static Env 风险路径**；本次修复覆盖 quant 入口，不代表全仓库完成迁移。继续使用
+static Env 风险路径**；本次修复覆盖 quant 入口，不代表全仓库完成迁移（W14/W16 演示入口已于 2026-11-18 迁移，见文末「后续」节）。继续使用
 EvalHarness 的新调用方也应自行持有并传递 Env。
 
 ## 修复前后对照
@@ -147,3 +147,29 @@ GDB/Valgrind 与匹配 glibc 调试符号的安装方法见
   无 ASAN 报告。使用 `detect_leaks=0:halt_on_error=1:abort_on_error=1:protect_shadow_gap=0`，
   不覆盖泄漏检查或未插桩的第三方库内部访问；目标 UAF 的主要证据仍是 Valgrind。
 - 未重新量化、重跑 mAP 或重做 Nsight 性能采集；独立代码审查未发现阻塞问题。
+
+## 后续：W14/W16 入口迁移（2026-11-18）
+
+`w14_ort_basics_demo`、`w14_inference_benchmark`、`w16_yolo_demo`、`w16_yolo_benchmark`
+改为与 quant 相同的做法：main 持有局部 `Ort::Env`，所有 engine / 检测器（含 benchmark
+里纯 CPU 的 engine）都通过 `SessionConfig.env` / `DetectorConfig.env` 借用。ORT 内部的
+Env 是进程级引用计数对象，只要进程里有一处仍调用 `GlobalEnv()`，static 引用就会把它拖到
+退出阶段，所以同一入口内必须全部迁移。
+
+同一 RelWithDebInfo GPU 构建（ORT GPU 1.26.0），迁移前（`e58cda3`）与迁移后二进制各跑一次
+Valgrind（参数同上，执行真实 CUDA 推理，每次约 1 分钟）：
+
+| 入口 | 迁移前：全部上下文 / Env 退出 UAF | 迁移后 |
+|---|---:|---:|
+| `w14_ort_basics_demo --cuda`（MobileNetV2） | 26 / **2** | 24 / **0** |
+| `w16_yolo_demo`（YOLOv8n，默认 CUDA） | 29 / **2** | 27 / **0** |
+
+- 四次运行退出码均为 0，实际 EP 均为 CUDA；只看退出码同样会漏掉问题。
+- 迁移后剩余上下文全部是 `libcuda` 内的 InvalidRead，与上文剩余的 WSL 驱动报告同类。
+- GDB 在迁移后二进制的 `w14::InferenceEngine::GlobalEnv` 下断点，两个 demo 跑完均未命中。
+- 功能不变：w16 demo 仍检出 4 person + 1 bus；`w14_inference_benchmark --cuda` 与
+  `w16_yolo_benchmark` 完整运行后正常退出（与 Valgrind 并行运行，计时不作性能数据）。
+
+仍走 `GlobalEnv()` 的是 W14/W16 单元测试（W14 测试本身含 `GlobalEnv()` 单例用例），见
+[技术债](../tech-debt.md)。证据位于仓库外 `../quant-profiling-artifacts/20261118-entry-env/`：
+迁移前后二进制及 SHA-256、Valgrind XML 与日志、计数脚本。

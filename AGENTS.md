@@ -5,11 +5,11 @@
 
 ## 当前进度
 
-**交付物 `quant`（Phase 0）核心完成：INT8 PTQ、部署硬化、评估 harness 与 coco128 精度评估已落地；2026-09-10 已修测试跳过逻辑、默认 32 图校准及模型目录复用，准备了默认关闭的 NVTX 标记。已补齐五轮基准、Nsight 设备时间线与 ORT 算子分配证据：CUDA INT8 多出转换 kernel 和小调用，详见 quant_profiling_report.md。2026-09-11 已定位并修复 quant 入口的退出 UAF：局部 Env 提前清理，Valgrind 目标上下文 2→0；旧 W14/W16 默认入口仍列迁移遗留，详见 quant_runtime_lifetime.md。完整 IOBinding 与分配计数未验收，真正 Entropy 对比及 GPU INT8 加速移交 TRT。CI 仅扩格式覆盖，完整 ORT 构建/模型回归另列后续。详见 quant notes 与收尾计划。**
+**交付物 `quant`（Phase 0）核心完成：INT8 PTQ、部署硬化、评估 harness 与 coco128 精度评估已落地；2026-09-10 已修测试跳过逻辑、默认 32 图校准及模型目录复用，准备了默认关闭的 NVTX 标记。已补齐五轮基准、Nsight 设备时间线与 ORT 算子分配证据：CUDA INT8 多出转换 kernel 和小调用，详见 quant_profiling_report.md。2026-09-11 已定位并修复 quant 入口的退出 UAF：局部 Env 提前清理，Valgrind 目标上下文 2→0；W14/W16 演示入口已于 2026-11-18 同样迁移（Valgrind 目标 UAF 2→0），仅单元测试仍走 GlobalEnv，详见 quant_runtime_lifetime.md。完整 IOBinding 与分配计数未验收，真正 Entropy 对比及 GPU INT8 加速移交 TRT。CI 仅扩格式覆盖，完整 ORT 构建/模型回归另列后续。详见 quant notes 与收尾计划。**
 
 **当前交付物：`trt`（TensorRT C++ Engine）M1 完成（2026-07-07）；M1.5（ORT TRT EP 参考对拍）与 M2（INT8 双路线 + mAP）未开始。W16 为 quant 基线；ResNet18 对比降级可选，VPS CPU EP 环境待定。**
 
-**⚠️ 结构切换（2026-06-30）**：W1–W16 作为**周志存档冻结不动**；W17 起改走 `docs/Roadmap.md` 的 **Phase + 交付物里程碑** 两层结构——不再按周切分，交付物按内容定大小、各自解锁一档能力里程碑。当前交付物 **`trt`（Phase 0）**；`quant` 核心与 GPU profiling 已完成，入口退出 UAF 已修复，旧默认入口迁移另列遗留（模块目录为 `02_Inference_Analysis/quantization/`）。旧季度手册已归档 `docs/archive/`。
+**⚠️ 结构切换（2026-06-30）**：W1–W16 作为**周志存档冻结不动**；W17 起改走 `docs/Roadmap.md` 的 **Phase + 交付物里程碑** 两层结构——不再按周切分，交付物按内容定大小、各自解锁一档能力里程碑。当前交付物 **`trt`（Phase 0）**；`quant` 核心与 GPU profiling 已完成，入口退出 UAF 已修复，W14/W16 演示入口已迁移，单元测试另列遗留（模块目录为 `02_Inference_Analysis/quantization/`）。旧季度手册已归档 `docs/archive/`。
 每开始一个新交付物，必须更新此处进度描述（一句话：当前交付物 + 状态 + 遗留，细节进模块 notes），并同步 `docs/Roadmap.md` 里程碑状态。
 
 ## Build（构建速查）

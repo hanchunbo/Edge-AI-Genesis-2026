@@ -133,6 +133,10 @@ Pipe BenchPipeline(w14::InferenceEngine& engine, const cv::Mat& bgr) {
 }  // namespace
 
 int main(int argc, char** argv) {
+  // 注意：所有 engine（含纯 CPU 的）都借用这个入口 Env。只要有一处走 static
+  // GlobalEnv()，进程级 Env 就会拖到退出时、晚于 CUDA provider 注册表析构，
+  // 触发释放后访问（见 docs/benchmarks/quant_runtime_lifetime.md）。
+  Ort::Env env(ORT_LOGGING_LEVEL_WARNING, "EdgeAI-W16");
   const std::string model = (argc > 1) ? argv[1] : W16_MODEL_PATH;
   const std::string image = (argc > 2) ? argv[2] : W16_IMAGE_PATH;
 
@@ -157,7 +161,8 @@ int main(int argc, char** argv) {
     // 固定，故不能跨 batch 复用同一 engine（batch 变 -> 输出形状变）。
     bool fellback = false;
     for (int batch : {1, 4}) {
-      w14::InferenceEngine engine(model, w14::SessionConfig{.ep = ep});
+      w14::InferenceEngine engine(model,
+                                  w14::SessionConfig{.ep = ep, .env = &env});
       if (ep == w14::Ep::kCuda && engine.ActiveEp() == w14::Ep::kCpu) {
         fellback = true;
         break;
@@ -188,7 +193,8 @@ int main(int argc, char** argv) {
       "| EP | preprocess | infer | postprocess | total(P50) | FPS |\n"
       "|---|---|---|---|---|---|\n");
   for (w14::Ep ep : {w14::Ep::kCpu, w14::Ep::kCuda}) {
-    w14::InferenceEngine engine(model, w14::SessionConfig{.ep = ep});
+    w14::InferenceEngine engine(model,
+                                w14::SessionConfig{.ep = ep, .env = &env});
     if (ep == w14::Ep::kCuda && engine.ActiveEp() == w14::Ep::kCpu) {
       break;
     }
@@ -204,7 +210,8 @@ int main(int argc, char** argv) {
   const std::vector<int64_t> shape1{1, 3, kInput, kInput};
   for (int t : {1, 2, 4}) {
     w14::InferenceEngine eng(
-        model, w14::SessionConfig{.ep = w14::Ep::kCpu, .intra_op_threads = t});
+        model, w14::SessionConfig{
+                   .ep = w14::Ep::kCpu, .intra_op_threads = t, .env = &env});
     const Stat s = Bench(eng, one, shape1, 1, /*binding=*/false);
     std::printf("| %d | %.2f | %.1f |\n", t, s.p50_ms, s.fps);
   }
