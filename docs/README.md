@@ -2,7 +2,7 @@
 
 | 文件 | 用途 | 什么时候查 |
 |------|------|-----------|
-| [Roadmap.md](Roadmap.md) | **求职最短路径主线（W16 后唯一执行依据）** | 规划下一阶段、确认里程碑与对口岗 |
+| [Roadmap.md](Roadmap.md) | **Phase + 交付物主线（W16 后唯一执行依据）** | 规划下一阶段、确认里程碑 |
 | [archive/Q1.md](archive/Q1.md) · [archive/Q2.md](archive/Q2.md) · [archive/Q3.md](archive/Q3.md) · [archive/Q4.md](archive/Q4.md) | 旧季度执行手册（已被 Roadmap 取代，归档参考） | 翻旧规划素材时参考 |
 | [cpp20_23_cheatsheet.md](cpp20_23_cheatsheet.md) | C++20/23 新旧写法速查表 | 写代码时忘记某个特性的正确写法 |
 | [interview_faq.md](interview_faq.md) | Q1 C++ 自测题库（W1-W11，60 道题含参考答案，含 Q27-Q39 自测复盘深讲、Q40-Q42 W14 推理闭环复盘、Q43-Q46 W16 检测 demo 精读、Q47-Q50 quant 量化/部署硬化复盘、Q51-Q54 W16 benchmark 读码复盘、Q55 batch 维 vs 多输入模型辨析、Q56-Q58 ORT Env/零拷贝生命周期深挖、Q59-Q60 quant Entropy 退化勘误与 KL 校准原理） | 知识点复习、查漏补缺 |

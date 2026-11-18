@@ -9,7 +9,7 @@
 
 **当前交付物：`trt`（TensorRT C++ Engine）🟡 M1 完成（2026-07-07）——TRT 10.16 环境 + FP16 engine（C++ Builder 路径 + 缓存戳 + 动态维度 profile）+ 一致性对拍 5/5 通过 + FP16 纯 infer 2.93ms（vs CUDA EP FP32 5.64ms，-48%），四路表骨架见 docs/benchmarks/trt_engine_report.md；M1.5（ORT TRT EP 参考对拍，2026-07-11 追加）与 M2（INT8 双路线 + mAP 闭环）未开始。W1–W16 全部完成（W16 YOLOv8n 检测 Demo 为 quant 基线），遗留 ResNet18 对比（降级可选）、VPS CPU EP 环境（待定）。**
 
-**⚠️ 结构切换（2026-06-30）**：W1–W16 作为**周志存档冻结不动**（仅允许向后兼容加性扩展）；W17 起改走 `docs/Roadmap.md` 的 **Phase + 交付物里程碑** 两层结构——不再按周切分，交付物按内容定大小、各挂一档可投岗位。旧季度手册已归档 `docs/archive/`。
+**⚠️ 结构切换（2026-06-30）**：W1–W16 作为**周志存档冻结不动**（仅允许向后兼容加性扩展）；W17 起改走 `docs/Roadmap.md` 的 **Phase + 交付物里程碑** 两层结构——不再按周切分，交付物按内容定大小、各自解锁一档能力里程碑。旧季度手册已归档 `docs/archive/`。
 每开始一个新交付物，必须更新此处进度描述（一句话：当前交付物 + 状态 + 遗留，细节进模块 notes），并同步 `docs/Roadmap.md` 里程碑状态。
 
 ## Build（构建速查）

@@ -100,6 +100,6 @@
 
 **为什么 / 何时用**：工程报告要能被复现和审计。`ActiveEp()==CPU` 且 `EpFallbackReason()` 非空时，所有 CUDA 请求行都只能当 CPU 结果；GTest 的 `GTEST_SKIP()` 表示测试未覆盖该环境；Debug/ASAN 数字只能看正确性或相对趋势，不能看绝对性能。
 
-**坑**：不要把 skip 当 pass，不要把 fallback 当 CUDA，不要把 Debug 数字写进简历。报告中要把这些状态显式列出来。
+**坑**：不要把 skip 当 pass，不要把 fallback 当 CUDA，不要把 Debug 数字当结论对外引用。报告中要把这些状态显式列出来。
 
 > 实战出处：`w14::InferenceEngine::EpFallbackReason()`；`Quant_BatchConsistencyTest` 资产缺失 skip 策略；`docs/benchmarks/quant_int8_report.md`
